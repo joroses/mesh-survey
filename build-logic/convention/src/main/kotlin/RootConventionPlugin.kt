@@ -125,11 +125,12 @@ private val ALL_MODULES_FULL =
         ":feature:firmware",
         ":feature:wifi-provision",
         ":feature:widget",
+        ":feature:survey",
         ":desktopApp",
     )
 
 /** Android-only modules that don't apply the KMP plugin. */
-private val ANDROID_ONLY_MODULES = setOf(":androidApp", ":core:barcode", ":core:nfc", ":feature:widget")
+private val ANDROID_ONLY_MODULES = setOf(":androidApp", ":core:barcode", ":core:nfc", ":feature:widget", ":feature:survey")
 
 /**
  * Modules excluded from Dokka aggregation.

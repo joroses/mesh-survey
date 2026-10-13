@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (c) 2026 Meshtastic LLC
+  ~
+  ~ This program is free software: you can redistribute it and/or modify
+  ~ it under the terms of the GNU General Public License as published by
+  ~ the Free Software Foundation, either version 3 of the License, or
+  ~ (at your option) any later version.
+  ~
+  ~ This program is distributed in the hope that it will be useful,
+  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  ~ GNU General Public License for more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License
+  ~ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  -->
+<!-- English only, kept out of core:resources so upstream string changes never conflict with the fork. -->
+<resources>
+    <string name="survey_title">Signal survey</string>
+    <string name="survey_back">Back</string>
+    <string name="survey_intro">Records every LoRa packet your node hears, with where this phone was, and uploads the measurements to SigSleuth. Keep the radio connected and location on.</string>
+    <string name="survey_not_recording">Not recording</string>
+    <string name="survey_recording">Recording</string>
+    <string name="survey_waiting_for_radio">Waiting for radio (GPS paused)</string>
+    <string name="survey_start">Start</string>
+    <string name="survey_stop">Stop</string>
+    <string name="survey_node">%1$s · %2$s</string>
+    <string name="survey_duration">Duration %1$s</string>
+    <plurals name="survey_measurements">
+        <item quantity="one">%1$d measurement</item>
+        <item quantity="other">%1$d measurements</item>
+    </plurals>
+    <string name="survey_gps">GPS ±%1$s m, fix %2$s s old</string>
+    <string name="survey_gps_none">No GPS fix yet</string>
+    <string name="survey_last_packet">Last packet: SNR %1$s dB, RSSI %2$s dBm, relay %3$s</string>
+    <string name="survey_last_ended">Last session: %1$s</string>
+    <string name="survey_problem_no_radio">Connect a radio first.</string>
+    <string name="survey_problem_no_lora">The radio has not sent its LoRa settings yet. Try again in a moment.</string>
+    <string name="survey_problem_no_location">Turn on location and allow precise location.</string>
+    <string name="survey_problem_storage">Could not save to the survey database.</string>
+    <string name="survey_status_recording">Recording</string>
+    <string name="survey_status_stopped">Stopped</string>
+    <string name="survey_status_node_changed">Ended: another radio</string>
+    <string name="survey_status_lora_changed">Ended: LoRa settings changed</string>
+    <string name="survey_status_radio_lost">Ended: radio did not come back</string>
+    <string name="survey_status_interrupted">Ended: app was closed</string>
+    <string name="survey_upload">Upload to SigSleuth</string>
+    <string name="survey_upload_url">SigSleuth URL</string>
+    <string name="survey_upload_url_invalid">Enter the full address, starting with https://</string>
+    <string name="survey_upload_user">User (optional)</string>
+    <string name="survey_upload_password">Password (optional)</string>
+    <string name="survey_upload_automatic">Upload automatically</string>
+    <string name="survey_save">Save</string>
+    <string name="survey_upload_now">Upload</string>
+    <string name="survey_uploading">Uploading…</string>
+    <string name="survey_sessions">Sessions</string>
+    <string name="survey_no_sessions">No sessions yet.</string>
+    <string name="survey_uploaded_of">Uploaded %1$d of %2$d</string>
+    <string name="survey_server_kept">SigSleuth kept %1$d, skipped %2$d</string>
+    <string name="survey_server_skip_reasons">Skipped: %1$s</string>
+    <string name="survey_export">Export CSV</string>
+    <string name="survey_export_saved">CSV saved.</string>
+    <string name="survey_export_failed">Could not save the CSV.</string>
+    <string name="survey_delete">Delete</string>
+    <string name="survey_delete_title">Delete this session?</string>
+    <string name="survey_delete_text">%1$d of its %2$d measurements are uploaded. The rest are lost unless you export them first.</string>
+    <string name="survey_cancel">Cancel</string>
+</resources>

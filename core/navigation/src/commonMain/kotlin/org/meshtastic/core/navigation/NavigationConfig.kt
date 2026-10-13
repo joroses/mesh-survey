@@ -40,6 +40,7 @@ val MeshtasticNavSavedStateConfig = SavedStateConfiguration {
             subclassesOfSealed<FirmwareRoute>()
             subclassesOfSealed<WifiProvisionRoute>()
             subclassesOfSealed<DiscoveryRoute>()
+            subclassesOfSealed<SurveyRoute>()
         }
     }
 }

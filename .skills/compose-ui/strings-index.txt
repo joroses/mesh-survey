@@ -1730,6 +1730,7 @@ shutdown_node_name
 shutdown_warning
 signal
 signal_quality
+signal_survey
 ### SITE ###
 site_planner
 site_planner_antenna_gain_dbi
