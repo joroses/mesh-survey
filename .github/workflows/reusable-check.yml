@@ -277,6 +277,7 @@ jobs:
               :feature:widget:testDebugUnitTest
               :feature:node:allTests
               :feature:wifi-provision:allTests
+              :feature:survey:testDebugUnitTest
               :schema-strings:test
             kover: >-
               :androidApp:koverXmlReportFdroidDebug
@@ -289,6 +290,7 @@ jobs:
               :feature:widget:koverXmlReportDebug
               :feature:node:koverXmlReport
               :feature:wifi-provision:koverXmlReport
+              :feature:survey:koverXmlReportDebug
 
     steps:
       - name: Checkout code

@@ -223,6 +223,7 @@ dependencies {
     implementation(projects.feature.firmware)
     implementation(projects.feature.wifiProvision)
     implementation(projects.feature.widget)
+    implementation(projects.feature.survey)
 
     implementation(libs.jetbrains.compose.material3.adaptive)
     implementation(libs.jetbrains.compose.material3.adaptive.layout)

@@ -237,6 +237,7 @@ fun SettingsScreen(
                 state = state,
                 isManaged = localConfig.security?.is_managed ?: false,
                 isOtaCapable = isOtaCapable,
+                showSignalSurvey = true,
                 onRouteClick = { route ->
                     val navRoute =
                         when (route) {

@@ -33,6 +33,7 @@ import org.meshtastic.core.navigation.DiscoveryRoute
 import org.meshtastic.core.navigation.FirmwareRoute
 import org.meshtastic.core.navigation.Route
 import org.meshtastic.core.navigation.SettingsRoute
+import org.meshtastic.core.navigation.SurveyRoute
 import org.meshtastic.core.resources.Res
 import org.meshtastic.core.resources.administration
 import org.meshtastic.core.resources.advanced_title
@@ -59,6 +60,7 @@ import org.meshtastic.core.resources.reboot
 import org.meshtastic.core.resources.reboot_into_dfu
 import org.meshtastic.core.resources.set_time
 import org.meshtastic.core.resources.shutdown
+import org.meshtastic.core.resources.signal_survey
 import org.meshtastic.core.resources.tak_server
 import org.meshtastic.core.ui.component.ListItem
 import org.meshtastic.core.ui.icon.AdminPanelSettings
@@ -68,6 +70,7 @@ import org.meshtastic.core.ui.icon.ChevronRight
 import org.meshtastic.core.ui.icon.CleaningServices
 import org.meshtastic.core.ui.icon.Download
 import org.meshtastic.core.ui.icon.MeshtasticIcons
+import org.meshtastic.core.ui.icon.MyLocation
 import org.meshtastic.core.ui.icon.PermScanWifi
 import org.meshtastic.core.ui.icon.Settings
 import org.meshtastic.core.ui.icon.SystemUpdate
@@ -80,6 +83,7 @@ fun RadioConfigItemList(
     state: RadioConfigState,
     isManaged: Boolean,
     isOtaCapable: Boolean = false,
+    showSignalSurvey: Boolean = false,
     onRouteClick: (Enum<*>) -> Unit = {},
     onImport: () -> Unit = {},
     onExport: () -> Unit = {},
@@ -100,7 +104,7 @@ fun RadioConfigItemList(
 
         if (state.isLocal) {
             BackupRestoreSection(isManaged, enabled, onImport, onExport)
-            AdvancedSection(isManaged, isOtaCapable, enabled, onNavigate)
+            AdvancedSection(isManaged, isOtaCapable, showSignalSurvey, enabled, onNavigate)
         }
     }
 }
@@ -180,7 +184,13 @@ private fun ColumnScope.AdministrationContent(enabled: Boolean, onNavigate: (Rou
 }
 
 @Composable
-private fun AdvancedSection(isManaged: Boolean, isOtaCapable: Boolean, enabled: Boolean, onNavigate: (Route) -> Unit) {
+private fun AdvancedSection(
+    isManaged: Boolean,
+    isOtaCapable: Boolean,
+    showSignalSurvey: Boolean,
+    enabled: Boolean,
+    onNavigate: (Route) -> Unit,
+) {
     ExpressiveSection(title = stringResource(Res.string.advanced_title)) {
         if (isManaged) {
             ManagedMessage()
@@ -215,6 +225,15 @@ private fun AdvancedSection(isManaged: Boolean, isOtaCapable: Boolean, enabled: 
             enabled = enabled,
             onClick = { onNavigate(DiscoveryRoute.DiscoveryGraph) },
         )
+
+        // Android only (desktop has no screen for it), and always enabled: the session list works offline.
+        if (showSignalSurvey) {
+            ListItem(
+                text = stringResource(Res.string.signal_survey),
+                leadingIcon = MeshtasticIcons.MyLocation,
+                onClick = { onNavigate(SurveyRoute.Survey) },
+            )
+        }
 
         // Always enabled: the Debug Panel reads app-local logs only — no radio connection,
         // pending config response, or managed-mode restriction applies to it.

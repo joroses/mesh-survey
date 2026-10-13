@@ -227,3 +227,9 @@ sealed interface DiscoveryRoute : Route {
 
     @Serializable data class DiscoveryMap(val sessionId: Long) : DiscoveryRoute
 }
+
+/** The Android fork's signal survey (feature:survey). Desktop registers no screen for it. */
+@Serializable
+sealed interface SurveyRoute : Route {
+    @Serializable data object Survey : SurveyRoute
+}
