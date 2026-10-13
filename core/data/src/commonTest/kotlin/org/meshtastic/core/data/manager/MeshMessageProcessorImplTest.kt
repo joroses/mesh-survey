@@ -66,6 +66,7 @@ class MeshMessageProcessorImplTest {
     private val fromRadioDispatcher = mock<FromRadioPacketHandler>(MockMode.autofill)
     private val dataHandler = mock<MeshDataHandler>(MockMode.autofill)
     private val radioInterfaceService = mock<RadioInterfaceService>(MockMode.autofill)
+    private val surveyPacketTap = SurveyPacketTapImpl()
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -142,6 +143,7 @@ class MeshMessageProcessorImplTest {
         fromRadioDispatcher = fromRadioDispatcher,
         radioInterfaceService = radioInterfaceService,
         scope = scope.asServiceScope(),
+        surveyPacketTap = surveyPacketTap,
     )
 
     private fun frame(bytes: ByteArray, frameSession: RadioSessionContext = session) =
@@ -149,6 +151,30 @@ class MeshMessageProcessorImplTest {
 
     private suspend fun MeshMessageProcessorImpl.handleReceivedMeshPacket(packet: MeshPacket, myNodeNum: Int?) {
         handleReceivedMeshPacket(packet, myNodeNum, session)
+    }
+
+    @Test
+    fun `survey tap sees raw and undecrypted packets but not stale sessions`() = runTest(testDispatcher) {
+        processor = createProcessor(backgroundScope)
+        val seen = mutableListOf<MeshPacket>()
+        surveyPacketTap.listener = { packet, _ -> seen += packet }
+        val encrypted =
+            MeshPacket.Builder()
+                .also { wb ->
+                    wb.from = 42
+                    wb.id = 7
+                    wb.encrypted = byteArrayOf(1, 2, 3).toByteString()
+                }
+                .build()
+
+        processor.handleReceivedMeshPacket(encrypted, myNodeNum = null)
+        activeSession.value = RadioSessionContext(generation = 4L, address = session.address)
+        processor.handleReceivedMeshPacket(
+            encrypted.newBuilder().also { wb -> wb.id = 8 }.build(),
+            myNodeNum = null,
+        )
+
+        assertEquals(listOf(7), seen.map { it.id })
     }
 
     // ---------- handleFromRadio: non-packet variants ----------

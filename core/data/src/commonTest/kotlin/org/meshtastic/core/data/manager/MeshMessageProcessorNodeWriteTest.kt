@@ -108,6 +108,7 @@ class MeshMessageProcessorNodeWriteTest {
                 fromRadioDispatcher = mock<FromRadioPacketHandler>(MockMode.autofill),
                 radioInterfaceService = radio,
                 scope = scope.asServiceScope(),
+                surveyPacketTap = SurveyPacketTapImpl(),
             )
 
         val session: RadioSessionContext

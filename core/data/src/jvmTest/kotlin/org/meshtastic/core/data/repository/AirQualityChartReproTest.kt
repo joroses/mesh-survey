@@ -32,6 +32,7 @@ import okio.ByteString.Companion.toByteString
 import org.meshtastic.core.common.di.asServiceScope
 import org.meshtastic.core.data.datasource.NodeInfoReadDataSource
 import org.meshtastic.core.data.manager.MeshMessageProcessorImpl
+import org.meshtastic.core.data.manager.SurveyPacketTapImpl
 import org.meshtastic.core.database.entity.MyNodeEntity
 import org.meshtastic.core.di.CoroutineDispatchers
 import org.meshtastic.core.model.MeshLog
@@ -250,6 +251,7 @@ class AirQualityChartReproTest {
                     fromRadioDispatcher = mock<FromRadioPacketHandler>(MockMode.autofill),
                     radioInterfaceService = radioInterfaceService,
                     scope = backgroundScope.asServiceScope(),
+                    surveyPacketTap = SurveyPacketTapImpl(),
                 )
 
             // Arrives before MyNodeInfo resolves -> buffered, NOT written to the log table (so not orphaned in the DB).
