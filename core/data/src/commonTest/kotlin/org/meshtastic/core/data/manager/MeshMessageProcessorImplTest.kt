@@ -47,6 +47,7 @@ import org.meshtastic.core.repository.RadioSessionContext
 import org.meshtastic.core.repository.RadioSessionLease
 import org.meshtastic.core.repository.ReceivedRadioFrame
 import org.meshtastic.core.repository.ServiceRepository
+import org.meshtastic.core.repository.SurveyPacketTap
 import org.meshtastic.proto.Data
 import org.meshtastic.proto.FromRadio
 import org.meshtastic.proto.LogRecord
@@ -149,6 +150,35 @@ class MeshMessageProcessorImplTest {
 
     private suspend fun MeshMessageProcessorImpl.handleReceivedMeshPacket(packet: MeshPacket, myNodeNum: Int?) {
         handleReceivedMeshPacket(packet, myNodeNum, session)
+    }
+
+    @Test
+    fun `survey tap sees raw and undecrypted packets but not stale sessions`() = runTest(testDispatcher) {
+        processor = createProcessor(backgroundScope)
+        val seen = mutableListOf<MeshPacket>()
+        val encrypted =
+            MeshPacket.Builder()
+                .also { wb ->
+                    wb.from = 42
+                    wb.id = 7
+                    wb.encrypted = byteArrayOf(1, 2, 3).toByteString()
+                }
+                .build()
+
+        // The tap is process-wide, so clear it before other tests run.
+        SurveyPacketTap.listener = { packet, _ -> seen += packet }
+        try {
+            processor.handleReceivedMeshPacket(encrypted, myNodeNum = null)
+            activeSession.value = RadioSessionContext(generation = 4L, address = session.address)
+            processor.handleReceivedMeshPacket(
+                encrypted.newBuilder().also { wb -> wb.id = 8 }.build(),
+                myNodeNum = null,
+            )
+        } finally {
+            SurveyPacketTap.listener = null
+        }
+
+        assertEquals(listOf(7), seen.map { it.id })
     }
 
     // ---------- handleFromRadio: non-packet variants ----------

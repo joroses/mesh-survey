@@ -49,6 +49,7 @@ import org.meshtastic.core.repository.RadioInterfaceService
 import org.meshtastic.core.repository.RadioSessionContext
 import org.meshtastic.core.repository.ReceivedRadioFrame
 import org.meshtastic.core.repository.ServiceStateWriter
+import org.meshtastic.core.repository.SurveyPacketTap
 import org.meshtastic.proto.FromRadio
 import org.meshtastic.proto.LogRecord
 import org.meshtastic.proto.MeshPacket
@@ -204,6 +205,9 @@ class MeshMessageProcessorImpl(
             Logger.d { "Dropping mesh packet from stale transport session gen=${session.generation}" }
             return
         }
+
+        // The signal survey sees the raw packet, before decoding drops the ones the node could not decrypt.
+        SurveyPacketTap.listener?.let { listener -> safeCatching { listener(packet, session) } }
 
         if (nodeManager.isNodeDbReady.value && myNodeNum != null) {
             processReceivedMeshPacket(preparedPacket, myNodeNum, session)
