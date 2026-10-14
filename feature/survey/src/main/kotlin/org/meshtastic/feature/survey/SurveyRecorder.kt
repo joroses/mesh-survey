@@ -70,6 +70,8 @@ data class SurveyState(
     val measurementCount: Int = 0,
     val fix: SurveyFix? = null,
     val lastMeasurement: SurveyMeasurement? = null,
+    /** The distinct relay bytes this session's measurements carry; a packet heard directly carries its sender's. */
+    val relays: Set<Int> = emptySet(),
     val problem: SurveyProblem? = null,
     /** How the last session ended, until the next one starts. */
     val lastEnd: SurveyStatus? = null,
@@ -304,7 +306,11 @@ class SurveyRecorder(
                 continue
             }
             mutableState.update {
-                it.copy(measurementCount = it.measurementCount + 1, lastMeasurement = row.copy(seq = seq))
+                it.copy(
+                    measurementCount = it.measurementCount + 1,
+                    lastMeasurement = row.copy(seq = seq),
+                    relays = row.relayByte?.let { byte -> it.relays + byte } ?: it.relays,
+                )
             }
         }
     }
