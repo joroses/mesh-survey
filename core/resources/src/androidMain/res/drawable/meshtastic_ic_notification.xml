@@ -16,20 +16,18 @@
   ~ along with this program.  If not, see <https://www.gnu.org/licenses/>.
   -->
 
+<!-- Placeholder signal icon for the Mesh Survey fork, in place of the Meshtastic logo (a Meshtastic LLC trademark). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <group
-        android:scaleX="0.24"
-        android:scaleY="0.24"
-        android:translateY="5.4">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M64.716,13.073L37.867,52.447L32.204,48.585L61.878,5.068C62.516,4.132 63.575,3.572 64.707,3.571C65.839,3.57 66.899,4.128 67.538,5.063L97.281,48.512L91.625,52.384L64.716,13.073Z" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M8.379,52.406L39.741,6.415L34.078,2.553L2.716,48.544L8.379,52.406Z" />
-    </group>
+    <path
+        android:pathData="M8.82,13.32A4.5,4.5 0,0 1,15.18,13.32M6.34,10.84A8,8 0,0 1,17.66,10.84M3.87,8.37A11.5,11.5 0,0 1,20.13,8.37"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M10,16.5a2,2 0,1 0,4 0a2,2 0,1 0,-4 0"
+        android:fillColor="#FFFFFF" />
 </vector>

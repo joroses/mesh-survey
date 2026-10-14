@@ -1,20 +1,17 @@
-<p align="center">
-  <img src=".github/meshtastic_logo.png" alt="Meshtastic Logo" width="200"/>
-</p>
-<h1 align="center">Meshtastic-Android</h1>
+# Mesh Survey
 
-![GitHub all releases](https://img.shields.io/github/downloads/meshtastic/meshtastic-android/total)
-[![Android CI](https://github.com/meshtastic/Meshtastic-Android/actions/workflows/pull-request.yml/badge.svg?branch=main)](https://github.com/meshtastic/Meshtastic-Android/actions/workflows/pull-request.yml)
-[![codecov](https://codecov.io/gh/meshtastic/Meshtastic-Android/graph/badge.svg)](https://codecov.io/gh/meshtastic/Meshtastic-Android)
-[![Crowdin](https://badges.crowdin.net/e/f440f1a5e094a5858dd86deb1adfe83d/localized.svg)](https://crowdin.meshtastic.org/android)
-[![CLA assistant](https://cla-assistant.io/readme/badge/meshtastic/Meshtastic-Android)](https://cla-assistant.io/meshtastic/Meshtastic-Android)
-[![Fiscal Contributors](https://opencollective.com/meshtastic/tiers/badge.svg?label=Fiscal%20Contributors&color=deeppink)](https://opencollective.com/meshtastic/)
-[![Vercel](https://img.shields.io/static/v1?label=Powered%20by&message=Vercel&style=flat&logo=vercel&color=000000)](https://vercel.com?utm_source=meshtastic&utm_campaign=oss)
-[![Revved up by Develocity](https://img.shields.io/badge/Revved%20up%20by-Develocity-06A0CE?logo=Gradle&labelColor=02303A)](https://community.develocity.cloud/scans?search.rootProjectNames=MeshtasticAndroid)
+Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshtastic/Meshtastic-Android) that works with Meshtastic® nodes. It adds a **signal survey**: while a survey runs, the app records every LoRa packet the connected node hears, with the phone's GPS position, and can export each session as CSV or upload it to a [SigSleuth](feature/survey/README.md) server. See [`feature/survey/README.md`](feature/survey/README.md) for how it works and which upstream files it changes.
 
-The Meshtastic client for Android and Compose Desktop — an app for communicating over open-source mesh radios. For more information see our webpage: [meshtastic.org](https://www.meshtastic.org). The device-side code lives in the [firmware repository](https://github.com/meshtastic/firmware).
+- **Modified work.** This fork has been modified from the upstream project since 2026-09: the signal survey, the app name, application ID and icons, and the source link on the About screen. The [commit history](https://github.com/joroses/Meshtastic-Android/commits/feature/signal-survey) shows every change and its date.
+- **Not affiliated.** Mesh Survey is not affiliated with, sponsored by or endorsed by Meshtastic LLC or the Meshtastic project. Please report problems with this fork [here](https://github.com/joroses/Meshtastic-Android/issues), not to the Meshtastic project.
+- **Trademark.** Meshtastic® is a registered trademark of Meshtastic LLC.
+- **License.** Like the upstream project, this fork is licensed under the [GNU General Public License v3.0 or later](LICENSE). The source of every release is the tagged commit it was built from.
 
-If you have questions or feedback please [Join our discussion forum](https://github.com/orgs/meshtastic/discussions) or the [Discord Group](https://discord.gg/meshtastic). We would love to hear from you!
+The rest of this README is the upstream project's own and describes the official Meshtastic app.
+
+---
+
+The Meshtastic client for Android and Compose Desktop — an app for communicating over open-source mesh radios. For more information see [meshtastic.org](https://www.meshtastic.org). The device-side code lives in the [firmware repository](https://github.com/meshtastic/firmware).
 
 ## Features
 

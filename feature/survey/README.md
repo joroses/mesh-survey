@@ -54,6 +54,18 @@ Keep these edits small; they are what a rebase onto upstream has to carry.
 | `.github/workflows/reusable-check.yml` | the module's tests and coverage in the `shard-app` test shard |
 | `core/resources/.../values/strings.xml`, `.skills/compose-ui/strings-index.txt` | `signal_survey` (the entry's title) |
 
+The fork's own name and identity, kept out of the Meshtastic trademark (see `CONTRIBUTING.md` → Forks and rebrands):
+
+| File | Change |
+| :--- | :--- |
+| `README.md` | the fork notice at the top, in place of upstream's logo and badges |
+| `config.properties` | `APPLICATION_ID=io.github.joroses.meshsurvey` |
+| `androidApp/src/main/res/values/strings.xml` | `app_name` and `nfc_tag_emulation_service` say Mesh Survey |
+| `androidApp/src/main/res/drawable-anydpi/ic_launcher_*.xml`, `ic_splash.xml` | placeholder signal icon on blue |
+| `core/resources/src/androidMain/res/drawable/meshtastic_ic_notification.xml`, `core/resources/.../drawable/ic_meshtastic.xml`, `feature/widget/.../drawable/widget_app_icon.xml` | the same placeholder icon (notification, top bar, widget) |
+| `core/service/.../MeshNotificationManagerImpl.kt`, `feature/widget/.../LocalStatsWidget.kt` | the app's label in place of `meshtastic_app_name` |
+| `feature/settings/.../AboutScreen.kt` | `GITHUB_REPO_URL` points at this fork; `copyright_notice` stays |
+
 Everything else, including the service's manifest entry and all other strings (English only, prefix `survey_`), is in this module, so upstream's frequent `strings.xml` and manifest changes never conflict.
 
 ## Build and try
@@ -67,4 +79,4 @@ for f in signal_survey.db signal_survey.db-wal signal_survey.db-shm; do
 done
 ```
 
-`APPLICATION_ID` (`com.geeksville.mesh.survey`) applies to release builds only: `androidApp/build.gradle.kts` sets every debug build to `com.geeksville.mesh.<flavor>.debug`, so the fork's debug build replaces an upstream debug build on the same phone. A `google` release also needs a `com.geeksville.mesh.survey` client in `google-services.json`.
+`APPLICATION_ID` (`io.github.joroses.meshsurvey`) applies to release builds only: `androidApp/build.gradle.kts` sets every debug build to `com.geeksville.mesh.<flavor>.debug`, so the fork's debug build replaces an upstream debug build on the same phone. A `google` release also needs an `io.github.joroses.meshsurvey` client in `google-services.json`.

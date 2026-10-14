@@ -87,7 +87,6 @@ import org.meshtastic.core.resources.local_stats_noise
 import org.meshtastic.core.resources.local_stats_relays
 import org.meshtastic.core.resources.local_stats_traffic
 import org.meshtastic.core.resources.local_stats_updated_at
-import org.meshtastic.core.resources.meshtastic_app_name
 import org.meshtastic.core.resources.nodes
 import org.meshtastic.core.resources.powered
 import org.meshtastic.core.resources.refresh
@@ -153,7 +152,7 @@ class LocalStatsWidget :
                     titleBar = {
                         TitleBar(
                             startIcon = ImageProvider(R.drawable.widget_app_icon),
-                            title = stringResource(Res.string.meshtastic_app_name),
+                            title = context.applicationInfo.loadLabel(context.packageManager).toString(),
                             actions = {
                                 CircleIconButton(
                                     imageProvider = ImageProvider(R.drawable.widget_ic_refresh),

@@ -95,7 +95,6 @@ import org.meshtastic.core.resources.low_battery_title
 import org.meshtastic.core.resources.mark_as_read
 import org.meshtastic.core.resources.mesh_beacon_notification_body
 import org.meshtastic.core.resources.mesh_beacon_notification_title
-import org.meshtastic.core.resources.meshtastic_app_name
 import org.meshtastic.core.resources.no_local_stats
 import org.meshtastic.core.resources.notification_reaction_to
 import org.meshtastic.core.resources.powered
@@ -417,13 +416,9 @@ class MeshNotificationManagerImpl(
         val title =
             snapshot.activeOperations.notificationTitleResource()?.let { getStringSuspend(it) }
                 ?: when (snapshot.state) {
-                    is ConnectionState.Connected ->
-                        getStringSuspend(Res.string.meshtastic_app_name) + ": " + getStringSuspend(Res.string.connected)
-
+                    is ConnectionState.Connected -> "$applicationLabel: " + getStringSuspend(Res.string.connected)
                     is ConnectionState.Disconnected -> getStringSuspend(Res.string.disconnected)
-
                     is ConnectionState.DeviceSleep -> getStringSuspend(Res.string.device_sleeping)
-
                     is ConnectionState.Connecting -> getStringSuspend(Res.string.connecting)
                 }
 
@@ -577,7 +572,7 @@ class MeshNotificationManagerImpl(
                 if (senderTitle != null && messageText != null) "$senderTitle: $messageText" else null
             }
         }
-        val appName = getStringSuspend(Res.string.meshtastic_app_name)
+        val appName = applicationLabel
         val inboxStyle = NotificationCompat.InboxStyle().setBigContentTitle(appName)
         lines.forEach { inboxStyle.addLine(it) }
 
