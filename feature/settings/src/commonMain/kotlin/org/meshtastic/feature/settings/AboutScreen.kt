@@ -87,7 +87,7 @@ private val CAROUSEL_IMAGE_WIDTH = 110.dp
 private val CAROUSEL_IMAGE_HEIGHT = 130.dp
 
 private const val HARDWARE_URL = "https://meshtastic.org/#hardware"
-private const val GITHUB_REPO_URL = "https://github.com/joroses/Meshtastic-Android"
+private const val GITHUB_REPO_URL = "https://github.com/joroses/mesh-survey"
 private const val WEBSITE_URL = "https://meshtastic.org"
 private const val DOCS_URL = "https://meshtastic.org/docs/getting-started"
 private const val LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
