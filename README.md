@@ -86,7 +86,7 @@ You need the Android SDK (with `ANDROID_HOME` pointing at it) and any JDK 17 or 
    keyAlias=release
    keyPassword=…
    ```
-3. **Build the `fdroid` flavor.** It needs no Google services. The `google` flavor adds Firebase and Google Maps, which only work with your own `google-services.json` and Maps API key.
+3. **Build the `fdroid` flavor.** First raise the `-survey.N` number in `VERSION_NAME_BASE` (`config.properties`) if this is a new release, so the About screen and bug reports show which build someone has; the official app never carries that suffix. The build needs no Google services. The `google` flavor adds Firebase and Google Maps, which only work with your own `google-services.json` and Maps API key.
    ```bash
    ./gradlew :androidApp:assembleFdroidRelease
    ```

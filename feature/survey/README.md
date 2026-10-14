@@ -59,7 +59,7 @@ The fork's own name and identity, kept out of the Meshtastic trademark (see `CON
 | File | Change |
 | :--- | :--- |
 | `README.md` | the fork notice at the top, in place of upstream's logo and badges |
-| `config.properties` | `APPLICATION_ID=io.github.joroses.meshsurvey` |
+| `config.properties` | `APPLICATION_ID=io.github.joroses.meshsurvey`; `VERSION_NAME_BASE` gets a `-survey.N` suffix |
 | `androidApp/src/main/res/values/strings.xml` | `app_name` and `nfc_tag_emulation_service` say Mesh Survey |
 | `androidApp/src/main/res/drawable-anydpi/ic_launcher_*.xml`, `ic_splash.xml` | placeholder signal icon on blue |
 | `core/resources/src/androidMain/res/drawable/meshtastic_ic_notification.xml`, `core/resources/.../drawable/ic_meshtastic.xml`, `feature/widget/.../drawable/widget_app_icon.xml` | the same placeholder icon (notification, top bar, widget) |
