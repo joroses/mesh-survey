@@ -70,6 +70,8 @@ Everything else, including the service's manifest entry and all other strings (E
 
 ## Build and try
 
+What a survey records and where it goes, for users, and how to build and sign a release APK to share, are in the top-level [README](../../README.md#privacy).
+
 ```bash
 ./gradlew :feature:survey:testDebugUnitTest
 ./gradlew :androidApp:installFdroidDebug

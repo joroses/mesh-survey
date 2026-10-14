@@ -7,6 +7,98 @@ Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshta
 - **Trademark.** Meshtastic® is a registered trademark of Meshtastic LLC.
 - **License.** Like the upstream project, this fork is licensed under the [GNU General Public License v3.0 or later](LICENSE). The source of every release is the tagged commit it was built from.
 
+## Privacy
+
+A signal survey is a record of where you were and when. Read this before you start one.
+
+**What is recorded.** Nothing is recorded until you press Start in Settings → Advanced → Signal survey. While a survey runs, the app reads the phone's GPS once a second and, for every LoRa packet your node hears, saves a row in a database on the phone. Each row holds:
+
+- the time to the millisecond
+- your position: latitude, longitude, the fix's accuracy and age
+- the signal: SNR, RSSI, hop counts and relay byte
+- the packet's sender node, recipient node and packet ID. These are other people's node numbers.
+
+Each session also saves your node's number and long name, and the radio settings. A busy mesh can produce several rows a second, so a session is a detailed track of your movements. A quiet mesh may produce none for minutes. Packets relayed over MQTT and packets from your own node are not recorded, and the app records nothing while the radio is disconnected.
+
+**Where it goes.** The rows stay on the phone until you delete a session.
+
+- **Upload:** only to a server whose address you enter yourself. Uploading is off until you enter one. Once you do, "Upload automatically" is on by default: everything recorded goes to that server every minute while you record, and again when a session ends. Uploads go over HTTPS, with the password in a header, never in the address.
+- **CSV export:** goes wherever you choose to share the file.
+
+The app has no server of its own: neither the author of this fork nor the Meshtastic project receives any survey data.
+
+**The rest of the app** behaves like the upstream `fdroid` build. There is no analytics or crash reporting. It talks to your radio, to Meshtastic's servers (for example for firmware and device lists) and to the map tile providers you use, and to MQTT only if you enable it.
+
+**If you run a server that others upload to,** you are collecting their location history. Tell them what you keep, for how long and who can see it. Where the GDPR applies, you need a lawful basis and a privacy notice of your own.
+
+## Install
+
+Mesh Survey isn't on Google Play or F-Droid. Download an APK from [Releases](https://github.com/joroses/Meshtastic-Android/releases):
+
+- **`arm64-v8a`:** almost every phone from the last several years.
+- **`universal`:** if you're not sure. It's bigger, but runs on any phone.
+
+It installs as its own app, next to the official Meshtastic app, and doesn't touch its data. It needs Android 8.0 or newer.
+
+### On the phone
+
+1. Open the downloaded APK, from the browser's downloads or a file manager.
+2. Android asks you to allow that app to install apps. Tap **Settings**, turn on **Allow from this source**, and go back. The setting is called "Install unknown apps", under Settings → Apps → Special app access. You can turn it off again after installing.
+3. Tap **Install**. Google Play Protect may warn that it doesn't recognise the app, because it isn't from Play. Tap **More details → Install anyway**.
+
+### With ADB from a computer
+
+1. Turn on **Developer options**: tap **Build number** in Settings → About phone seven times. Xiaomi phones use **MIUI version** or **OS version** instead.
+2. In Developer options, turn on **USB debugging**. On Xiaomi phones, also turn on **Install via USB**, which needs a signed-in Xiaomi account.
+3. Connect the phone, accept the prompt on its screen, and run:
+   ```bash
+   adb install androidApp-fdroid-arm64-v8a-release.apk
+   ```
+
+### Check the APK (optional)
+
+The certificate's SHA-256 is at the end of [Build a release APK](#build-a-release-apk). Compare it with what [AppVerifier](https://github.com/soupslurpr/AppVerifier) shows on the phone, or `apksigner verify --print-certs` on a computer. If it doesn't match, don't install the APK.
+
+### Updates
+
+Install the newer APK over the old one, the same way: your sessions and settings stay. To be notified of new versions, add `https://github.com/joroses/Meshtastic-Android` to [Obtainium](https://github.com/ImranR98/Obtainium). Android won't install an older version over a newer one, or an APK signed with a different key. Uninstalling deletes every survey session on the phone, so export or upload them first.
+
+### Before a long survey
+
+- Allow **precise** location. With approximate location only, a survey won't start.
+- Allow notifications, so the survey's ongoing notification and its Stop button show.
+- Phones that kill background apps can stop a survey while the screen is off. Under Settings → Apps → Mesh Survey → Battery, choose **Unrestricted** (on Xiaomi phones, **No restrictions**). On Xiaomi phones, also turn on **Autostart**.
+
+## Build a release APK
+
+You need the Android SDK (with `ANDROID_HOME` pointing at it) and any JDK 17 or newer to start Gradle. Gradle downloads the JDK 25 the build uses by itself.
+
+1. **Create a signing key** once, and back it up together with its password. Without it, nobody can install an update over your app.
+   ```bash
+   mkdir -m 700 ~/keys
+   keytool -genkeypair -v -keystore ~/keys/release.jks -alias release \
+     -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=your-name"
+   ```
+2. **Point the build at it** in `keystore.properties` at the repo root. Git ignores this file. Without it, the release build is unsigned and won't install.
+   ```properties
+   storeFile=/home/you/keys/release.jks
+   storePassword=…
+   keyAlias=release
+   keyPassword=…
+   ```
+3. **Build the `fdroid` flavor.** It needs no Google services. The `google` flavor adds Firebase and Google Maps, which only work with your own `google-services.json` and Maps API key.
+   ```bash
+   ./gradlew :androidApp:assembleFdroidRelease
+   ```
+   The APKs land in `androidApp/build/outputs/apk/fdroid/release/`: `universal` runs on any phone, while `arm64-v8a` and `armeabi-v7a` are smaller. On a machine with less than 16 GB of RAM, add `--max-workers=2 -Dorg.gradle.jvmargs=-Xmx3g`.
+4. **Check the signature** before you share the APK:
+   ```bash
+   $ANDROID_HOME/build-tools/<version>/apksigner verify --print-certs \
+     androidApp/build/outputs/apk/fdroid/release/androidApp-fdroid-universal-release.apk
+   ```
+
+Your build installs next to the official Meshtastic app, as a separate app. If you share a build of your own, also change `APPLICATION_ID` in `config.properties`. Android refuses an update signed with a different key, so two builds with the same ID and different keys can't replace each other on a phone. Releases from this repository are signed with a certificate whose SHA-256 is `9D:FC:DF:B6:38:50:56:A8:99:E1:FF:5D:4A:B5:F0:0F:B3:B0:D8:51:8D:4F:C0:10:1E:28:BD:AE:F2:14:84:94`.
+
 The rest of this README is the upstream project's own and describes the official Meshtastic app.
 
 ---
