@@ -208,6 +208,10 @@ private fun RecordingCard(state: SurveyState, onStart: () -> Unit, onStop: () ->
                 Text(
                     pluralStringResource(R.plurals.survey_measurements, state.measurementCount, state.measurementCount),
                 )
+                Text(pluralStringResource(R.plurals.survey_relays, state.relays.size, state.relays.size))
+                state.lastMeasurement?.let { last ->
+                    Text(stringResource(R.string.survey_since_last, elapsedText(last.heardAtMs)))
+                }
                 Text(gpsText(state))
                 state.lastMeasurement?.let { last ->
                     Text(

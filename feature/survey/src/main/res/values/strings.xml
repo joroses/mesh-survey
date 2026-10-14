@@ -31,6 +31,11 @@
         <item quantity="one">%1$d measurement</item>
         <item quantity="other">%1$d measurements</item>
     </plurals>
+    <plurals name="survey_relays">
+        <item quantity="one">%1$d distinct relay</item>
+        <item quantity="other">%1$d distinct relays</item>
+    </plurals>
+    <string name="survey_since_last">Since last measurement %1$s</string>
     <string name="survey_gps">GPS ±%1$s m, fix %2$s s old</string>
     <string name="survey_gps_none">No GPS fix yet</string>
     <string name="survey_last_packet">Last packet: SNR %1$s dB, RSSI %2$s dBm, relay %3$s</string>
