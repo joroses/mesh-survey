@@ -2,8 +2,12 @@
 
 Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshtastic/Meshtastic-Android) that works with Meshtastic® nodes. It adds a **signal survey**: while a survey runs, the app records every LoRa packet the connected node hears, with the phone's GPS position, and can export each session as CSV or upload it to a [SigSleuth](feature/survey/README.md) server. See [`feature/survey/README.md`](feature/survey/README.md) for how it works and which upstream files it changes.
 
-- **Modified work.** This fork has been modified from the upstream project since 2026-09: the signal survey, the app name, application ID and icons, and the source link on the About screen. The [commit history](https://github.com/joroses/Meshtastic-Android/commits/feature/signal-survey) shows every change and its date.
-- **Not affiliated.** Mesh Survey is not affiliated with, sponsored by or endorsed by Meshtastic LLC or the Meshtastic project. Please report problems with this fork [here](https://github.com/joroses/Meshtastic-Android/issues), not to the Meshtastic project.
+<p align="center">
+  <img src="feature/survey/docs/signal-survey.png" alt="The Signal survey screen: a Start button, and fields for a SigSleuth server's URL, user and password with automatic upload" width="300"/>
+</p>
+
+- **Modified work.** This fork has been modified from the upstream project since 2026-09: the signal survey, the app name, application ID and icons, and the source link on the About screen. The [commit history](https://github.com/joroses/mesh-survey/commits/feature/signal-survey) shows every change and its date.
+- **Not affiliated.** Mesh Survey is not affiliated with, sponsored by or endorsed by Meshtastic LLC or the Meshtastic project. Please report problems with this fork [here](https://github.com/joroses/mesh-survey/issues), not to the Meshtastic project.
 - **Trademark.** Meshtastic® is a registered trademark of Meshtastic LLC.
 - **License.** Like the upstream project, this fork is licensed under the [GNU General Public License v3.0 or later](LICENSE). The source of every release is the tagged commit it was built from.
 
@@ -33,7 +37,7 @@ The app has no server of its own: neither the author of this fork nor the Meshta
 
 ## Install
 
-Mesh Survey isn't on Google Play or F-Droid. Download an APK from [Releases](https://github.com/joroses/Meshtastic-Android/releases):
+Mesh Survey isn't on Google Play or F-Droid. Download an APK from [Releases](https://github.com/joroses/mesh-survey/releases):
 
 - **`arm64-v8a`:** almost every phone from the last several years.
 - **`universal`:** if you're not sure. It's bigger, but runs on any phone.
@@ -61,7 +65,7 @@ The certificate's SHA-256 is at the end of [Build a release APK](#build-a-releas
 
 ### Updates
 
-Install the newer APK over the old one, the same way: your sessions and settings stay. To be notified of new versions, add `https://github.com/joroses/Meshtastic-Android` to [Obtainium](https://github.com/ImranR98/Obtainium). Android won't install an older version over a newer one, or an APK signed with a different key. Uninstalling deletes every survey session on the phone, so export or upload them first.
+Install the newer APK over the old one, the same way: your sessions and settings stay. To be notified of new versions, add `https://github.com/joroses/mesh-survey` to [Obtainium](https://github.com/ImranR98/Obtainium). Android won't install an older version over a newer one, or an APK signed with a different key. Uninstalling deletes every survey session on the phone, so export or upload them first.
 
 ### Before a long survey
 
