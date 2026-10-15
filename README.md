@@ -1,6 +1,6 @@
 # Mesh Survey
 
-Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshtastic/Meshtastic-Android) that works with Meshtastic® nodes. It adds a **signal survey**: while a survey runs, the app records every LoRa packet the connected node hears, with the phone's GPS position, and can export each session as CSV or upload it to a [SigSleuth](feature/survey/README.md) server. See [`feature/survey/README.md`](feature/survey/README.md) for how it works and which upstream files it changes.
+Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshtastic/Meshtastic-Android) that works with Meshtastic® nodes. It adds a **signal survey**: while a survey runs, the app records every LoRa packet the connected node hears, with the phone's GPS position, and can export each session as CSV or upload it to a [SigSleuth](https://github.com/joroses/sigsleuth) server. See [`feature/survey/README.md`](feature/survey/README.md) for how it works and which upstream files it changes.
 
 <p align="center">
   <img src="feature/survey/docs/signal-survey.png" alt="The Signal survey screen: a Start button, and fields for a SigSleuth server's URL, user and password with automatic upload" width="300"/>
@@ -52,8 +52,8 @@ It installs as its own app, next to the official Meshtastic app, and doesn't tou
 
 ### With ADB from a computer
 
-1. Turn on **Developer options**: tap **Build number** in Settings → About phone seven times. Xiaomi phones use **MIUI version** or **OS version** instead.
-2. In Developer options, turn on **USB debugging**. On Xiaomi phones, also turn on **Install via USB**, which needs a signed-in Xiaomi account.
+1. Turn on **Developer options**: tap **Build number** in Settings → About phone seven times.
+2. In Developer options, turn on **USB debugging**.
 3. Connect the phone, accept the prompt on its screen, and run:
    ```bash
    adb install androidApp-fdroid-arm64-v8a-release.apk
@@ -71,7 +71,7 @@ Install the newer APK over the old one, the same way: your sessions and settings
 
 - Allow **precise** location. With approximate location only, a survey won't start.
 - Allow notifications, so the survey's ongoing notification and its Stop button show.
-- Phones that kill background apps can stop a survey while the screen is off. Under Settings → Apps → Mesh Survey → Battery, choose **Unrestricted** (on Xiaomi phones, **No restrictions**). On Xiaomi phones, also turn on **Autostart**.
+- Phones that kill background apps can stop a survey while the screen is off. Under Settings → Apps → Mesh Survey → Battery, choose **Unrestricted**.
 
 ## Build a release APK
 
@@ -103,9 +103,12 @@ You need the Android SDK (with `ANDROID_HOME` pointing at it) and any JDK 17 or 
 
 Your build installs next to the official Meshtastic app, as a separate app. If you share a build of your own, also change `APPLICATION_ID` in `config.properties`. Android refuses an update signed with a different key, so two builds with the same ID and different keys can't replace each other on a phone. Releases from this repository are signed with a certificate whose SHA-256 is `9D:FC:DF:B6:38:50:56:A8:99:E1:FF:5D:4A:B5:F0:0F:B3:B0:D8:51:8D:4F:C0:10:1E:28:BD:AE:F2:14:84:94`.
 
-The rest of this README is the upstream project's own and describes the official Meshtastic app.
-
 ---
+
+# Upstream Meshtastic-Android
+
+> [!NOTE]
+> The rest of this README is from the upstream [Meshtastic-Android](https://github.com/meshtastic/Meshtastic-Android) project and describes the official Meshtastic app.
 
 The Meshtastic client for Android and Compose Desktop — an app for communicating over open-source mesh radios. For more information see [meshtastic.org](https://www.meshtastic.org). The device-side code lives in the [firmware repository](https://github.com/meshtastic/firmware).
 
