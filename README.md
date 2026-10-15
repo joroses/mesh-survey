@@ -61,7 +61,7 @@ It installs as its own app, next to the official Meshtastic app, and doesn't tou
 
 ### Check the APK (optional)
 
-The certificate's SHA-256 is at the end of [Build a release APK](#build-a-release-apk). Compare it with what [AppVerifier](https://github.com/soupslurpr/AppVerifier) shows on the phone, or `apksigner verify --print-certs` on a computer. If it doesn't match, don't install the APK.
+Releases from this repository are signed with a certificate whose SHA-256 is `9D:FC:DF:B6:38:50:56:A8:99:E1:FF:5D:4A:B5:F0:0F:B3:B0:D8:51:8D:4F:C0:10:1E:28:BD:AE:F2:14:84:94`. Compare it with what [AppVerifier](https://github.com/soupslurpr/AppVerifier) shows on the phone, or `apksigner verify --print-certs` on a computer. If it doesn't match, don't install the APK.
 
 ### Updates
 
@@ -72,36 +72,7 @@ Install the newer APK over the old one, the same way: your sessions and settings
 - Allow **precise** location. With approximate location only, a survey won't start.
 - Allow notifications, so the survey's ongoing notification and its Stop button show.
 - Phones that kill background apps can stop a survey while the screen is off. Under Settings → Apps → Mesh Survey → Battery, choose **Unrestricted**.
-
-## Build a release APK
-
-You need the Android SDK (with `ANDROID_HOME` pointing at it) and any JDK 17 or newer to start Gradle. Gradle downloads the JDK 25 the build uses by itself.
-
-1. **Create a signing key** once, and back it up together with its password. Without it, nobody can install an update over your app.
-   ```bash
-   mkdir -m 700 ~/keys
-   keytool -genkeypair -v -keystore ~/keys/release.jks -alias release \
-     -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=your-name"
-   ```
-2. **Point the build at it** in `keystore.properties` at the repo root. Git ignores this file. Without it, the release build is unsigned and won't install.
-   ```properties
-   storeFile=/home/you/keys/release.jks
-   storePassword=…
-   keyAlias=release
-   keyPassword=…
-   ```
-3. **Build the `fdroid` flavor.** First raise the `-survey.N` number in `VERSION_NAME_BASE` (`config.properties`) if this is a new release, so the About screen and bug reports show which build someone has; the official app never carries that suffix. The build needs no Google services. The `google` flavor adds Firebase and Google Maps, which only work with your own `google-services.json` and Maps API key.
-   ```bash
-   ./gradlew :androidApp:assembleFdroidRelease
-   ```
-   The APKs land in `androidApp/build/outputs/apk/fdroid/release/`: `universal` runs on any phone, while `arm64-v8a` and `armeabi-v7a` are smaller. On a machine with less than 16 GB of RAM, add `--max-workers=2 -Dorg.gradle.jvmargs=-Xmx3g`.
-4. **Check the signature** before you share the APK:
-   ```bash
-   $ANDROID_HOME/build-tools/<version>/apksigner verify --print-certs \
-     androidApp/build/outputs/apk/fdroid/release/androidApp-fdroid-universal-release.apk
-   ```
-
-Your build installs next to the official Meshtastic app, as a separate app. If you share a build of your own, also change `APPLICATION_ID` in `config.properties`. Android refuses an update signed with a different key, so two builds with the same ID and different keys can't replace each other on a phone. Releases from this repository are signed with a certificate whose SHA-256 is `9D:FC:DF:B6:38:50:56:A8:99:E1:FF:5D:4A:B5:F0:0F:B3:B0:D8:51:8D:4F:C0:10:1E:28:BD:AE:F2:14:84:94`.
+- Leaving the survey running for a long time can drain your battery quite fast. Remember to stop it!
 
 ---
 
