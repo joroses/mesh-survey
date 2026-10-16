@@ -22,11 +22,14 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 
-/** A neighbour heard directly within this long counts as recent, and a guess from it as likely. */
+/** Time fallback for packets without a fix, or candidates without reception cells. */
 val RECENT_DIRECT = 1.hours
 
 /** How far back the survey radio's earlier sessions are searched for neighbours heard directly. */
 val DIRECT_HISTORY = 30.days
+
+/** Within 1 km of a direct reception cell counts as near, allowing for cell size and GPS error. */
+const val NEAR = 1_000.0
 
 private const val BYTE_MASK = 0xFFL
 private const val ZERO_BYTE_RELAY = 0xFF
@@ -54,19 +57,19 @@ sealed interface RelayGuess {
             get() = listOf(senderId)
     }
 
-    /** The only neighbour with this byte heard directly within [RECENT_DIRECT]. */
+    /** The only near neighbour with this byte, or the only recent one when the packet has no fix. */
     data class Likely(val nodeId: Long) : RelayGuess {
         override val nodeIds
             get() = listOf(nodeId)
     }
 
-    /** None recent, and the only one with this byte in the older history. */
+    /** None near (or recent without a fix), and the only one with this byte in the history. */
     data class Possible(val nodeId: Long) : RelayGuess {
         override val nodeIds
             get() = listOf(nodeId)
     }
 
-    /** Several neighbours share this byte in the best tier that has any; newest first. */
+    /** Several neighbours in the best tier; nearest first, or newest first without a packet fix. */
     data class Ambiguous(override val nodeIds: List<Long>) : RelayGuess
 
     /** No neighbour heard directly has this byte. */
@@ -142,26 +145,49 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
      * Who relayed a packet from [senderId] with [relayByte], heard at [atMs]. The sender and known CLIENT_MUTE nodes
      * cannot be its relay; [roleOf] checks the survey radio's node database, and an unknown role keeps a candidate.
      */
+    @Suppress("LongParameterList")
     fun guess(
         relayByte: Int,
         atMs: Long,
         senderId: Long,
+        latitude: Double? = null,
+        longitude: Double? = null,
         roleOf: (Long) -> Config.DeviceConfig.Role? = { null },
     ): RelayGuess {
-        val heard =
+        val sinceMs = atMs - DIRECT_HISTORY.inWholeMilliseconds
+        val candidates =
             byByte[relayByte]
                 .orEmpty()
-                .filter { it != senderId && roleOf(it) != Config.DeviceConfig.Role.CLIENT_MUTE }
-                .associateWith { all.getValue(it).lastDirectMs }
-        val recent = heard.filterValues { it >= atMs - RECENT_DIRECT.inWholeMilliseconds }
-        val older = heard.filterValues { it >= atMs - DIRECT_HISTORY.inWholeMilliseconds }
-        val tier = recent.ifEmpty { older }
-        return when {
-            tier.isEmpty() -> RelayGuess.Unknown
-            tier.size > 1 -> RelayGuess.Ambiguous(tier.entries.sortedByDescending { it.value }.map { it.key })
-            recent.isNotEmpty() -> RelayGuess.Likely(tier.keys.single())
-            else -> RelayGuess.Possible(tier.keys.single())
+                .filter { it != senderId }
+                .map { all.getValue(it) }
+                .filter { it.lastDirectMs >= sinceMs }
+                .filter { roleOf(it.nodeId) != Config.DeviceConfig.Role.CLIENT_MUTE }
+        val recentMs = atMs - RECENT_DIRECT.inWholeMilliseconds
+        if (latitude == null || longitude == null) {
+            val recent = candidates.filter { it.lastDirectMs >= recentMs }
+            val tier =
+                recent
+                    .ifEmpty { candidates }
+                    .sortedWith(compareByDescending<DirectSender> { it.lastDirectMs }.thenBy { it.nodeId })
+            return tierGuess(tier.map { it.nodeId }, likely = recent.isNotEmpty())
         }
+        val distances = candidates.associate { it.nodeId to it.nearest(latitude, longitude, sinceMs) }
+        val ordered =
+            candidates.sortedWith(
+                compareBy<DirectSender> { distances[it.nodeId]?.meters ?: Double.POSITIVE_INFINITY }
+                    .thenBy { it.nodeId },
+            )
+        val near = ordered.filter { candidate ->
+            distances[candidate.nodeId]?.let { it.meters <= NEAR } ?: (candidate.lastDirectMs >= recentMs)
+        }
+        return tierGuess(near.ifEmpty { ordered }.map { it.nodeId }, likely = near.isNotEmpty())
+    }
+
+    private fun tierGuess(nodeIds: List<Long>, likely: Boolean): RelayGuess = when {
+        nodeIds.isEmpty() -> RelayGuess.Unknown
+        nodeIds.size > 1 -> RelayGuess.Ambiguous(nodeIds)
+        likely -> RelayGuess.Likely(nodeIds.single())
+        else -> RelayGuess.Possible(nodeIds.single())
     }
 
     /** Keeps the latest direct time for the node and for each cell, without changing published snapshots. */

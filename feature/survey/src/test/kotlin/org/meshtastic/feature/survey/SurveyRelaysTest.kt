@@ -22,6 +22,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 class SurveyRelaysTest {
@@ -73,14 +75,14 @@ class SurveyRelaysTest {
     }
 
     @Test
-    fun `one neighbour heard directly in the last hour is the likely relay`() {
+    fun `without a packet fix one recent neighbour is likely`() {
         val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(30))))
 
         assertEquals(RelayGuess.Likely(0x13F), neighbours.guess(0x3F, now, senderId = 0x500))
     }
 
     @Test
-    fun `one heard directly only earlier is a possible relay, and one past the history none`() {
+    fun `without a packet fix older evidence is possible and expired evidence unknown`() {
         val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(90))))
 
         assertEquals(RelayGuess.Possible(0x13F), neighbours.guess(0x3F, now, senderId = 0x500))
@@ -89,14 +91,14 @@ class SurveyRelaysTest {
     }
 
     @Test
-    fun `a recent neighbour beats an older one with the same byte`() {
+    fun `without a packet fix a recent neighbour beats an older one`() {
         val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(90)), DirectSender(0x23F, ago(10))))
 
         assertEquals(RelayGuess.Likely(0x23F), neighbours.guess(0x3F, now, senderId = 0x500))
     }
 
     @Test
-    fun `several neighbours in the best tier are ambiguous, newest first`() {
+    fun `without a packet fix the best time tier is ambiguous newest first`() {
         val recent = DirectNeighbours(listOf(DirectSender(0x13F, ago(50)), DirectSender(0x23F, ago(10))))
         val older = DirectNeighbours(listOf(DirectSender(0x13F, ago(500)), DirectSender(0x23F, ago(100))))
 
@@ -104,25 +106,137 @@ class SurveyRelaysTest {
         assertEquals(RelayGuess.Ambiguous(listOf(0x23F, 0x13F)), older.guess(0x3F, now, senderId = 0x500))
     }
 
-    @Test
-    fun `CLIENT_MUTE is excluded from both guess tiers and an unknown role keeps its candidate`() {
-        val recent = DirectNeighbours(listOf(DirectSender(0x13F, ago(10)), DirectSender(0x23F, ago(20))))
-        val older = DirectNeighbours(listOf(DirectSender(0x13F, ago(90)), DirectSender(0x23F, ago(100))))
-        val roles = mutableMapOf(0x13FL to Config.DeviceConfig.Role.CLIENT_MUTE)
-        val roleOf = { id: Long -> roles[id] }
+    private fun DirectNeighbours.guessAt(latitude: Double, at: Long = now) =
+        guess(0x3F, at, senderId = 0x500, latitude = latitude, longitude = 0.0)
 
-        assertEquals(RelayGuess.Likely(0x23F), recent.guess(0x3F, now, 0x500, roleOf))
-        assertEquals(RelayGuess.Possible(0x23F), older.guess(0x3F, now, 0x500, roleOf))
-        roles[0x13F] = Config.DeviceConfig.Role.ROUTER
-        assertEquals(RelayGuess.Ambiguous(listOf(0x13F, 0x23F)), recent.guess(0x3F, now, 0x500, roleOf))
+    @Test
+    fun `same-byte neighbours heard from one cell stay ambiguous past either one's hour`() {
+        val neighbours = DirectNeighbours()
+        // Reverse insertion and last-heard order must not affect the node-number tie break.
+        neighbours.record(row(0x23F, 0x3F, at = ago(10), latitude = 1.0002))
+        neighbours.record(row(0x13F, 0x3F, at = ago(50), latitude = 1.0))
+        val expected = RelayGuess.Ambiguous(listOf(0x13F, 0x23F))
+
+        assertEquals(expected, neighbours.guessAt(1.0))
+        assertEquals(expected, neighbours.guessAt(1.0, now + 11.minutes.inWholeMilliseconds))
+        assertEquals(expected, neighbours.guessAt(1.0, now + 51.minutes.inWholeMilliseconds))
+        neighbours.record(row(0x13F, 0x3F, at = now, latitude = 1.0001))
+        assertEquals(expected, neighbours.guessAt(1.0, now + 2.hours.inWholeMilliseconds))
     }
 
     @Test
-    fun `a mute node alone cannot be a relay even if recent`() {
-        val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(10))))
+    fun `moving from A's reception zone to B's makes B likely once heard there`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0))
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.0))
+        assertEquals(RelayGuess.Possible(0x13F), neighbours.guessAt(0.1))
+
+        neighbours.record(row(0x23F, 0x3F, latitude = 0.1))
+
+        assertEquals(RelayGuess.Likely(0x23F), neighbours.guessAt(0.1))
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.0))
+    }
+
+    @Test
+    fun `a router heard along a route ranks by its closest reception rather than its latest`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x23F, 0x3F, at = ago(500), latitude = 0.1))
+        neighbours.record(row(0x23F, 0x3F, at = ago(100), latitude = 0.5))
+        neighbours.record(row(0x13F, 0x3F, at = ago(1), latitude = 0.48)) // About 40 km away.
+
+        assertEquals(RelayGuess.Likely(0x23F), neighbours.guessAt(0.1))
+        // None near: the router's earlier reception still ranks before the chatty distant node.
+        assertEquals(RelayGuess.Ambiguous(listOf(0x23F, 0x13F)), neighbours.guessAt(0.12))
+    }
+
+    @Test
+    fun `yesterday's cells count immediately on return even after a newer reception elsewhere`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, at = now - 1.days.inWholeMilliseconds, latitude = 0.0))
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.5))
+        neighbours.record(row(0x23F, 0x3F, latitude = 0.5))
+
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.0))
+    }
+
+    @Test
+    fun `cells expire after 30 days even when the node was recently heard elsewhere`() {
+        val cutoff = now - DIRECT_HISTORY.inWholeMilliseconds
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, at = cutoff, latitude = 0.0))
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.5))
+
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.0))
+        assertEquals(RelayGuess.Possible(0x13F), neighbours.guessAt(0.0, now + 1))
+        val expired = DirectNeighbours(listOf(DirectSender(0x23F, cutoff - 1, mapOf(DirectCell(0, 0) to cutoff - 1))))
+        assertEquals(RelayGuess.Unknown, expired.guessAt(0.0))
+    }
+
+    @Test
+    fun `a candidate without cells is near only within the hour`() {
+        val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(60))))
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.0))
+        assertEquals(RelayGuess.Possible(0x13F), neighbours.guessAt(0.0, now + 1))
+
+        neighbours.record(row(0x23F, 0x3F, at = ago(500), latitude = 0.0))
+        assertEquals(RelayGuess.Ambiguous(listOf(0x23F, 0x13F)), neighbours.guessAt(0.0))
+        assertEquals(RelayGuess.Likely(0x23F), neighbours.guessAt(0.0, now + 1))
+    }
+
+    @Test
+    fun `with none near candidates sort by distance then node number and fixless last`() {
+        val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, now)))
+        neighbours.record(row(0x33F, 0x3F, at = ago(500), latitude = 0.1))
+        neighbours.record(row(0x23F, 0x3F, at = ago(100), latitude = 0.1))
+        neighbours.record(row(0x43F, 0x3F, at = ago(5), latitude = 0.2))
+
+        assertEquals(
+            RelayGuess.Ambiguous(listOf(0x23F, 0x33F, 0x43F, 0x13F)),
+            neighbours.guessAt(0.0, now + 2.hours.inWholeMilliseconds),
+        )
+    }
+
+    @Test
+    fun `near means within one kilometre of the cell centre`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, at = ago(500), latitude = 0.0))
+
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.008))
+        assertEquals(RelayGuess.Possible(0x13F), neighbours.guessAt(0.010))
+    }
+
+    @Test
+    fun `fixless packets use time tiers even when reception cells exist`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, at = ago(90), latitude = 0.0))
+        neighbours.record(row(0x23F, 0x3F, at = ago(10), latitude = 0.5))
+
+        assertEquals(RelayGuess.Likely(0x23F), neighbours.guess(0x3F, now, senderId = 0x500))
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.0))
+    }
+
+    @Test
+    fun `CLIENT_MUTE is excluded from both guess tiers and an unknown role keeps its candidate`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0))
+        neighbours.record(row(0x23F, 0x3F, latitude = 0.1))
+        val roles = mutableMapOf(0x13FL to Config.DeviceConfig.Role.CLIENT_MUTE)
+        val roleOf = { id: Long -> roles[id] }
+
+        assertEquals(RelayGuess.Possible(0x23F), neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, roleOf))
+        assertEquals(RelayGuess.Likely(0x23F), neighbours.guess(0x3F, now, 0x500, roleOf = roleOf))
+        roles[0x13F] = Config.DeviceConfig.Role.ROUTER
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, roleOf))
+    }
+
+    @Test
+    fun `a mute node alone cannot be a relay even if recent and nearby`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0))
         val mute = { _: Long -> Config.DeviceConfig.Role.CLIENT_MUTE }
 
-        assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, 0x500, mute))
+        assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, mute))
+        assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, 0x500, roleOf = mute))
     }
 
     @Test
@@ -132,6 +246,10 @@ class SurveyRelaysTest {
         neighbours.record(row(0x2FF, 0xFF, at = ago(1)))
 
         assertEquals(RelayGuess.Ambiguous(listOf(0x2FF, 0x100)), neighbours.guess(0xFF, now, senderId = 0x500))
+        assertEquals(
+            RelayGuess.Ambiguous(listOf(0x100, 0x2FF)),
+            neighbours.guess(0xFF, now, senderId = 0x500, latitude = 0.0, longitude = 0.0),
+        )
     }
 
     @Test
@@ -142,6 +260,7 @@ class SurveyRelaysTest {
 
         neighbours.record(row(0x13F, 0x3F, at = ago(1)))
         assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, senderId = 0x13F))
+        assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, 0x13F, latitude = 0.0, longitude = 0.0))
         assertEquals(RelayGuess.Unknown, neighbours.guess(0x40, now, senderId = 0x500))
     }
 

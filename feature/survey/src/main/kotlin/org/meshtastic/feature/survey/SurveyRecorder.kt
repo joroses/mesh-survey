@@ -323,7 +323,7 @@ class SurveyRecorder(
                 if (row.isDirect()) {
                     RelayGuess.Direct(row.senderNodeId)
                 } else {
-                    current.neighbours.guess(byte, row.heardAtMs, row.senderNodeId) { id ->
+                    current.neighbours.guess(byte, row.heardAtMs, row.senderNodeId, row.latitude, row.longitude) { id ->
                         nodes.nodeDBbyNum.value[id.toInt()]?.user?.role
                     }
                 }

@@ -17,6 +17,7 @@
 package org.meshtastic.feature.survey
 
 import co.touchlab.kermit.Severity
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -49,6 +50,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -100,7 +102,7 @@ class SurveyRecorderTest {
         .apply { settings = listOf(ChannelSettings.Builder().apply { this.name = name }.build()) }
         .build()
 
-    private fun TestScope.recorder(): SurveyRecorder {
+    private fun TestScope.recorder(surveyDao: SurveyDao = dao, elapsedRealtime: Long = 5_000L): SurveyRecorder {
         radio =
             FakeRadioInterfaceService(backgroundScope).apply {
                 setDeviceAddress("xradio")
@@ -110,13 +112,13 @@ class SurveyRecorderTest {
             object : SurveyClock {
                 override fun wallTimeMs() = clockError?.let { throw it } ?: 1_000_000L
 
-                override fun elapsedRealtimeMs() = 5_000L
+                override fun elapsedRealtimeMs() = elapsedRealtime
             }
         return SurveyRecorder(
             tap,
             location,
             clock,
-            dao,
+            surveyDao,
             nodes,
             radio,
             service,
@@ -353,6 +355,42 @@ class SurveyRecorderTest {
         }
 
     @Test
+    fun `live direct packets add cells and guesses use the packet's own fix even when stale`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val saving = CompletableDeferred<Unit>()
+            val savePacket = CompletableDeferred<Unit>()
+            val delayedDao =
+                object : SurveyDao by dao {
+                    override suspend fun insertMeasurement(measurement: SurveyMeasurement): Long {
+                        if (measurement.senderNodeId == 0x500L) {
+                            saving.complete(Unit)
+                            savePacket.await()
+                        }
+                        return dao.insertMeasurement(measurement)
+                    }
+                }
+            val elapsed = 2.hours.inWholeMilliseconds
+            val recorder = recorder(delayedDao, elapsedRealtime = elapsed)
+            recorder.start()
+            location.send(SurveyFix(elapsed, 0.0, 0.0, 10f))
+            hear(from = 0x13F, relay = 0x3F)
+            assertEquals(mapOf(DirectCell(0, 0) to 1_000_000L), recorder.state.value.neighbours[0x13F]?.places)
+
+            location.send(SurveyFix(elapsed, 0.1, 0.0, 10f))
+            hear(from = 0x23F, relay = 0x3F)
+            location.send(SurveyFix(0, 0.0, 0.0, 10f)) // Two-hour-old fix still belongs to this packet.
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            saving.await()
+            location.send(SurveyFix(elapsed, 0.1, 0.0, 10f)) // The screen moves while the insert waits.
+            savePacket.complete(Unit)
+
+            assertEquals(0.0, recorder.state.value.lastMeasurement?.latitude)
+            assertEquals(elapsed, recorder.state.value.lastMeasurement?.fixAgeMs)
+            assertEquals(0.1, recorder.state.value.fix?.latitude)
+            assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.relays[0x3F]?.guess)
+        }
+
+    @Test
     fun `relay guesses check current radio node roles but direct packets still name mute senders`() =
         runTest(UnconfinedTestDispatcher()) {
             val muteId = 0x8000_013F.toInt()
@@ -365,6 +403,7 @@ class SurveyRecorderTest {
             nodes.setNodes(listOf(mute))
             val recorder = recorder()
             recorder.start()
+            location.send(SurveyFix(5_000, 0.0, 0.0, 10f))
             hear(from = muteId, relay = 0x3F)
             assertEquals(RelayGuess.Direct(0x8000_013FL), recorder.state.value.relays[0x3F]?.guess)
             hear(from = 0x23F, relay = 0x3F) // Absent from the radio's node database: unknown role.
@@ -374,7 +413,10 @@ class SurveyRecorderTest {
 
             nodes.setNodes(emptyList()) // Unknown roles must keep both candidates on the next packet.
             hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
-            assertEquals(RelayGuess.Ambiguous(listOf(0x8000_013FL, 0x23F)), recorder.state.value.relays[0x3F]?.guess)
+            assertEquals(
+                RelayGuess.Ambiguous(listOf(0x23F, 0x8000_013FL)),
+                recorder.state.value.relays[0x3F]?.guess,
+            )
         }
 
     @Test
@@ -440,14 +482,19 @@ private const val HOP_START = 3
 
 private class FakeSurveyLocation : SurveyLocation {
     var running = false
+    private var onFix: ((SurveyFix) -> Unit)? = null
 
     override fun isAvailable() = true
 
     override fun start(onFix: (SurveyFix) -> Unit) {
         running = true
+        this.onFix = onFix
     }
 
     override fun stop() {
         running = false
+        onFix = null
     }
+
+    fun send(fix: SurveyFix) = onFix?.invoke(fix)
 }
