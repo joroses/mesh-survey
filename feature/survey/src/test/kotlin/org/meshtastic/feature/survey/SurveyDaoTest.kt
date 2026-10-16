@@ -53,11 +53,12 @@ class SurveyDaoTest {
         hopStart: Int = 3,
         hopLimit: Int = 3,
         relayByte: Int? = null,
+        latitude: Double? = null,
     ) = SurveyMeasurement(
         sessionId = sessionId,
         heardAtMs = heardAt,
-        latitude = null,
-        longitude = null,
+        latitude = latitude,
+        longitude = latitude?.let { 2.0 },
         accuracyM = null,
         fixAgeMs = null,
         senderNodeId = sender,
@@ -120,9 +121,10 @@ class SurveyDaoTest {
         dao.insertSession(session("old", startedAt = 1))
         dao.insertSession(session("new", startedAt = 50))
         dao.insertSession(session("other radio", startedAt = 1, receiverNodeId = 9))
-        dao.insertMeasurement(measurement("old", 20, sender = 0x102, relayByte = 0x02))
+        dao.insertMeasurement(measurement("old", 20, sender = 0x102, relayByte = 0x02, latitude = 1.0))
         dao.insertMeasurement(measurement("new", 60, sender = 0x102, relayByte = 0x02)) // The latest time wins.
-        dao.insertMeasurement(measurement("new", 55, sender = 0x102, relayByte = 0x02))
+        dao.insertMeasurement(measurement("new", 55, sender = 0x102, relayByte = 0x02, latitude = 3.0)) // Its place.
+        dao.insertMeasurement(measurement("new", 54, sender = 0x102, relayByte = 0x02, latitude = 4.0))
         dao.insertMeasurement(measurement("new", 61, sender = 0x200, relayByte = 0xFF)) // 00 is sent as FF.
         dao.insertMeasurement(measurement("new", 62, sender = 0x103, hopLimit = 2, relayByte = 0x03)) // A hop used.
         dao.insertMeasurement(measurement("new", 63, sender = 0x104, relayByte = 0x3F)) // Someone else's byte.
@@ -132,7 +134,10 @@ class SurveyDaoTest {
 
         val senders = dao.directSenders(receiverNodeId = 1, sinceMs = 10)
 
-        assertEquals(listOf(DirectSender(0x102, 60), DirectSender(0x200, 61)), senders.sortedBy { it.nodeId })
+        assertEquals(
+            listOf(DirectSender(0x102, 60, 3.0, 2.0, 55), DirectSender(0x200, 61)),
+            senders.sortedBy { it.nodeId },
+        )
     }
 
     @Test

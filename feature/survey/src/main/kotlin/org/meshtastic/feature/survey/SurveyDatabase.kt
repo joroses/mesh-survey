@@ -129,16 +129,23 @@ interface SurveyDao {
     suspend fun measurementsAfter(sessionId: String, afterSeq: Long, limit: Int): List<SurveyMeasurement>
 
     /**
-     * Each sender [receiverNodeId] has heard directly since [sinceMs], in any session, with its latest such time. The
-     * WHERE clause repeats [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE.
+     * Each sender [receiverNodeId] has heard directly since [sinceMs], in any session, with its latest such time and
+     * where the phone was the latest time such a reception had a position. The `direct` WHERE clause repeats
+     * [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE. In `p`, SQLite takes the bare latitude and
+     * longitude from the row that has the MAX.
      */
     @Query(
-        "SELECT m.sender_node_id AS nodeId, MAX(m.heard_at_ms) AS lastDirectMs " +
+        "WITH direct AS (SELECT m.sender_node_id, m.heard_at_ms, m.latitude, m.longitude " +
             "FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
             "WHERE s.receiver_node_id = :receiverNodeId AND m.heard_at_ms >= :sinceMs " +
             "AND m.hop_start = m.hop_limit " +
-            "AND m.relay_byte = CASE WHEN m.sender_node_id % 256 = 0 THEN 255 ELSE m.sender_node_id % 256 END " +
-            "GROUP BY m.sender_node_id",
+            "AND m.relay_byte = CASE WHEN m.sender_node_id % 256 = 0 THEN 255 ELSE m.sender_node_id % 256 END) " +
+            "SELECT d.sender_node_id AS nodeId, MAX(d.heard_at_ms) AS lastDirectMs, " +
+            "p.latitude AS latitude, p.longitude AS longitude, p.heard_at_ms AS positionMs " +
+            "FROM direct d LEFT JOIN (SELECT sender_node_id, MAX(heard_at_ms) AS heard_at_ms, latitude, longitude " +
+            "FROM direct WHERE latitude IS NOT NULL AND longitude IS NOT NULL GROUP BY sender_node_id) p " +
+            "ON p.sender_node_id = d.sender_node_id " +
+            "GROUP BY d.sender_node_id",
     )
     suspend fun directSenders(receiverNodeId: Long, sinceMs: Long): List<DirectSender>
 

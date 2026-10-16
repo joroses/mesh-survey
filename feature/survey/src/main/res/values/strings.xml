@@ -45,6 +45,20 @@
     <string name="survey_relay_possible">%1$s ≈ %2$s?</string>
     <string name="survey_relay_ambiguous">%1$s: %2$s</string>
     <string name="survey_relay_or">%1$s or %2$s</string>
+    <string name="survey_relays_open">Show relays</string>
+    <string name="survey_relays_title">Relays this session</string>
+    <string name="survey_relays_explained">≈ likely: the only node with that byte heard directly in the last hour. ? possible: heard directly in the last 30 days. Distances are from where this phone was when it heard the node directly, not from the node itself.</string>
+    <plurals name="survey_relay_packets">
+        <item quantity="one">%1$d packet, last %2$s</item>
+        <item quantity="other">%1$d packets, last %2$s</item>
+    </plurals>
+    <!-- %2$s and %4$s are relative times ("3 min. ago"), %3$s a distance. -->
+    <string name="survey_relay_candidate">%1$s: heard directly %2$s</string>
+    <string name="survey_relay_candidate_at">%1$s: heard directly %2$s, %3$s from here</string>
+    <string name="survey_relay_candidate_earlier">%1$s: heard directly %2$s, and with a GPS fix %4$s, %3$s from here</string>
+    <string name="survey_distance_m">%1$d m</string>
+    <string name="survey_distance_km">%1$s km</string>
+    <string name="survey_close">Close</string>
     <string name="survey_last_ended">Last session: %1$s</string>
     <string name="survey_problem_no_radio">Connect a radio first.</string>
     <string name="survey_problem_no_lora">The radio has not sent its LoRa settings yet. Try again in a moment.</string>

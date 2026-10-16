@@ -305,18 +305,21 @@ class SurveyRecorderTest {
         runTest(UnconfinedTestDispatcher()) {
             val recorder = recorder()
             recorder.start()
+            val relays = { recorder.state.value.relays }
 
             hear(from = 0x13F, relay = 0x3F)
-            assertEquals(RelayGuess.Direct(0x13F), recorder.state.value.lastRelayGuess)
+            assertEquals(RelayStats(1, 1_000_000, RelayGuess.Direct(0x13F)), relays()[0x3F])
+            assertEquals(setOf(0x13FL), recorder.state.value.neighbours.keys)
 
             hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
-            assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.lastRelayGuess)
+            assertEquals(RelayStats(2, 1_000_000, RelayGuess.Likely(0x13F)), relays()[0x3F])
 
             hear(from = 0x500, hopsUsed = 1, relay = 0x77)
-            assertEquals(RelayGuess.Unknown, recorder.state.value.lastRelayGuess)
+            assertEquals(RelayGuess.Unknown, relays()[0x77]?.guess)
 
             hear(from = 0x500) // Older firmware: no relay byte.
-            assertNull(recorder.state.value.lastRelayGuess)
+            assertEquals(setOf(0x3F, 0x77), relays().keys)
+            assertEquals(4, recorder.state.value.measurementCount)
         }
 
     @Test
@@ -359,7 +362,8 @@ class SurveyRecorderTest {
 
         hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
 
-        assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.lastRelayGuess)
+        assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.relays[0x3F]?.guess)
+        assertEquals(setOf(0x13FL), recorder.state.value.neighbours.keys)
     }
 
     @Test

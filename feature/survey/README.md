@@ -26,7 +26,8 @@ A packet carries only the last byte of the node that relayed it (`relay_byte`), 
 | None | `3f` |
 
 - **Direct** means `hop_start == hop_limit` and the relay byte is the sender's own (`isDirect`).
-- **Candidates** are only senders this survey radio has heard directly: in this session, and in earlier sessions with the same `receiver_node_id` from the last 30 days (`SurveyDao.directSenders`, loaded when a session starts). The sender itself is never a candidate, and a packet is never evidence for its own guess.
+- **Candidates** are only senders this survey radio has heard directly: in this session, and in earlier sessions with the same `receiver_node_id` from the last 30 days (`SurveyDao.directSenders`, loaded when a session starts, with where each was last heard directly). The sender itself is never a candidate, and a packet is never evidence for its own guess.
+- **The relay list.** Tapping "N distinct relays" lists this session's relay bytes, most packets first: each byte's guess, packet count and when its last packet arrived, and for each candidate when the radio last heard it directly and how far that was from the phone's current fix. The distance runs from where the phone was the last time it heard the candidate directly with a GPS fix (which can be older than the last direct reception; the list then says when), not from the node itself, so it is a hint for picking between candidates, not a range. It does not rank them: guesses use time alone.
 - **Names** come from the node database of the connected radio, which is the survey radio; a node missing from it shows as `!xxxxxxxx`.
 - **Not stored or exported.** Guesses are derived: the database, the CSV and the SigSleuth upload keep only the raw fields, so SigSleuth can make its own.
 

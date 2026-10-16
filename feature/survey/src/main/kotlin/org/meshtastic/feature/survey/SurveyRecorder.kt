@@ -70,10 +70,13 @@ data class SurveyState(
     val measurementCount: Int = 0,
     val fix: SurveyFix? = null,
     val lastMeasurement: SurveyMeasurement? = null,
-    /** The distinct relay bytes this session's measurements carry; a packet heard directly carries its sender's. */
-    val relays: Set<Int> = emptySet(),
-    /** Who most likely relayed [lastMeasurement]; null when it carries no relay byte. */
-    val lastRelayGuess: RelayGuess? = null,
+    /**
+     * The relay bytes this session's measurements carry, with their packet counts and latest guesses; a packet heard
+     * directly carries its sender's byte.
+     */
+    val relays: Map<Int, RelayStats> = emptyMap(),
+    /** The nodes the survey radio has heard directly, this session and in the [DIRECT_HISTORY] before it. */
+    val neighbours: Map<Long, DirectSender> = emptyMap(),
     val problem: SurveyProblem? = null,
     /** How the last session ended, until the next one starts. */
     val lastEnd: SurveyStatus? = null,
@@ -236,7 +239,7 @@ class SurveyRecorder(
             .getOrDefault(emptyList())
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)
         val current = Active(session, myNode.myNodeNum, address, rows, DirectNeighbours(history))
-        mutableState.value = SurveyState(session = session)
+        mutableState.value = SurveyState(session = session, neighbours = current.neighbours.all)
         writer = scope.launch { write(current) }
         watcher = scope.launch { watch(current, lora) }
         active = current
@@ -298,22 +301,28 @@ class SurveyRecorder(
                 mutableState.update { it.copy(problem = SurveyProblem.STORAGE) }
                 continue
             }
-            val guess =
-                row.relayByte?.let { byte ->
-                    if (row.isDirect()) {
-                        RelayGuess.Direct(row.senderNodeId)
-                    } else {
-                        current.neighbours.guess(byte, row.heardAtMs, row.senderNodeId)
-                    }
+            val relayByte = row.relayByte
+            val guess = relayByte?.let { byte ->
+                if (row.isDirect()) {
+                    RelayGuess.Direct(row.senderNodeId)
+                } else {
+                    current.neighbours.guess(byte, row.heardAtMs, row.senderNodeId)
                 }
+            }
             // After the guess, so a packet is never its own evidence.
             current.neighbours.record(row)
             mutableState.update {
                 it.copy(
                     measurementCount = it.measurementCount + 1,
                     lastMeasurement = row.copy(seq = seq),
-                    relays = row.relayByte?.let { byte -> it.relays + byte } ?: it.relays,
-                    lastRelayGuess = guess,
+                    relays =
+                    if (relayByte == null || guess == null) {
+                        it.relays
+                    } else {
+                        val packets = (it.relays[relayByte]?.packets ?: 0) + 1
+                        it.relays + (relayByte to RelayStats(packets, row.heardAtMs, guess))
+                    },
+                    neighbours = current.neighbours.all,
                 )
             }
         }
