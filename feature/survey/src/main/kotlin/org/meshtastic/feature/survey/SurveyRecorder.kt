@@ -72,6 +72,8 @@ data class SurveyState(
     val lastMeasurement: SurveyMeasurement? = null,
     /** The distinct relay bytes this session's measurements carry; a packet heard directly carries its sender's. */
     val relays: Set<Int> = emptySet(),
+    /** Who most likely relayed [lastMeasurement]; null when it carries no relay byte. */
+    val lastRelayGuess: RelayGuess? = null,
     val problem: SurveyProblem? = null,
     /** How the last session ended, until the next one starts. */
     val lastEnd: SurveyStatus? = null,
@@ -170,6 +172,8 @@ class SurveyRecorder(
         val surveyNode: Int,
         val address: String,
         val rows: Channel<SurveyMeasurement>,
+        /** The candidates for relay guesses; only the writer touches it. */
+        val neighbours: DirectNeighbours,
     ) {
         /**
          * The transport session whose node and LoRa settings the watcher has checked against this session; only its
@@ -228,10 +232,15 @@ class SurveyRecorder(
                 appVersion = buildConfig.versionName,
             )
         if (safeCatching { dao.insertSession(session) }.isFailure) return fail(SurveyProblem.STORAGE)
+        // Without the history the guesses only start from this session's packets, which is no reason not to record.
+        val history = safeCatching {
+            dao.directSenders(session.receiverNodeId, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
+        }
+            .getOrDefault(emptyList())
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)
-        val current = Active(session, myNode.myNodeNum, address, rows)
+        val current = Active(session, myNode.myNodeNum, address, rows, DirectNeighbours(history))
         mutableState.value = SurveyState(session = session)
-        writer = scope.launch { write(rows) }
+        writer = scope.launch { write(current) }
         watcher = scope.launch { watch(current, lora) }
         active = current
         tap.listener = ::onPacket
@@ -298,18 +307,31 @@ class SurveyRecorder(
         }
     }
 
-    private suspend fun write(rows: Channel<SurveyMeasurement>) {
-        for (row in rows) {
+    private suspend fun write(current: Active) {
+        for (row in current.rows) {
             val seq = safeCatching { dao.insertMeasurement(row) }.getOrNull()
             if (seq == null) {
                 mutableState.update { it.copy(problem = SurveyProblem.STORAGE) }
                 continue
             }
+            val guess =
+                row.relayByte?.let { byte ->
+                    if (row.isDirect()) {
+                        RelayGuess.Direct(row.senderNodeId)
+                    } else {
+                        current.neighbours.guess(byte, row.heardAtMs, row.senderNodeId) { id ->
+                            nodes.nodeDBbyNum.value[id.toInt()]?.user?.role
+                        }
+                    }
+                }
+            // After the guess, so a packet is never its own evidence.
+            current.neighbours.record(row)
             mutableState.update {
                 it.copy(
                     measurementCount = it.measurementCount + 1,
                     lastMeasurement = row.copy(seq = seq),
                     relays = row.relayByte?.let { byte -> it.relays + byte } ?: it.relays,
+                    lastRelayGuess = guess,
                 )
             }
         }

@@ -13,6 +13,25 @@ Signal survey, a fork-only feature (not in upstream Meshtastic-Android). While a
 - **Upload** (`SurveyUploader`): batches of 500 rows after each session's `uploaded_seq`, oldest session first; the server's `last_seq` becomes the new `uploaded_seq`, and it ignores rows it already holds. It stops at the first failure and saves the error. The URL must be absolute (`https://host`): the app's shared HttpClient resolves anything else against api.meshtastic.org, so Save refuses it and the uploader sends nothing. Each session keeps what SigSleuth's replies say it kept and skipped, by reason (`no_position`, `too_old`, …), and its card shows them, since "Uploaded N of N" only means the server answered. A `hop_start` of 0 (firmware older than hop counts) is uploaded with both hop fields null, as SigSleuth's MQTT side stores it; the CSV keeps the raw values. It runs every minute while recording and once when a session ends (if "Upload automatically" is on), and from the Upload buttons. The URL, user and password live in this module's DataStore (`signal_survey_ds`); the password is sent as `Authorization: Basic`, never in the URL, whenever a user or a password is set (SigSleuth checks only the password: its `SIGSLEUTH_UPLOAD_PASSWORD`).
 - **Cleartext HTTP** is blocked except to `localhost`, so a deployed SigSleuth needs HTTPS. Over USB, `adb reverse tcp:8001 tcp:8001` reaches a local instance as `http://localhost:8001`.
 
+## Relay guesses
+
+A packet carries only the last byte of the node that relayed it (`relay_byte`), and the firmware sends a node number ending in `00` as `FF` (`getLastByteOfNodeNum` in `NodeDB.h`), so many nodes can share a byte. The recording card's "Last packet" line names the likely relay anyway, marked as a guess (`SurveyRelays.kt`):
+
+| Situation | Relay text |
+| :--- | :--- |
+| The packet came straight from its sender | `ABCD (direct)` |
+| One neighbour with that byte heard directly in the last hour | `3f ≈ ABCD` |
+| None in the last hour, one in the last 30 days | `3f ≈ ABCD?` |
+| Several in the best of those two tiers | `3f: ABCD or EFGH` (newest first, at most three) |
+| None | `3f` |
+
+- **Direct** means `hop_start == hop_limit` and the relay byte is the sender's own (`isDirect`).
+- **Candidates** are only senders this survey radio has heard directly: in this session, and in earlier sessions with the same `receiver_node_id` from the last 30 days (`SurveyDao.directSenders`, loaded when a session starts). The sender itself is never a candidate, and a packet is never evidence for its own guess. Nodes whose role in the survey radio's node database is `CLIENT_MUTE` are excluded because they never rebroadcast; an unknown role keeps the candidate.
+- **Names** come from the node database of the connected radio, which is the survey radio; a node missing from it shows as `!xxxxxxxx`.
+- **Not stored or exported.** Guesses are derived: the database, the CSV and the SigSleuth upload keep only the raw fields, so SigSleuth can make its own.
+
+Limits: a relay the survey radio has never heard directly is never named, a neighbour heard directly only from another spot may be out of range now, and two neighbours sharing a byte stay ambiguous. Upstream named relays by matching the whole node database and dropped it because it named stale or wrong nodes ([#4292](https://github.com/meshtastic/Meshtastic-Android/issues/4292), [design#33](https://github.com/meshtastic/design/issues/33), [#3773](https://github.com/meshtastic/Meshtastic-Android/pull/3773)); limiting candidates to direct neighbours follows the firmware's own relay attribution in [firmware#12090](https://github.com/meshtastic/firmware/pull/12090).
+
 ## CSV export compared with "Export all packets"
 
 Settings' "Export all packets" (`ExportDataUseCase`; "Export rangetest packets" is the same export filtered to the range-test port) writes `date, time, from, sender name, sender lat, sender long, rx lat, rx long, rx elevation, rx snr, distance(m), hop limit, hop start, relay node, payload`. The survey's CSV (`SurveyCsv`, one session per file) writes `session_id, seq, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, sender_node_id, recipient_node_id, packet_id, rx_snr, rx_rssi, hop_start, hop_limit, relay_byte`.

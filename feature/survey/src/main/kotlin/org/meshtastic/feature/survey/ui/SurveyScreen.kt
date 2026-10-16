@@ -68,6 +68,7 @@ import org.meshtastic.core.common.util.nowMillis
 import org.meshtastic.core.ui.icon.ArrowBack
 import org.meshtastic.core.ui.icon.MeshtasticIcons
 import org.meshtastic.feature.survey.R
+import org.meshtastic.feature.survey.RelayGuess
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveySessionSummary
 import org.meshtastic.feature.survey.SurveyState
@@ -85,6 +86,7 @@ fun SurveyScreen(
     viewModel: SurveyViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val relayNames by viewModel.relayNames.collectAsStateWithLifecycle()
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val uploadSettings by viewModel.uploadSettings.collectAsStateWithLifecycle()
     val uploading by viewModel.uploading.collectAsStateWithLifecycle()
@@ -130,7 +132,7 @@ fun SurveyScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { RecordingCard(state, onStart = requestStart, onStop = viewModel::stop) }
+            item { RecordingCard(state, relayNames, onStart = requestStart, onStop = viewModel::stop) }
             item {
                 uploadSettings?.let { current ->
                     UploadSettingsCard(
@@ -185,7 +187,7 @@ private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
 
 @Composable
-private fun RecordingCard(state: SurveyState, onStart: () -> Unit, onStop: () -> Unit) {
+private fun RecordingCard(state: SurveyState, relayNames: Map<Long, String>, onStart: () -> Unit, onStop: () -> Unit) {
     val session = state.session
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -220,7 +222,7 @@ private fun RecordingCard(state: SurveyState, onStart: () -> Unit, onStop: () ->
                             R.string.survey_last_packet,
                             last.rxSnr?.let { NumberFormatter.format(it, 2) } ?: "–",
                             last.rxRssi?.toString() ?: "–",
-                            last.relayByte?.let { "%02x".format(Locale.ROOT, it) } ?: "–",
+                            last.relayByte?.let { relayText(it, state.lastRelayGuess, relayNames) } ?: "–",
                         ),
                     )
                 }
@@ -234,6 +236,36 @@ private fun RecordingCard(state: SurveyState, onStart: () -> Unit, onStop: () ->
         }
     }
 }
+
+/** The relay byte with who most likely sent it on, worded as the guess it is. */
+@Composable
+private fun relayText(relayByte: Int, guess: RelayGuess?, names: Map<Long, String>): String {
+    val byte = "%02x".format(Locale.ROOT, relayByte)
+    fun name(id: Long) = names[id] ?: "!%08x".format(Locale.ROOT, id)
+    return when (guess) {
+        is RelayGuess.Direct -> stringResource(R.string.survey_relay_direct, name(guess.senderId))
+
+        is RelayGuess.Likely -> stringResource(R.string.survey_relay_likely, byte, name(guess.nodeId))
+
+        is RelayGuess.Possible -> stringResource(R.string.survey_relay_possible, byte, name(guess.nodeId))
+
+        is RelayGuess.Ambiguous -> {
+            val shown = guess.nodeIds.take(MAX_RELAY_NAMES).map(::name)
+            val more = if (guess.nodeIds.size > MAX_RELAY_NAMES) "…" else ""
+            stringResource(
+                R.string.survey_relay_ambiguous,
+                byte,
+                shown.reduce { joined, next -> stringResource(R.string.survey_relay_or, joined, next) } + more,
+            )
+        }
+
+        RelayGuess.Unknown,
+        null,
+        -> byte
+    }
+}
+
+private const val MAX_RELAY_NAMES = 3
 
 @Composable
 private fun gpsText(state: SurveyState): String {
