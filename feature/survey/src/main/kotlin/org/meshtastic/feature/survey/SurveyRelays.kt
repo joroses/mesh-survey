@@ -16,6 +16,7 @@
  */
 package org.meshtastic.feature.survey
 
+import org.meshtastic.core.common.util.latLongToMeter
 import org.meshtastic.proto.Config
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -74,8 +75,28 @@ sealed interface RelayGuess {
     }
 }
 
-/** A node the survey radio heard directly, and when it last did. */
-data class DirectSender(val nodeId: Long, val lastDirectMs: Long)
+/**
+ * A node the survey radio heard directly, and when it last did. The position is where the phone was the last time it
+ * heard the node directly with a GPS fix, at [positionMs], which can be older than [lastDirectMs]; null when no direct
+ * reception had a fix. It is not the node's own position.
+ */
+data class DirectSender(
+    val nodeId: Long,
+    val lastDirectMs: Long,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val positionMs: Long? = null,
+) {
+    /** Metres from where it was last heard directly to ([latitude], [longitude]); null without a position. */
+    fun metersFrom(latitude: Double, longitude: Double): Double? {
+        val lat = this.latitude
+        val lon = this.longitude
+        return if (lat == null || lon == null) null else latLongToMeter(lat, lon, latitude, longitude)
+    }
+}
+
+/** One relay byte in this session: its packets, when the last arrived, and the guess made for that packet. */
+data class RelayStats(val packets: Int, val lastHeardMs: Long, val guess: RelayGuess)
 
 /**
  * The nodes the survey radio has heard directly, by relay byte, with when each was last heard so. Only these are
@@ -83,15 +104,29 @@ data class DirectSender(val nodeId: Long, val lastDirectMs: Long)
  * whole-database guess (meshtastic/Meshtastic-Android#3773). Not thread-safe; only the recorder's writer uses it.
  */
 class DirectNeighbours(history: List<DirectSender> = emptyList()) {
-    private val byByte = mutableMapOf<Int, MutableMap<Long, Long>>()
+    private val byByte = mutableMapOf<Int, MutableSet<Long>>()
+
+    /** Every node heard directly, by node ID. Replaced on each change rather than changed, so it can be shared. */
+    var all: Map<Long, DirectSender> = emptyMap()
+        private set
 
     init {
-        history.forEach { heard(it.nodeId, it.lastDirectMs) }
+        history.forEach(::heard)
     }
 
     /** Remembers [row]'s sender if the packet came straight from it. */
     fun record(row: SurveyMeasurement) {
-        if (row.isDirect()) heard(row.senderNodeId, row.heardAtMs)
+        if (!row.isDirect()) return
+        val positioned = row.latitude != null && row.longitude != null
+        heard(
+            DirectSender(
+                nodeId = row.senderNodeId,
+                lastDirectMs = row.heardAtMs,
+                latitude = row.latitude,
+                longitude = row.longitude,
+                positionMs = row.heardAtMs.takeIf { positioned },
+            ),
+        )
     }
 
     /**
@@ -105,9 +140,10 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
         roleOf: (Long) -> Config.DeviceConfig.Role? = { null },
     ): RelayGuess {
         val heard =
-            byByte[relayByte].orEmpty().filterKeys { id ->
-                id != senderId && roleOf(id) != Config.DeviceConfig.Role.CLIENT_MUTE
-            }
+            byByte[relayByte]
+                .orEmpty()
+                .filter { it != senderId && roleOf(it) != Config.DeviceConfig.Role.CLIENT_MUTE }
+                .associateWith { all.getValue(it).lastDirectMs }
         val recent = heard.filterValues { it >= atMs - RECENT_DIRECT.inWholeMilliseconds }
         val older = heard.filterValues { it >= atMs - DIRECT_HISTORY.inWholeMilliseconds }
         val tier = recent.ifEmpty { older }
@@ -119,8 +155,17 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
         }
     }
 
-    private fun heard(nodeId: Long, atMs: Long) {
-        val nodes = byByte.getOrPut(relayByteOf(nodeId)) { mutableMapOf() }
-        nodes[nodeId] = maxOf(atMs, nodes[nodeId] ?: atMs)
+    /** Keeps the latest direct time, and the position of whichever reception has the newer one. */
+    private fun heard(sender: DirectSender) {
+        val known = all[sender.nodeId]
+        val merged =
+            if (known == null) {
+                sender
+            } else {
+                val place = if ((sender.positionMs ?: -1) > (known.positionMs ?: -1)) sender else known
+                place.copy(lastDirectMs = maxOf(sender.lastDirectMs, known.lastDirectMs))
+            }
+        byByte.getOrPut(relayByteOf(sender.nodeId)) { mutableSetOf() } += sender.nodeId
+        all = all + (sender.nodeId to merged)
     }
 }

@@ -62,7 +62,16 @@ internal class FakeSurveyDao : SurveyDao {
         return measurements
             .filter { it.sessionId in sessionIds && it.heardAtMs >= sinceMs && it.isDirect() }
             .groupBy { it.senderNodeId }
-            .map { (nodeId, rows) -> DirectSender(nodeId, rows.maxOf { it.heardAtMs }) }
+            .map { (nodeId, rows) ->
+                val placed = rows.filter { it.latitude != null && it.longitude != null }.maxByOrNull { it.heardAtMs }
+                DirectSender(
+                    nodeId,
+                    rows.maxOf { it.heardAtMs },
+                    placed?.latitude,
+                    placed?.longitude,
+                    placed?.heardAtMs,
+                )
+            }
     }
 
     override suspend fun endSession(sessionId: String, status: SurveyStatus, endedAt: Long) =

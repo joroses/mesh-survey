@@ -22,6 +22,7 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,7 +30,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,8 +58,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -67,8 +73,10 @@ import org.meshtastic.core.common.util.NumberFormatter
 import org.meshtastic.core.common.util.nowMillis
 import org.meshtastic.core.ui.icon.ArrowBack
 import org.meshtastic.core.ui.icon.MeshtasticIcons
+import org.meshtastic.feature.survey.DirectSender
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayGuess
+import org.meshtastic.feature.survey.SurveyFix
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveySessionSummary
 import org.meshtastic.feature.survey.SurveyState
@@ -77,6 +85,7 @@ import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.isUploadUrl
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -211,7 +220,20 @@ private fun RecordingCard(state: SurveyState, relayNames: Map<Long, String>, onS
                 Text(
                     pluralStringResource(R.plurals.survey_measurements, state.measurementCount, state.measurementCount),
                 )
-                Text(pluralStringResource(R.plurals.survey_relays, state.relays.size, state.relays.size))
+                var showRelays by remember { mutableStateOf(false) }
+                Text(
+                    pluralStringResource(R.plurals.survey_relays, state.relays.size, state.relays.size),
+                    color = if (state.relays.isEmpty()) Color.Unspecified else MaterialTheme.colorScheme.primary,
+                    modifier =
+                    Modifier.clickable(
+                        enabled = state.relays.isNotEmpty(),
+                        onClickLabel = stringResource(R.string.survey_relays_open),
+                        role = Role.Button,
+                    ) {
+                        showRelays = true
+                    },
+                )
+                if (showRelays) RelaysDialog(state, relayNames, onDismiss = { showRelays = false })
                 state.lastMeasurement?.let { last ->
                     Text(stringResource(R.string.survey_since_last, elapsedText(last.heardAtMs)))
                 }
@@ -222,7 +244,7 @@ private fun RecordingCard(state: SurveyState, relayNames: Map<Long, String>, onS
                             R.string.survey_last_packet,
                             last.rxSnr?.let { NumberFormatter.format(it, 2) } ?: "–",
                             last.rxRssi?.toString() ?: "–",
-                            last.relayByte?.let { relayText(it, state.lastRelayGuess, relayNames) } ?: "–",
+                            last.relayByte?.let { relayText(it, state.relays[it]?.guess, relayNames) } ?: "–",
                         ),
                     )
                 }
@@ -241,7 +263,7 @@ private fun RecordingCard(state: SurveyState, relayNames: Map<Long, String>, onS
 @Composable
 private fun relayText(relayByte: Int, guess: RelayGuess?, names: Map<Long, String>): String {
     val byte = "%02x".format(Locale.ROOT, relayByte)
-    fun name(id: Long) = names[id] ?: "!%08x".format(Locale.ROOT, id)
+    fun name(id: Long) = nodeName(id, names)
     return when (guess) {
         is RelayGuess.Direct -> stringResource(R.string.survey_relay_direct, name(guess.senderId))
 
@@ -266,6 +288,82 @@ private fun relayText(relayByte: Int, guess: RelayGuess?, names: Map<Long, Strin
 }
 
 private const val MAX_RELAY_NAMES = 3
+private const val METERS_PER_KM = 1_000.0
+private const val METERS_ROUNDING = 10
+
+private fun nodeName(id: Long, names: Map<Long, String>) = names[id] ?: "!%08x".format(Locale.ROOT, id)
+
+/** This session's relay bytes, most packets first, each with its guess and its candidates' direct receptions. */
+@Composable
+private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.survey_relays_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.survey_relays_explained), style = MaterialTheme.typography.bodySmall)
+                state.relays.entries
+                    .sortedByDescending { it.value.packets }
+                    .forEach { (byte, relay) ->
+                        Column {
+                            Text(relayText(byte, relay.guess, names), style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                pluralStringResource(
+                                    R.plurals.survey_relay_packets,
+                                    relay.packets,
+                                    relay.packets,
+                                    DateFormatter.formatRelativeTime(relay.lastHeardMs),
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            // A direct packet's sender is no guess, so it needs no evidence.
+                            if (relay.guess !is RelayGuess.Direct) {
+                                relay.guess.nodeIds.forEach { id ->
+                                    state.neighbours[id]?.let { sender ->
+                                        Text(
+                                            candidateText(nodeName(id, names), sender, state.fix),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.survey_close)) } },
+    )
+}
+
+/** When a candidate was last heard directly, and how far from here, when both positions are known. */
+@Composable
+private fun candidateText(name: String, sender: DirectSender, fix: SurveyFix?): String {
+    val heard = DateFormatter.formatRelativeTime(sender.lastDirectMs)
+    val meters =
+        fix?.let { sender.metersFrom(it.latitude, it.longitude) }
+            ?: return stringResource(R.string.survey_relay_candidate, name, heard)
+    val distance = distanceText(meters)
+    val earlier = sender.positionMs?.takeIf { it != sender.lastDirectMs }
+    return if (earlier == null) {
+        stringResource(R.string.survey_relay_candidate_at, name, heard, distance)
+    } else {
+        stringResource(
+            R.string.survey_relay_candidate_earlier,
+            name,
+            heard,
+            distance,
+            DateFormatter.formatRelativeTime(earlier),
+        )
+    }
+}
+
+@Composable
+@ReadOnlyComposable
+private fun distanceText(meters: Double): String = if (meters < METERS_PER_KM) {
+    stringResource(R.string.survey_distance_m, (meters / METERS_ROUNDING).roundToInt() * METERS_ROUNDING)
+} else {
+    stringResource(R.string.survey_distance_km, NumberFormatter.format(meters / METERS_PER_KM, 1))
+}
 
 @Composable
 private fun gpsText(state: SurveyState): String {

@@ -65,14 +65,16 @@ class SurveyViewModel(
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
 
     /**
-     * Short names of the nodes in the last relay guess. The node database is the connected radio's, which is the survey
-     * radio; a node missing from it has no entry here.
+     * Short names of the nodes in this session's relay guesses. The node database is the connected radio's, which is
+     * the survey radio; a node missing from it has no entry here.
      */
     val relayNames: StateFlow<Map<Long, String>> =
-        combine(state.map { it.lastRelayGuess?.nodeIds.orEmpty() }.distinctUntilChanged(), nodes.nodeDBbyNum) {
-                ids,
-                db,
-            ->
+        combine(
+            state
+                .map { it.relays.values.flatMapTo(mutableSetOf()) { relay -> relay.guess.nodeIds } }
+                .distinctUntilChanged(),
+            nodes.nodeDBbyNum,
+        ) { ids, db ->
             ids.mapNotNull { id -> db[id.toInt()]?.user?.short_name?.takeIf { it.isNotBlank() }?.let { id to it } }
                 .toMap()
         }

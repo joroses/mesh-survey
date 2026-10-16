@@ -20,29 +20,37 @@ import org.meshtastic.proto.Config
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 
 class SurveyRelaysTest {
     private val now = 100 * DIRECT_HISTORY.inWholeMilliseconds
 
-    private fun row(sender: Long, relayByte: Int?, hopStart: Int = 3, hopLimit: Int = 3, at: Long = now) =
-        SurveyMeasurement(
-            sessionId = "s",
-            heardAtMs = at,
-            latitude = null,
-            longitude = null,
-            accuracyM = null,
-            fixAgeMs = null,
-            senderNodeId = sender,
-            recipientNodeId = 0xFFFFFFFF,
-            packetId = 1,
-            rxSnr = null,
-            rxRssi = null,
-            hopStart = hopStart,
-            hopLimit = hopLimit,
-            relayByte = relayByte,
-        )
+    @Suppress("LongParameterList")
+    private fun row(
+        sender: Long,
+        relayByte: Int?,
+        hopStart: Int = 3,
+        hopLimit: Int = 3,
+        at: Long = now,
+        latitude: Double? = null,
+    ) = SurveyMeasurement(
+        sessionId = "s",
+        heardAtMs = at,
+        latitude = latitude,
+        longitude = latitude?.let { 0.0 },
+        accuracyM = null,
+        fixAgeMs = null,
+        senderNodeId = sender,
+        recipientNodeId = 0xFFFFFFFF,
+        packetId = 1,
+        rxSnr = null,
+        rxRssi = null,
+        hopStart = hopStart,
+        hopLimit = hopLimit,
+        relayByte = relayByte,
+    )
 
     private fun ago(minutes: Int) = now - minutes.minutes.inWholeMilliseconds
 
@@ -135,6 +143,26 @@ class SurveyRelaysTest {
         neighbours.record(row(0x13F, 0x3F, at = ago(1)))
         assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, senderId = 0x13F))
         assertEquals(RelayGuess.Unknown, neighbours.guess(0x40, now, senderId = 0x500))
+    }
+
+    @Test
+    fun `a neighbour keeps its latest direct time and its latest place`() {
+        val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(10), 1.0, 0.0, ago(20))))
+        neighbours.record(row(0x13F, 0x3F, at = ago(5))) // Newer, but without a fix.
+        neighbours.record(row(0x13F, 0x3F, at = ago(30), latitude = 2.0)) // A fix, but older than the known one.
+
+        assertEquals(DirectSender(0x13F, ago(5), 1.0, 0.0, ago(20)), neighbours.all[0x13F])
+
+        neighbours.record(row(0x13F, 0x3F, at = ago(1), latitude = 3.0))
+        assertEquals(DirectSender(0x13F, ago(1), 3.0, 0.0, ago(1)), neighbours.all[0x13F])
+    }
+
+    @Test
+    fun `distance runs from where the node was heard directly`() {
+        val heardAt = DirectSender(0x13F, now, latitude = 0.0, longitude = 0.0, positionMs = now)
+
+        assertEquals(111_195.0, heardAt.metersFrom(1.0, 0.0)!!, 1.0) // One degree of latitude.
+        assertNull(DirectSender(0x13F, now).metersFrom(1.0, 0.0))
     }
 
     @Test
