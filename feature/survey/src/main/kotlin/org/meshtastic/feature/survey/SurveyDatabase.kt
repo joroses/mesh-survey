@@ -128,6 +128,20 @@ interface SurveyDao {
     )
     suspend fun measurementsAfter(sessionId: String, afterSeq: Long, limit: Int): List<SurveyMeasurement>
 
+    /**
+     * Each sender [receiverNodeId] has heard directly since [sinceMs], in any session, with its latest such time. The
+     * WHERE clause repeats [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE.
+     */
+    @Query(
+        "SELECT m.sender_node_id AS nodeId, MAX(m.heard_at_ms) AS lastDirectMs " +
+            "FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
+            "WHERE s.receiver_node_id = :receiverNodeId AND m.heard_at_ms >= :sinceMs " +
+            "AND m.hop_start = m.hop_limit " +
+            "AND m.relay_byte = CASE WHEN m.sender_node_id % 256 = 0 THEN 255 ELSE m.sender_node_id % 256 END " +
+            "GROUP BY m.sender_node_id",
+    )
+    suspend fun directSenders(receiverNodeId: Long, sinceMs: Long): List<DirectSender>
+
     @Query("UPDATE survey_session SET status = :status, ended_at = :endedAt WHERE id = :sessionId")
     suspend fun endSession(sessionId: String, status: SurveyStatus, endedAt: Long)
 

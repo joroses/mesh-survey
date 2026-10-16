@@ -33,10 +33,10 @@ class SurveyDaoTest {
 
     @AfterTest fun close() = database.close()
 
-    private fun session(id: String, startedAt: Long) = SurveySession(
+    private fun session(id: String, startedAt: Long, receiverNodeId: Long = 1) = SurveySession(
         id = id,
         startedAt = startedAt,
-        receiverNodeId = 1,
+        receiverNodeId = receiverNodeId,
         receiverName = "Survey node",
         modemPreset = "LONG_FAST",
         spreadingFactor = 11,
@@ -45,21 +45,29 @@ class SurveyDaoTest {
         appVersion = "test",
     )
 
-    private fun measurement(sessionId: String, heardAt: Long) = SurveyMeasurement(
+    @Suppress("LongParameterList")
+    private fun measurement(
+        sessionId: String,
+        heardAt: Long,
+        sender: Long = 2,
+        hopStart: Int = 3,
+        hopLimit: Int = 3,
+        relayByte: Int? = null,
+    ) = SurveyMeasurement(
         sessionId = sessionId,
         heardAtMs = heardAt,
         latitude = null,
         longitude = null,
         accuracyM = null,
         fixAgeMs = null,
-        senderNodeId = 2,
+        senderNodeId = sender,
         recipientNodeId = 4_294_967_295,
         packetId = heardAt,
         rxSnr = null,
         rxRssi = null,
-        hopStart = 3,
-        hopLimit = 3,
-        relayByte = null,
+        hopStart = hopStart,
+        hopLimit = hopLimit,
+        relayByte = relayByte,
     )
 
     @Test
@@ -105,6 +113,26 @@ class SurveyDaoTest {
         assertEquals(SurveyStatus.INTERRUPTED, summary.session.status)
         assertEquals(42L, summary.session.endedAt)
         assertEquals(1, summary.measurementCount)
+    }
+
+    @Test
+    fun `direct senders are this radio's, heard directly since the cutoff, at their latest time`() = runTest {
+        dao.insertSession(session("old", startedAt = 1))
+        dao.insertSession(session("new", startedAt = 50))
+        dao.insertSession(session("other radio", startedAt = 1, receiverNodeId = 9))
+        dao.insertMeasurement(measurement("old", 20, sender = 0x102, relayByte = 0x02))
+        dao.insertMeasurement(measurement("new", 60, sender = 0x102, relayByte = 0x02)) // The latest time wins.
+        dao.insertMeasurement(measurement("new", 55, sender = 0x102, relayByte = 0x02))
+        dao.insertMeasurement(measurement("new", 61, sender = 0x200, relayByte = 0xFF)) // 00 is sent as FF.
+        dao.insertMeasurement(measurement("new", 62, sender = 0x103, hopLimit = 2, relayByte = 0x03)) // A hop used.
+        dao.insertMeasurement(measurement("new", 63, sender = 0x104, relayByte = 0x3F)) // Someone else's byte.
+        dao.insertMeasurement(measurement("new", 64, sender = 0x105)) // No relay byte.
+        dao.insertMeasurement(measurement("old", 5, sender = 0x106, relayByte = 0x06)) // Before the cutoff.
+        dao.insertMeasurement(measurement("other radio", 70, sender = 0x107, relayByte = 0x07))
+
+        val senders = dao.directSenders(receiverNodeId = 1, sinceMs = 10)
+
+        assertEquals(listOf(DirectSender(0x102, 60), DirectSender(0x200, 61)), senders.sortedBy { it.nodeId })
     }
 
     @Test

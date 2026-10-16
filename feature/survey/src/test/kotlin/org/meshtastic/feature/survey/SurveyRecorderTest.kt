@@ -121,10 +121,13 @@ class SurveyRecorderTest {
         )
     }
 
-    private fun hear(from: Int = 42, generation: Long = 1) = tap.listener?.invoke(
+    private fun hear(from: Int = 42, generation: Long = 1, hopsUsed: Int = 0, relay: Int = 0) = tap.listener?.invoke(
         MeshPacket.Builder()
             .apply {
                 this.from = from
+                hop_start = HOP_START
+                hop_limit = HOP_START - hopsUsed
+                relay_node = relay
                 id = 7
                 transport_mechanism = MeshPacket.TransportMechanism.TRANSPORT_LORA
             }
@@ -298,6 +301,68 @@ class SurveyRecorderTest {
     }
 
     @Test
+    fun `a direct packet names its sender, and makes it the likely relay of the next with its byte`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val recorder = recorder()
+            recorder.start()
+
+            hear(from = 0x13F, relay = 0x3F)
+            assertEquals(RelayGuess.Direct(0x13F), recorder.state.value.lastRelayGuess)
+
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.lastRelayGuess)
+
+            hear(from = 0x500, hopsUsed = 1, relay = 0x77)
+            assertEquals(RelayGuess.Unknown, recorder.state.value.lastRelayGuess)
+
+            hear(from = 0x500) // Older firmware: no relay byte.
+            assertNull(recorder.state.value.lastRelayGuess)
+        }
+
+    @Test
+    fun `an earlier session with the same radio seeds the guesses`() = runTest(UnconfinedTestDispatcher()) {
+        val earlier = "earlier"
+        dao.insertSession(
+            SurveySession(
+                id = earlier,
+                startedAt = 0,
+                status = SurveyStatus.STOPPED,
+                receiverNodeId = 1,
+                receiverName = "",
+                modemPreset = "LONG_FAST",
+                spreadingFactor = 11,
+                bandwidthKhz = 250f,
+                frequencyMhz = null,
+                appVersion = "test",
+            ),
+        )
+        dao.insertMeasurement(
+            SurveyMeasurement(
+                sessionId = earlier,
+                heardAtMs = 999_000,
+                latitude = null,
+                longitude = null,
+                accuracyM = null,
+                fixAgeMs = null,
+                senderNodeId = 0x13F,
+                recipientNodeId = 0xFFFFFFFF,
+                packetId = 1,
+                rxSnr = null,
+                rxRssi = null,
+                hopStart = HOP_START,
+                hopLimit = HOP_START,
+                relayByte = 0x3F,
+            ),
+        )
+        val recorder = recorder()
+        recorder.start()
+
+        hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+
+        assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.lastRelayGuess)
+    }
+
+    @Test
     fun `a problem met while recording ends with the session`() = runTest(UnconfinedTestDispatcher()) {
         val recorder = recorder()
         recorder.start()
@@ -311,6 +376,8 @@ class SurveyRecorderTest {
         assertEquals(SurveyStatus.STOPPED, recorder.state.value.lastEnd)
     }
 }
+
+private const val HOP_START = 3
 
 private class FakeSurveyLocation : SurveyLocation {
     var running = false

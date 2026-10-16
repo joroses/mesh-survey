@@ -39,6 +39,12 @@
     <string name="survey_gps">GPS ±%1$s m, fix %2$s s old</string>
     <string name="survey_gps_none">No GPS fix yet</string>
     <string name="survey_last_packet">Last packet: SNR %1$s dB, RSSI %2$s dBm, relay %3$s</string>
+    <!-- Relay guesses: %1$s is the relay byte in hex (3f), %2$s a node's short name. "≈" and "?" mark them as guesses. -->
+    <string name="survey_relay_direct">%1$s (direct)</string>
+    <string name="survey_relay_likely">%1$s ≈ %2$s</string>
+    <string name="survey_relay_possible">%1$s ≈ %2$s?</string>
+    <string name="survey_relay_ambiguous">%1$s: %2$s</string>
+    <string name="survey_relay_or">%1$s or %2$s</string>
     <string name="survey_last_ended">Last session: %1$s</string>
     <string name="survey_problem_no_radio">Connect a radio first.</string>
     <string name="survey_problem_no_lora">The radio has not sent its LoRa settings yet. Try again in a moment.</string>

@@ -22,10 +22,14 @@ import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.KoinViewModel
 import org.meshtastic.core.common.di.ApplicationCoroutineScope
 import org.meshtastic.core.common.util.safeCatching
+import org.meshtastic.core.repository.NodeRepository
 import org.meshtastic.core.ui.viewmodel.stateInWhileSubscribed
 import org.meshtastic.feature.survey.SurveyCsv
 import org.meshtastic.feature.survey.SurveyDao
@@ -51,6 +55,7 @@ class SurveyViewModel(
     private val uploader: SurveyUploader,
     private val settings: SurveySettings,
     private val dao: SurveyDao,
+    nodes: NodeRepository,
     // Work that must outlive the screen: Stop, delete and export finish even if the user leaves.
     private val appScope: ApplicationCoroutineScope,
 ) : ViewModel() {
@@ -58,6 +63,20 @@ class SurveyViewModel(
     val uploading: StateFlow<Boolean> = uploader.uploading
     val sessions: StateFlow<List<SurveySessionSummary>> = dao.sessions().stateInWhileSubscribed(emptyList())
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
+
+    /**
+     * Short names of the nodes in the last relay guess. The node database is the connected radio's, which is the survey
+     * radio; a node missing from it has no entry here.
+     */
+    val relayNames: StateFlow<Map<Long, String>> =
+        combine(state.map { it.lastRelayGuess?.nodeIds.orEmpty() }.distinctUntilChanged(), nodes.nodeDBbyNum) {
+                ids,
+                db,
+            ->
+            ids.mapNotNull { id -> db[id.toInt()]?.user?.short_name?.takeIf { it.isNotBlank() }?.let { id to it } }
+                .toMap()
+        }
+            .stateInWhileSubscribed(emptyMap())
 
     private val mutableExportResult = MutableStateFlow<ExportResult?>(null)
     val exportResult: StateFlow<ExportResult?> = mutableExportResult.asStateFlow()
