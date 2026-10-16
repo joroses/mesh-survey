@@ -117,27 +117,43 @@ class SurveyDaoTest {
     }
 
     @Test
-    fun `direct senders are this radio's, heard directly since the cutoff, at their latest time`() = runTest {
-        dao.insertSession(session("old", startedAt = 1))
-        dao.insertSession(session("new", startedAt = 50))
-        dao.insertSession(session("other radio", startedAt = 1, receiverNodeId = 9))
-        dao.insertMeasurement(measurement("old", 20, sender = 0x102, relayByte = 0x02, latitude = 1.0))
-        dao.insertMeasurement(measurement("new", 60, sender = 0x102, relayByte = 0x02)) // The latest time wins.
-        dao.insertMeasurement(measurement("new", 55, sender = 0x102, relayByte = 0x02, latitude = 3.0)) // Its place.
-        dao.insertMeasurement(measurement("new", 54, sender = 0x102, relayByte = 0x02, latitude = 4.0))
-        dao.insertMeasurement(measurement("new", 61, sender = 0x200, relayByte = 0xFF)) // 00 is sent as FF.
-        dao.insertMeasurement(measurement("new", 62, sender = 0x103, hopLimit = 2, relayByte = 0x03)) // A hop used.
-        dao.insertMeasurement(measurement("new", 63, sender = 0x104, relayByte = 0x3F)) // Someone else's byte.
-        dao.insertMeasurement(measurement("new", 64, sender = 0x105)) // No relay byte.
-        dao.insertMeasurement(measurement("old", 5, sender = 0x106, relayByte = 0x06)) // Before the cutoff.
-        dao.insertMeasurement(measurement("other radio", 70, sender = 0x107, relayByte = 0x07))
+    fun `direct places group cells and fixless rows and keep only this radio's direct history`() = runTest {
+        // Exercise the real SQL and the recorder's fake against the same evidence.
+        for (subject in listOf(dao, FakeSurveyDao())) {
+            subject.insertSession(session("old", startedAt = 1))
+            subject.insertSession(session("new", startedAt = 50))
+            subject.insertSession(session("other radio", startedAt = 1, receiverNodeId = 9))
+            subject.insertMeasurement(measurement("old", 10, sender = 0x102, relayByte = 0x02, latitude = 1.0))
+            subject.insertMeasurement(measurement("new", 55, sender = 0x102, relayByte = 0x02, latitude = 1.0002))
+            subject.insertMeasurement(measurement("new", 54, sender = 0x102, relayByte = 0x02, latitude = -0.001))
+            subject.insertMeasurement(measurement("new", 59, sender = 0x102, relayByte = 0x02))
+            subject.insertMeasurement(measurement("new", 60, sender = 0x102, relayByte = 0x02))
+            subject.insertMeasurement(measurement("new", 61, sender = 0x200, relayByte = 0xFF)) // 00 maps to FF.
+            subject.insertMeasurement(measurement("new", 62, sender = 0x103, hopLimit = 2, relayByte = 0x03))
+            subject.insertMeasurement(measurement("new", 63, sender = 0x104, relayByte = 0x3F)) // Another node's byte.
+            subject.insertMeasurement(measurement("new", 64, sender = 0x105)) // No relay byte.
+            subject.insertMeasurement(measurement("old", 9, sender = 0x106, relayByte = 0x06)) // Before the cutoff.
+            subject.insertMeasurement(measurement("other radio", 70, sender = 0x107, relayByte = 0x07))
 
-        val senders = dao.directSenders(receiverNodeId = 1, sinceMs = 10)
+            val places = subject.directPlaces(receiverNodeId = 1, sinceMs = 10)
 
-        assertEquals(
-            listOf(DirectSender(0x102, 60, 3.0, 2.0, 55), DirectSender(0x200, 61)),
-            senders.sortedBy { it.nodeId },
-        )
+            assertEquals(
+                setOf(
+                    DirectPlace(0x102, 55, 500, 1000),
+                    DirectPlace(0x102, 54, -1, 1000),
+                    DirectPlace(0x102, 60, null, null),
+                    DirectPlace(0x200, 61, null, null),
+                ),
+                places.toSet(),
+            )
+            assertEquals(4, places.size)
+            val neighbours = DirectNeighbours(places.map { it.toDirectSender() })
+            assertEquals(
+                DirectSender(0x102, 60, mapOf(DirectCell(500, 1000) to 55L, DirectCell(-1, 1000) to 54L)),
+                neighbours.all[0x102],
+            )
+            assertEquals(DirectSender(0x200, 61), neighbours.all[0x200])
+        }
     }
 
     @Test

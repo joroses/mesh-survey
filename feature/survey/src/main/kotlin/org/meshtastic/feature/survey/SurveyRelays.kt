@@ -18,6 +18,7 @@ package org.meshtastic.feature.survey
 
 import org.meshtastic.core.common.util.latLongToMeter
 import org.meshtastic.proto.Config
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 
@@ -38,7 +39,7 @@ fun relayByteOf(nodeId: Long): Int = (nodeId and BYTE_MASK).toInt().takeIf { it 
 
 /**
  * Whether the survey radio heard this packet straight from its sender: no hop used, and the relay byte is the sender's
- * own. `SurveyDao.directSenders` repeats this test in SQL.
+ * own. `SurveyDao.directPlaces` repeats this test in SQL.
  */
 fun SurveyMeasurement.isDirect(): Boolean =
     relayByte != null && hopStart == hopLimit && relayByte == relayByteOf(senderNodeId)
@@ -75,24 +76,34 @@ sealed interface RelayGuess {
     }
 }
 
-/**
- * A node the survey radio heard directly, and when it last did. The position is where the phone was the last time it
- * heard the node directly with a GPS fix, at [positionMs], which can be older than [lastDirectMs]; null when no direct
- * reception had a fix. It is not the node's own position.
- */
-data class DirectSender(
-    val nodeId: Long,
-    val lastDirectMs: Long,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    val positionMs: Long? = null,
-) {
-    /** Metres from where it was last heard directly to ([latitude], [longitude]); null without a position. */
-    fun metersFrom(latitude: Double, longitude: Double): Double? {
-        val lat = this.latitude
-        val lon = this.longitude
-        return if (lat == null || lon == null) null else latLongToMeter(lat, lon, latitude, longitude)
+private const val CELLS_PER_DEGREE = 500.0
+
+/** A 0.002° cell where the phone heard a direct reception, not the heard node's position. */
+data class DirectCell(val latitude: Int, val longitude: Int) {
+    fun metersFrom(latitude: Double, longitude: Double): Double =
+        latLongToMeter(this.latitude / CELLS_PER_DEGREE, this.longitude / CELLS_PER_DEGREE, latitude, longitude)
+
+    companion object {
+        fun of(latitude: Double, longitude: Double): DirectCell = DirectCell(cell(latitude), cell(longitude))
+
+        // SQLite ROUND rounds halves away from zero; roundToInt alone rounds negative halves towards zero.
+        private fun cell(coordinate: Double): Int {
+            val scaled = coordinate * CELLS_PER_DEGREE
+            return if (scaled < 0) -(-scaled).roundToInt() else scaled.roundToInt()
+        }
     }
+}
+
+/** The closest direct reception's distance from the requested position and its latest time in that cell. */
+data class NearestDirect(val meters: Double, val heardAtMs: Long)
+
+/** A directly heard node, its latest direct time, and the latest direct time in each reception cell. */
+data class DirectSender(val nodeId: Long, val lastDirectMs: Long, val places: Map<DirectCell, Long> = emptyMap()) {
+    /** Closest cell centre heard since [sinceMs]; null when there are no cells in that history. */
+    fun nearest(latitude: Double, longitude: Double, sinceMs: Long): NearestDirect? = places.entries
+        .filter { it.value >= sinceMs }
+        .map { (cell, at) -> NearestDirect(cell.metersFrom(latitude, longitude), at) }
+        .minWithOrNull(compareBy<NearestDirect> { it.meters }.thenByDescending { it.heardAtMs })
 }
 
 /** One relay byte in this session: its packets, when the last arrived, and the guess made for that packet. */
@@ -117,14 +128,12 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
     /** Remembers [row]'s sender if the packet came straight from it. */
     fun record(row: SurveyMeasurement) {
         if (!row.isDirect()) return
-        val positioned = row.latitude != null && row.longitude != null
+        val cell = row.latitude?.let { lat -> row.longitude?.let { lon -> DirectCell.of(lat, lon) } }
         heard(
             DirectSender(
                 nodeId = row.senderNodeId,
                 lastDirectMs = row.heardAtMs,
-                latitude = row.latitude,
-                longitude = row.longitude,
-                positionMs = row.heardAtMs.takeIf { positioned },
+                places = cell?.let { mapOf(it to row.heardAtMs) }.orEmpty(),
             ),
         )
     }
@@ -155,15 +164,16 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
         }
     }
 
-    /** Keeps the latest direct time, and the position of whichever reception has the newer one. */
+    /** Keeps the latest direct time for the node and for each cell, without changing published snapshots. */
     private fun heard(sender: DirectSender) {
         val known = all[sender.nodeId]
         val merged =
             if (known == null) {
                 sender
             } else {
-                val place = if ((sender.positionMs ?: -1) > (known.positionMs ?: -1)) sender else known
-                place.copy(lastDirectMs = maxOf(sender.lastDirectMs, known.lastDirectMs))
+                val places = known.places.toMutableMap()
+                sender.places.forEach { (cell, at) -> places[cell] = maxOf(at, places[cell] ?: at) }
+                known.copy(lastDirectMs = maxOf(sender.lastDirectMs, known.lastDirectMs), places = places.toMap())
             }
         byByte.getOrPut(relayByteOf(sender.nodeId)) { mutableSetOf() } += sender.nodeId
         all = all + (sender.nodeId to merged)

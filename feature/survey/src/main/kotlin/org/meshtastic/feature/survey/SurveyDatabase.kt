@@ -105,6 +105,14 @@ data class SurveySessionSummary(
     @ColumnInfo(name = "last_seq") val lastSeq: Long,
 )
 
+/** One sender's latest direct reception in a cell; a fixless reception has two null cell coordinates. */
+data class DirectPlace(val nodeId: Long, val lastDirectMs: Long, val latitudeCell: Int?, val longitudeCell: Int?) {
+    fun toDirectSender(): DirectSender {
+        val cell = latitudeCell?.let { lat -> longitudeCell?.let { lon -> DirectCell(lat, lon) } }
+        return DirectSender(nodeId, lastDirectMs, cell?.let { mapOf(it to lastDirectMs) }.orEmpty())
+    }
+}
+
 private const val SUMMARY =
     "SELECT s.*, COUNT(m.seq) AS measurement_count, COALESCE(MAX(m.seq), 0) AS last_seq, " +
         "COALESCE(SUM(m.seq <= s.uploaded_seq), 0) AS uploaded_count " +
@@ -129,10 +137,9 @@ interface SurveyDao {
     suspend fun measurementsAfter(sessionId: String, afterSeq: Long, limit: Int): List<SurveyMeasurement>
 
     /**
-     * Each sender [receiverNodeId] has heard directly since [sinceMs], in any session, with its latest such time and
-     * where the phone was the latest time such a reception had a position. The `direct` WHERE clause repeats
-     * [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE. In `p`, SQLite takes the bare latitude and
-     * longitude from the row that has the MAX.
+     * Each cell where [receiverNodeId] heard a sender directly since [sinceMs], across sessions, with its latest direct
+     * time. Fixless receptions share a null-cell row. The `direct` WHERE clause repeats [isDirect], with
+     * [relayByteOf]'s `00` → `FF` mapping as the CASE.
      */
     @Query(
         "WITH direct AS (SELECT m.sender_node_id, m.heard_at_ms, m.latitude, m.longitude " +
@@ -141,13 +148,11 @@ interface SurveyDao {
             "AND m.hop_start = m.hop_limit " +
             "AND m.relay_byte = CASE WHEN m.sender_node_id % 256 = 0 THEN 255 ELSE m.sender_node_id % 256 END) " +
             "SELECT d.sender_node_id AS nodeId, MAX(d.heard_at_ms) AS lastDirectMs, " +
-            "p.latitude AS latitude, p.longitude AS longitude, p.heard_at_ms AS positionMs " +
-            "FROM direct d LEFT JOIN (SELECT sender_node_id, MAX(heard_at_ms) AS heard_at_ms, latitude, longitude " +
-            "FROM direct WHERE latitude IS NOT NULL AND longitude IS NOT NULL GROUP BY sender_node_id) p " +
-            "ON p.sender_node_id = d.sender_node_id " +
-            "GROUP BY d.sender_node_id",
+            "CAST(ROUND(d.latitude * 500) AS INTEGER) AS latitudeCell, " +
+            "CAST(ROUND(d.longitude * 500) AS INTEGER) AS longitudeCell " +
+            "FROM direct d GROUP BY d.sender_node_id, latitudeCell, longitudeCell",
     )
-    suspend fun directSenders(receiverNodeId: Long, sinceMs: Long): List<DirectSender>
+    suspend fun directPlaces(receiverNodeId: Long, sinceMs: Long): List<DirectPlace>
 
     @Query("UPDATE survey_session SET status = :status, ended_at = :endedAt WHERE id = :sessionId")
     suspend fun endSession(sessionId: String, status: SurveyStatus, endedAt: Long)

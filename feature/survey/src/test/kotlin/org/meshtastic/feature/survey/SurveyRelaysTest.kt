@@ -146,23 +146,36 @@ class SurveyRelaysTest {
     }
 
     @Test
-    fun `a neighbour keeps its latest direct time and its latest place`() {
-        val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(10), 1.0, 0.0, ago(20))))
+    fun `a neighbour merges cells by latest direct time without mutating snapshots`() {
+        val first = DirectCell.of(1.0, 0.0)
+        val second = DirectCell.of(2.0, 0.0)
+        val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(10), mapOf(first to ago(20)))))
+        val snapshot = neighbours.all
         neighbours.record(row(0x13F, 0x3F, at = ago(5))) // Newer, but without a fix.
-        neighbours.record(row(0x13F, 0x3F, at = ago(30), latitude = 2.0)) // A fix, but older than the known one.
+        neighbours.record(row(0x13F, 0x3F, at = ago(30), latitude = 2.0))
+        neighbours.record(row(0x13F, 0x3F, at = ago(25), latitude = 1.0001)) // Same cell, older evidence.
 
-        assertEquals(DirectSender(0x13F, ago(5), 1.0, 0.0, ago(20)), neighbours.all[0x13F])
+        assertEquals(DirectSender(0x13F, ago(5), mapOf(first to ago(20), second to ago(30))), neighbours.all[0x13F])
+        assertEquals(DirectSender(0x13F, ago(10), mapOf(first to ago(20))), snapshot[0x13F])
 
-        neighbours.record(row(0x13F, 0x3F, at = ago(1), latitude = 3.0))
-        assertEquals(DirectSender(0x13F, ago(1), 3.0, 0.0, ago(1)), neighbours.all[0x13F])
+        neighbours.record(row(0x13F, 0x3F, at = ago(1), latitude = 1.0002))
+        assertEquals(DirectSender(0x13F, ago(1), mapOf(first to ago(1), second to ago(30))), neighbours.all[0x13F])
     }
 
     @Test
-    fun `distance runs from where the node was heard directly`() {
-        val heardAt = DirectSender(0x13F, now, latitude = 0.0, longitude = 0.0, positionMs = now)
+    fun `nearest uses cell centres in the history and returns the reception time`() {
+        val heardAt =
+            DirectSender(0x13F, now, mapOf(DirectCell.of(0.0, 0.0) to now, DirectCell.of(1.0, 0.0) to ago(20)))
 
-        assertEquals(111_195.0, heardAt.metersFrom(1.0, 0.0)!!, 1.0) // One degree of latitude.
-        assertNull(DirectSender(0x13F, now).metersFrom(1.0, 0.0))
+        assertEquals(NearestDirect(0.0, ago(20)), heardAt.nearest(1.0, 0.0, ago(30)))
+        assertEquals(111_195.0, heardAt.nearest(1.0, 0.0, ago(10))!!.meters, 1.0) // One degree of latitude.
+        assertNull(DirectSender(0x13F, now).nearest(1.0, 0.0, ago(30)))
+    }
+
+    @Test
+    fun `live cells round half coordinates away from zero like SQLite`() {
+        assertEquals(DirectCell(1, -1), DirectCell.of(0.001, -0.001))
+        assertEquals(DirectCell(0, 0), DirectCell.of(0.0009, -0.0009))
     }
 
     @Test

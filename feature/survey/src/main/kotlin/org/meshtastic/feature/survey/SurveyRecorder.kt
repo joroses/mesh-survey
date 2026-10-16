@@ -237,11 +237,12 @@ class SurveyRecorder(
         if (safeCatching { dao.insertSession(session) }.isFailure) return fail(SurveyProblem.STORAGE)
         // Without the history the guesses only start from this session's packets, which is no reason not to record.
         val history = safeCatching {
-            dao.directSenders(session.receiverNodeId, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
+            dao.directPlaces(session.receiverNodeId, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
         }
             .getOrDefault(emptyList())
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)
-        val current = Active(session, myNode.myNodeNum, address, rows, DirectNeighbours(history))
+        val current =
+            Active(session, myNode.myNodeNum, address, rows, DirectNeighbours(history.map { it.toDirectSender() }))
         mutableState.value = SurveyState(session = session, neighbours = current.neighbours.all)
         writer = scope.launch { write(current) }
         watcher = scope.launch { watch(current, lora) }

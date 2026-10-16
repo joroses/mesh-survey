@@ -73,6 +73,7 @@ import org.meshtastic.core.common.util.NumberFormatter
 import org.meshtastic.core.common.util.nowMillis
 import org.meshtastic.core.ui.icon.ArrowBack
 import org.meshtastic.core.ui.icon.MeshtasticIcons
+import org.meshtastic.feature.survey.DIRECT_HISTORY
 import org.meshtastic.feature.survey.DirectSender
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayGuess
@@ -339,11 +340,11 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
 @Composable
 private fun candidateText(name: String, sender: DirectSender, fix: SurveyFix?): String {
     val heard = DateFormatter.formatRelativeTime(sender.lastDirectMs)
-    val meters =
-        fix?.let { sender.metersFrom(it.latitude, it.longitude) }
+    val nearest =
+        fix?.let { sender.nearest(it.latitude, it.longitude, sender.lastDirectMs - DIRECT_HISTORY.inWholeMilliseconds) }
             ?: return stringResource(R.string.survey_relay_candidate, name, heard)
-    val distance = distanceText(meters)
-    val earlier = sender.positionMs?.takeIf { it != sender.lastDirectMs }
+    val distance = distanceText(nearest.meters)
+    val earlier = nearest.heardAtMs.takeIf { it != sender.lastDirectMs }
     return if (earlier == null) {
         stringResource(R.string.survey_relay_candidate_at, name, heard, distance)
     } else {
