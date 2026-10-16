@@ -336,12 +336,12 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
     )
 }
 
-/** When a candidate was last heard directly, and how far from here, when both positions are known. */
+/** Latest direct time, distance to the nearest reception cell, and that cell's time when it differs. */
 @Composable
 private fun candidateText(name: String, sender: DirectSender, fix: SurveyFix?): String {
     val heard = DateFormatter.formatRelativeTime(sender.lastDirectMs)
     val nearest =
-        fix?.let { sender.nearest(it.latitude, it.longitude, sender.lastDirectMs - DIRECT_HISTORY.inWholeMilliseconds) }
+        fix?.let { sender.nearest(it.latitude, it.longitude, nowMillis - DIRECT_HISTORY.inWholeMilliseconds) }
             ?: return stringResource(R.string.survey_relay_candidate, name, heard)
     val distance = distanceText(nearest.meters)
     val earlier = nearest.heardAtMs.takeIf { it != sender.lastDirectMs }
