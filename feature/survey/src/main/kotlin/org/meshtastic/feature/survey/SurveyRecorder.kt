@@ -371,6 +371,9 @@ class SurveyRecorder(
     private suspend fun watch(current: Active, lora: SurveyLora) = coroutineScope {
         val sessionId = current.session.id
         var radioWait: Job? = null
+        // When the radio left, on the clock that keeps counting while the phone sleeps. [radioWait]'s delay does not,
+        // and with GPS off the phone may sleep through most of an absence.
+        var awaySinceMs: Long? = null
         var loraSettle: Job? = null
         launch { radioConfig.channelSetFlow.collect { current.defaultKeyChannels = defaultKeyChannels(it) } }
         combine(
@@ -399,9 +402,15 @@ class SurveyRecorder(
                 when {
                     end != null && end != SurveyStatus.LORA_CHANGED -> scope.launch { stop(end, sessionId) }
 
+                    // Back after the wait ran out while the phone slept: this is a new trip, not the same session.
+                    connected &&
+                        awaySinceMs?.let { clock.elapsedRealtimeMs() - it >= RADIO_WAIT.inWholeMilliseconds } == true ->
+                        scope.launch { stop(SurveyStatus.RADIO_LOST, sessionId) }
+
                     connected -> {
                         radioWait?.cancel()
                         radioWait = null
+                        awaySinceMs = null
                         resumeGps()
                         if (end == SurveyStatus.LORA_CHANGED) {
                             // During a reconnect the config and channel flows can show a half-written state for a
@@ -426,6 +435,8 @@ class SurveyRecorder(
 
                     radioWait == null -> {
                         pauseGps()
+                        awaySinceMs = clock.elapsedRealtimeMs()
+                        // Ends a session whose radio never comes back.
                         radioWait = launch {
                             delay(RADIO_WAIT)
                             scope.launch { stop(SurveyStatus.RADIO_LOST, sessionId) }

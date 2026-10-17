@@ -102,7 +102,10 @@ class SurveyRecorderTest {
         .apply { settings = listOf(ChannelSettings.Builder().apply { this.name = name }.build()) }
         .build()
 
-    private fun TestScope.recorder(surveyDao: SurveyDao = dao, elapsedRealtime: Long = 5_000L): SurveyRecorder {
+    /** The clock that keeps counting while the phone sleeps; tests move it to fake a sleep. */
+    private var elapsedRealtime = 5_000L
+
+    private fun TestScope.recorder(surveyDao: SurveyDao = dao): SurveyRecorder {
         radio =
             FakeRadioInterfaceService(backgroundScope).apply {
                 setDeviceAddress("xradio")
@@ -276,6 +279,40 @@ class SurveyRecorderTest {
         }
 
     @Test
+    fun `a radio back after the phone slept through the wait ends the session`() = runTest(UnconfinedTestDispatcher()) {
+        val recorder = recorder()
+        recorder.start()
+
+        service.setConnectionState(ConnectionState.Disconnected)
+        // Asleep: the delay barely moved, the elapsed-realtime clock ran on.
+        advanceTimeBy(1.seconds)
+        elapsedRealtime += SurveyRecorder.RADIO_WAIT.inWholeMilliseconds
+        service.setConnectionState(ConnectionState.Connected)
+
+        assertEquals(SurveyStatus.RADIO_LOST, dao.sessions.single().status)
+        assertNull(recorder.state.value.session)
+        assertFalse(location.running)
+    }
+
+    @Test
+    fun `a radio back within the wait keeps the session, and the next absence gets a full wait`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val recorder = recorder()
+            recorder.start()
+
+            service.setConnectionState(ConnectionState.Disconnected)
+            elapsedRealtime += SurveyRecorder.RADIO_WAIT.inWholeMilliseconds - 1_000
+            service.setConnectionState(ConnectionState.Connected)
+            assertEquals(SurveyStatus.RECORDING, dao.sessions.single().status)
+
+            service.setConnectionState(ConnectionState.Disconnected)
+            elapsedRealtime += 2_000
+            service.setConnectionState(ConnectionState.Connected)
+            assertEquals(SurveyStatus.RECORDING, dao.sessions.single().status)
+            assertTrue(location.running)
+        }
+
+    @Test
     fun `a disconnect by hand waits for the radio, and another radio ends the session`() =
         runTest(UnconfinedTestDispatcher()) {
             val recorder = recorder()
@@ -389,7 +426,8 @@ class SurveyRecorderTest {
                     }
                 }
             val elapsed = 2.hours.inWholeMilliseconds
-            val recorder = recorder(delayedDao, elapsedRealtime = elapsed)
+            elapsedRealtime = elapsed
+            val recorder = recorder(delayedDao)
             recorder.start()
             location.send(SurveyFix(elapsed, 0.0, 0.0, 10f))
             hear(from = 0x13F, relay = 0x3F)
