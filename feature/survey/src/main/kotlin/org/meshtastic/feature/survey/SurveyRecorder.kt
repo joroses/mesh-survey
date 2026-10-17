@@ -381,9 +381,10 @@ class SurveyRecorder(
             combine(radioConfig.localConfigFlow, radioConfig.channelSetFlow, ::surveyLora),
         ) { connection, myNode, transport, address, loraNow ->
             val connected = connection == ConnectionState.Connected
+            // A disconnect by hand clears the address; like a lost radio, the session waits for it to return.
             val end =
                 when {
-                    address != current.address -> SurveyStatus.NODE_CHANGED
+                    address != null && address != current.address -> SurveyStatus.NODE_CHANGED
                     myNode != null && myNode.myNodeNum != current.surveyNode -> SurveyStatus.NODE_CHANGED
                     connected && loraNow != null && loraNow != lora -> SurveyStatus.LORA_CHANGED
                     else -> null

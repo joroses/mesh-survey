@@ -29,6 +29,7 @@ import androidx.room3.Query
 import androidx.room3.RoomDatabase
 import androidx.room3.Transaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /** Why a session is no longer recording. RECORDING is the only live status. */
 enum class SurveyStatus {
@@ -129,8 +130,18 @@ interface SurveyDao {
 
     @Insert suspend fun insertMeasurement(measurement: SurveyMeasurement): Long
 
+    @Query("SELECT * FROM survey_session ORDER BY started_at DESC")
+    fun sessionRows(): Flow<List<SurveySession>>
+
     @Query("$SUMMARY GROUP BY s.id ORDER BY s.started_at DESC")
-    fun sessions(): Flow<List<SurveySessionSummary>>
+    suspend fun summaries(): List<SurveySessionSummary>
+
+    /**
+     * The session list, newest first. It follows the session table only: a flow on [SUMMARY] would count every
+     * measurement again after each insert. So a recording session's counts change only when its row does (an upload,
+     * the end); until then the recorder has the live count.
+     */
+    fun sessions(): Flow<List<SurveySessionSummary>> = sessionRows().map { summaries() }
 
     @Query("$SUMMARY GROUP BY s.id HAVING MAX(m.seq) > s.uploaded_seq ORDER BY s.started_at")
     suspend fun sessionsToUpload(): List<SurveySessionSummary>

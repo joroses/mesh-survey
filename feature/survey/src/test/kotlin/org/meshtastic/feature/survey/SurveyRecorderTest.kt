@@ -276,6 +276,25 @@ class SurveyRecorderTest {
         }
 
     @Test
+    fun `a disconnect by hand waits for the radio, and another radio ends the session`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val recorder = recorder()
+            recorder.start()
+
+            service.setConnectionState(ConnectionState.Disconnected)
+            radio.setDeviceAddress(null)
+            assertEquals(SurveyStatus.RECORDING, dao.sessions.single().status)
+            assertTrue(recorder.state.value.waitingForRadio)
+
+            radio.setDeviceAddress("xradio")
+            service.setConnectionState(ConnectionState.Connected)
+            assertTrue(location.running)
+
+            radio.setDeviceAddress("yradio")
+            assertEquals(SurveyStatus.NODE_CHANGED, dao.sessions.single().status)
+        }
+
+    @Test
     fun `another survey node ends the session`() = runTest(UnconfinedTestDispatcher()) {
         val recorder = recorder()
         recorder.start()

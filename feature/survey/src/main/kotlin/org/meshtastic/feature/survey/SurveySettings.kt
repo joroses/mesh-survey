@@ -44,12 +44,19 @@ data class SurveyUploadSettings(
 }
 
 /**
- * Whether [url] is an absolute http(s) URL with a host. The shared HttpClient resolves anything else against its
- * default base URL, api.meshtastic.org, so "sigsleuth.example.org" would post the survey and its password there.
+ * Whether [url] is an absolute https URL with a host, or an http one to this device. The shared HttpClient resolves
+ * anything else against its default base URL, api.meshtastic.org, so "sigsleuth.example.org" would post the survey and
+ * its password there. The app's network security config blocks cleartext except to localhost and 127.0.0.1, so any
+ * other http URL would save but never upload.
  */
 fun isUploadUrl(url: String): Boolean {
-    val uri = safeCatching { URI(url.trim()) }.getOrNull() ?: return false
-    return uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()
+    val uri = safeCatching { URI(url.trim()) }.getOrNull()
+    val host = uri?.host?.lowercase().orEmpty()
+    return when (uri?.scheme?.lowercase()) {
+        "https" -> host.isNotBlank()
+        "http" -> host == "localhost" || host.endsWith(".localhost") || host == "127.0.0.1"
+        else -> false
+    }
 }
 
 interface SurveySettings {

@@ -38,6 +38,7 @@ import org.meshtastic.core.common.di.ApplicationCoroutineScope
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -266,6 +267,14 @@ class SurveyUploaderTest {
         assertEquals(0L, dao.sessions.single().uploadedSeq)
         assertTrue(dao.sessions.single().lastUploadError!!.contains("https://"))
         assertTrue(isUploadUrl("http://localhost:8001") && isUploadUrl("HTTPS://sigsleuth.example.org/"))
+    }
+
+    @Test
+    fun `plain http is accepted only for this device, the one place cleartext may go`() {
+        assertTrue(isUploadUrl("http://127.0.0.1:8001") && isUploadUrl("HTTP://LOCALHOST/"))
+        assertFalse(isUploadUrl("http://192.168.1.10:8000"))
+        assertFalse(isUploadUrl("http://sigsleuth.example.org"))
+        assertFalse(isUploadUrl("ftp://sigsleuth.example.org"))
     }
 
     @Test

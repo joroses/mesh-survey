@@ -27,7 +27,7 @@ internal class FakeSurveyDao : SurveyDao {
         sessions.replaceAll { if (it.id == id) change(it) else it }
     }
 
-    private fun summaries() = sessions.map { session ->
+    override suspend fun summaries() = sessions.map { session ->
         val rows = measurements.filter { it.sessionId == session.id }
         SurveySessionSummary(
             session,
@@ -50,7 +50,7 @@ internal class FakeSurveyDao : SurveyDao {
         return measurements.size.toLong()
     }
 
-    override fun sessions() = MutableStateFlow(summaries())
+    override fun sessionRows() = MutableStateFlow(sessions.toList())
 
     override suspend fun sessionsToUpload() = summaries().filter { it.lastSeq > it.session.uploadedSeq }
 

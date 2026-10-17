@@ -61,7 +61,16 @@ class SurveyViewModel(
 ) : ViewModel() {
     val state: StateFlow<SurveyState> = recorder.state
     val uploading: StateFlow<Boolean> = uploader.uploading
-    val sessions: StateFlow<List<SurveySessionSummary>> = dao.sessions().stateInWhileSubscribed(emptyList())
+
+    /** The stored sessions, with the recording one's measurement count from the recorder, which the list lags. */
+    val sessions: StateFlow<List<SurveySessionSummary>> =
+        combine(
+            dao.sessions(),
+            state.map { it.session?.id to it.measurementCount }.distinctUntilChanged(),
+        ) { sessions, (liveId, liveCount) ->
+            sessions.map { if (it.session.id == liveId) it.copy(measurementCount = liveCount) else it }
+        }
+            .stateInWhileSubscribed(emptyList())
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
 
     /** The connected radio's name, which Start would survey with; null while no radio is connected. */
