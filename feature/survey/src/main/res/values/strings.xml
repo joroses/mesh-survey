@@ -22,23 +22,33 @@
     <string name="survey_intro">Records every LoRa packet your node hears, with where this phone was, and uploads the measurements to SigSleuth. Keep the radio connected and location on.</string>
     <string name="survey_not_recording">Not recording</string>
     <string name="survey_recording">Recording</string>
+    <!-- The notification's text while the radio is away; the screen uses the two strings after it. -->
     <string name="survey_waiting_for_radio">Waiting for radio (GPS paused)</string>
+    <string name="survey_waiting_title">Waiting for radio</string>
+    <string name="survey_waiting_explained">GPS is paused and nothing is recorded until the radio reconnects. The session ends if it stays away for %1$d minutes.</string>
+    <string name="survey_radio_connected">Radio: %1$s</string>
+    <string name="survey_radio_none">No radio connected</string>
     <string name="survey_start">Start</string>
     <string name="survey_stop">Stop</string>
+    <!-- %1$s is the radio's name, %2$s its preset (LongFast) or spreading factor (SF11), %3$s the frequency. -->
     <string name="survey_node">%1$s · %2$s</string>
-    <string name="survey_duration">Duration %1$s</string>
+    <string name="survey_node_frequency">%1$s · %2$s · %3$s MHz</string>
     <plurals name="survey_measurements">
         <item quantity="one">%1$d measurement</item>
         <item quantity="other">%1$d measurements</item>
     </plurals>
-    <plurals name="survey_relays">
-        <item quantity="one">%1$d distinct relay byte</item>
-        <item quantity="other">%1$d distinct relay bytes</item>
-    </plurals>
-    <string name="survey_since_last">Since last measurement %1$s</string>
+    <string name="survey_stat_measurements">Measurements</string>
+    <string name="survey_stat_relays">Relay bytes</string>
+    <string name="survey_stat_since_last">Since last packet</string>
+    <string name="survey_seconds">%1$d s</string>
+    <string name="survey_minutes">%1$d min</string>
+    <string name="survey_hours">%1$d h</string>
     <string name="survey_gps">GPS ±%1$s m, fix %2$s s old</string>
     <string name="survey_gps_none">No GPS fix yet</string>
-    <string name="survey_last_packet">Last packet: SNR %1$s dB, RSSI %2$s dBm, relay %3$s</string>
+    <!-- %1$d and %2$d are SigSleuth's limits, in seconds and metres. -->
+    <string name="survey_gps_skipped">SigSleuth skips packets heard now: it needs a fix at most %1$d s old and within %2$d m.</string>
+    <string name="survey_last_signal">Last packet: SNR %1$s dB, RSSI %2$s dBm</string>
+    <string name="survey_last_relay">Relay: %1$s</string>
     <!-- Relay guesses: %1$s is the relay byte in hex (3f), %2$s a node's short name. "≈" and "?" mark them as guesses. -->
     <string name="survey_relay_direct">%1$s (direct)</string>
     <string name="survey_relay_likely">%1$s ≈ %2$s</string>
@@ -59,11 +69,16 @@
     <string name="survey_distance_m">%1$d m</string>
     <string name="survey_distance_km">%1$s km</string>
     <string name="survey_close">Close</string>
-    <string name="survey_last_ended">Last session: %1$s</string>
+    <!-- Why the last session ended on its own; shown until the next one starts. -->
+    <string name="survey_ended_node_changed">The last session ended because another radio connected.</string>
+    <string name="survey_ended_lora_changed">The last session ended because the radio\'s LoRa settings changed. Start again to record with the new settings.</string>
+    <string name="survey_ended_radio_lost">The last session ended because the radio was away for %1$d minutes.</string>
+    <string name="survey_ended_interrupted">The last session ended because Android stopped the app.</string>
     <string name="survey_problem_no_radio">Connect a radio first.</string>
     <string name="survey_problem_no_lora">The radio has not sent its LoRa settings yet. Try again in a moment.</string>
     <string name="survey_problem_no_location">Turn on location and allow precise location.</string>
     <string name="survey_problem_storage">Could not save to the survey database.</string>
+    <string name="survey_open_settings">Open settings</string>
     <string name="survey_status_recording">Recording</string>
     <string name="survey_status_stopped">Stopped</string>
     <string name="survey_status_node_changed">Ended: another radio</string>
@@ -71,24 +86,55 @@
     <string name="survey_status_radio_lost">Ended: radio did not come back</string>
     <string name="survey_status_interrupted">Ended: app was closed</string>
     <string name="survey_upload">Upload to SigSleuth</string>
+    <string name="survey_upload_off">Off. Measurements stay on this phone, and each session can still be exported as CSV.</string>
+    <string name="survey_upload_set_up">Set up</string>
+    <string name="survey_upload_edit">Edit</string>
     <string name="survey_upload_url">SigSleuth URL</string>
+    <string name="survey_upload_url_hint">Leave it empty to turn uploads off.</string>
     <string name="survey_upload_url_invalid">Enter the full address, starting with https://</string>
     <string name="survey_upload_user">User (optional)</string>
     <string name="survey_upload_password">Password (optional)</string>
+    <string name="survey_upload_show_password">Show password</string>
+    <string name="survey_upload_hide_password">Hide password</string>
     <string name="survey_upload_automatic">Upload automatically</string>
+    <string name="survey_upload_automatic_explained">Every minute while recording, and when a session ends.</string>
     <string name="survey_save">Save</string>
-    <string name="survey_upload_now">Upload</string>
+    <string name="survey_upload_now">Upload now</string>
     <string name="survey_uploading">Uploading…</string>
+    <plurals name="survey_upload_pending">
+        <item quantity="one">%1$d measurement waiting to upload</item>
+        <item quantity="other">%1$d measurements waiting to upload</item>
+    </plurals>
+    <string name="survey_upload_done">Everything is uploaded.</string>
+    <string name="survey_upload_failed">Last upload failed: %1$s</string>
+    <string name="survey_upload_failed_password">Last upload failed: %1$s. Check the password.</string>
     <string name="survey_sessions">Sessions</string>
-    <string name="survey_no_sessions">No sessions yet.</string>
+    <string name="survey_no_sessions">No sessions yet</string>
+    <string name="survey_no_sessions_hint">Each recording appears here, ready to upload or export.</string>
     <string name="survey_uploaded_of">Uploaded %1$d of %2$d</string>
-    <string name="survey_server_kept">SigSleuth kept %1$d, skipped %2$d</string>
-    <string name="survey_server_skip_reasons">Skipped: %1$s</string>
+    <string name="survey_uploaded_all">All uploaded</string>
+    <string name="survey_server_kept">SigSleuth kept %1$d and skipped %2$d</string>
+    <string name="survey_server_kept_reasons">SigSleuth kept %1$d and skipped %2$d: %3$s</string>
+    <!-- SigSleuth's skip reasons, each after its count. %2$d is SigSleuth's limit, in metres or seconds. -->
+    <string name="survey_skip_no_position">%1$d without a position</string>
+    <string name="survey_skip_inaccurate">%1$d with a fix worse than %2$d m</string>
+    <string name="survey_skip_old_fix">%1$d with a fix older than %2$d s</string>
+    <string name="survey_skip_too_old">%1$d older than SigSleuth keeps</string>
+    <string name="survey_skip_in_future">%1$d timed in the future</string>
+    <string name="survey_skip_no_sender">%1$d without a sender</string>
+    <!-- A reason this version does not know; %2$s is SigSleuth's own name for it. -->
+    <string name="survey_skip_other">%1$d %2$s</string>
     <string name="survey_export">Export CSV</string>
     <string name="survey_export_saved">CSV saved.</string>
     <string name="survey_export_failed">Could not save the CSV.</string>
     <string name="survey_delete">Delete</string>
     <string name="survey_delete_title">Delete this session?</string>
     <string name="survey_delete_text">%1$d of its %2$d measurements are uploaded. The rest are lost unless you export them first.</string>
+    <string name="survey_delete_text_uploaded">All %1$d measurements are uploaded. Export them first if you want a copy.</string>
+    <!-- SigSleuth answered for rows it skipped (no position, old fix) without storing them. -->
+    <string name="survey_delete_text_kept">SigSleuth kept %1$d of its %2$d measurements. The rest are only on this phone and are lost unless you export them first.</string>
+    <string name="survey_delete_text_empty">It has no measurements.</string>
+    <string name="survey_deleted">Session deleted.</string>
+    <string name="survey_delete_failed">Could not delete the session.</string>
     <string name="survey_cancel">Cancel</string>
 </resources>

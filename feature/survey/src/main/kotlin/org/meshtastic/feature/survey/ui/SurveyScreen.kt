@@ -19,30 +19,52 @@
 package org.meshtastic.feature.survey.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -58,27 +80,56 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 import org.meshtastic.core.common.util.DateFormatter
 import org.meshtastic.core.common.util.NumberFormatter
 import org.meshtastic.core.common.util.nowMillis
+import org.meshtastic.core.ui.component.EmptyState
 import org.meshtastic.core.ui.icon.ArrowBack
+import org.meshtastic.core.ui.icon.CheckCircle
+import org.meshtastic.core.ui.icon.ChevronRight
+import org.meshtastic.core.ui.icon.CloudUpload
+import org.meshtastic.core.ui.icon.ErrorOutline
+import org.meshtastic.core.ui.icon.History
+import org.meshtastic.core.ui.icon.Info
+import org.meshtastic.core.ui.icon.LinkOff
+import org.meshtastic.core.ui.icon.LocationDisabled
+import org.meshtastic.core.ui.icon.MeshRadio
 import org.meshtastic.core.ui.icon.MeshtasticIcons
+import org.meshtastic.core.ui.icon.MyLocation
+import org.meshtastic.core.ui.icon.PlayArrow
+import org.meshtastic.core.ui.icon.Route
+import org.meshtastic.core.ui.icon.Snr
+import org.meshtastic.core.ui.icon.Visibility
+import org.meshtastic.core.ui.icon.VisibilityOff
+import org.meshtastic.core.ui.theme.StatusColors.StatusGreen
+import org.meshtastic.core.ui.theme.StatusColors.StatusYellow
 import org.meshtastic.feature.survey.DIRECT_HISTORY
 import org.meshtastic.feature.survey.DirectSender
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayGuess
 import org.meshtastic.feature.survey.SurveyFix
 import org.meshtastic.feature.survey.SurveyProblem
+import org.meshtastic.feature.survey.SurveyRecorder
+import org.meshtastic.feature.survey.SurveySession
 import org.meshtastic.feature.survey.SurveySessionSummary
 import org.meshtastic.feature.survey.SurveyState
 import org.meshtastic.feature.survey.SurveyStatus
@@ -96,11 +147,11 @@ fun SurveyScreen(
     viewModel: SurveyViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val radioName by viewModel.radioName.collectAsStateWithLifecycle()
     val relayNames by viewModel.relayNames.collectAsStateWithLifecycle()
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val uploadSettings by viewModel.uploadSettings.collectAsStateWithLifecycle()
     val uploading by viewModel.uploading.collectAsStateWithLifecycle()
-    val exportResult by viewModel.exportResult.collectAsStateWithLifecycle()
 
     val permissions =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
@@ -123,6 +174,7 @@ fun SurveyScreen(
             val sessionId = exportSessionId
             if (uri != null && sessionId != null) viewModel.export(sessionId, uri)
         }
+    val uploadsOn = uploadSettings?.url?.isNotBlank() == true
 
     Scaffold(
         modifier = modifier,
@@ -139,14 +191,17 @@ fun SurveyScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.padding(padding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { RecordingCard(state, relayNames, onStart = requestStart, onStop = viewModel::stop) }
-            item {
-                uploadSettings?.let { current ->
-                    UploadSettingsCard(
+            item(key = "recording") {
+                RecordingCard(state, radioName, relayNames, onStart = requestStart, onStop = viewModel::stop)
+            }
+            uploadSettings?.let { current ->
+                item(key = "upload") {
+                    UploadCard(
                         current,
+                        sessions,
                         uploading,
                         onSave = viewModel::saveServer,
                         onAutomatic = viewModel::setAutomatic,
@@ -154,31 +209,29 @@ fun SurveyScreen(
                     )
                 }
             }
-            exportResult?.let { result ->
-                item {
-                    Text(
-                        stringResource(
-                            if (result == ExportResult.SAVED) {
-                                R.string.survey_export_saved
-                            } else {
-                                R.string.survey_export_failed
-                            },
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
+            item(key = "sessions") {
+                Text(
+                    stringResource(R.string.survey_sessions),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            if (sessions.isEmpty()) {
+                item(key = "no_sessions") {
+                    EmptyState(
+                        icon = MeshtasticIcons.History,
+                        title = stringResource(R.string.survey_no_sessions),
+                        supportingText = stringResource(R.string.survey_no_sessions_hint),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-            }
-            item { Text(stringResource(R.string.survey_sessions), style = MaterialTheme.typography.titleMedium) }
-            if (sessions.isEmpty()) {
-                item { Text(stringResource(R.string.survey_no_sessions)) }
             }
             items(sessions, key = { it.session.id }) { summary ->
                 SessionCard(
                     summary = summary,
                     recording = summary.session.id == state.session?.id,
-                    onUpload = viewModel::upload,
+                    uploadsOn = uploadsOn,
                     onExport = {
-                        viewModel.clearExportResult()
                         exportSessionId = summary.session.id
                         exporter.launch(csvFileName(summary))
                     },
@@ -195,70 +248,329 @@ private fun csvFileName(summary: SurveySessionSummary): String =
 private const val SHORT_ID_LENGTH = 8
 private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
+private const val SECONDS_PER_HOUR = 3_600L
+
+// SigSleuth skips a measurement whose fix is older or less accurate than this (its MAX_FIX_AGE_MS and MAX_ACCURACY_M).
+private const val SIGSLEUTH_MAX_FIX_AGE_S = 10
+private const val SIGSLEUTH_MAX_ACCURACY_M = 100
 
 @Composable
-private fun RecordingCard(state: SurveyState, relayNames: Map<Long, String>, onStart: () -> Unit, onStop: () -> Unit) {
+private fun RecordingCard(
+    state: SurveyState,
+    radioName: String?,
+    relayNames: Map<Long, String>,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+) {
     val session = state.session
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                stringResource(
-                    when {
-                        session == null -> R.string.survey_not_recording
-                        state.waitingForRadio -> R.string.survey_waiting_for_radio
-                        else -> R.string.survey_recording
-                    },
-                ),
-                style = MaterialTheme.typography.titleMedium,
-            )
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatusHeader(state)
             if (session == null) {
-                Text(stringResource(R.string.survey_intro), style = MaterialTheme.typography.bodyMedium)
-                state.lastEnd?.let { Text(stringResource(R.string.survey_last_ended, stringResource(it.label()))) }
+                IdleDetails(state.lastEnd, radioName)
             } else {
-                val node = session.receiverName.ifBlank { "!%08x".format(Locale.ROOT, session.receiverNodeId) }
-                Text(stringResource(R.string.survey_node, node, session.modemPreset ?: "SF${session.spreadingFactor}"))
-                Text(stringResource(R.string.survey_duration, elapsedText(session.startedAt)))
-                Text(
-                    pluralStringResource(R.plurals.survey_measurements, state.measurementCount, state.measurementCount),
-                )
-                var showRelays by remember { mutableStateOf(false) }
-                Text(
-                    pluralStringResource(R.plurals.survey_relays, state.relays.size, state.relays.size),
-                    color = if (state.relays.isEmpty()) Color.Unspecified else MaterialTheme.colorScheme.primary,
-                    modifier =
-                    Modifier.clickable(
-                        enabled = state.relays.isNotEmpty(),
-                        onClickLabel = stringResource(R.string.survey_relays_open),
-                        role = Role.Button,
-                    ) {
-                        showRelays = true
-                    },
-                )
-                if (showRelays) RelaysDialog(state, relayNames, onDismiss = { showRelays = false })
-                state.lastMeasurement?.let { last ->
-                    Text(stringResource(R.string.survey_since_last, elapsedText(last.heardAtMs)))
-                }
-                Text(gpsText(state))
-                state.lastMeasurement?.let { last ->
-                    Text(
-                        stringResource(
-                            R.string.survey_last_packet,
-                            last.rxSnr?.let { NumberFormatter.format(it, 2) } ?: "–",
-                            last.rxRssi?.toString() ?: "–",
-                            last.relayByte?.let { relayText(it, state.relays[it]?.guess, relayNames) } ?: "–",
-                        ),
-                    )
-                }
+                RecordingDetails(state, session, relayNames)
             }
-            state.problem?.let { Text(stringResource(it.label()), color = MaterialTheme.colorScheme.error) }
+            state.problem?.let { ProblemBanner(it) }
             if (session == null) {
-                Button(onClick = onStart) { Text(stringResource(R.string.survey_start)) }
+                Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        MeshtasticIcons.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                    )
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text(stringResource(R.string.survey_start))
+                }
             } else {
-                Button(onClick = onStop) { Text(stringResource(R.string.survey_stop)) }
+                Button(
+                    onClick = onStop,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                ) {
+                    Text(stringResource(R.string.survey_stop))
+                }
             }
         }
     }
 }
+
+/** A coloured dot and what the survey is doing; while recording, how long it has run. */
+@Composable
+private fun StatusHeader(state: SurveyState) {
+    val session = state.session
+    val (title, dot) =
+        when {
+            session == null -> R.string.survey_not_recording to MaterialTheme.colorScheme.outline
+            state.waitingForRadio -> R.string.survey_waiting_title to MaterialTheme.colorScheme.StatusYellow
+            else -> R.string.survey_recording to MaterialTheme.colorScheme.StatusGreen
+        }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(10.dp).background(dot, CircleShape))
+        Text(stringResource(title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        session?.let {
+            Text(
+                clockText(currentTime() - it.startedAt),
+                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun IdleDetails(lastEnd: SurveyStatus?, radioName: String?) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.survey_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (radioName != null) {
+            InfoRow(MeshtasticIcons.MeshRadio, stringResource(R.string.survey_radio_connected, radioName))
+        } else {
+            InfoRow(MeshtasticIcons.LinkOff, stringResource(R.string.survey_radio_none))
+        }
+        lastEnd?.endedNotice()?.let { InfoRow(MeshtasticIcons.Info, it) }
+    }
+}
+
+@Composable
+private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNames: Map<Long, String>) {
+    var showRelays by rememberSaveable { mutableStateOf(false) }
+    val last = state.lastMeasurement
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            radioText(session),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (state.waitingForRadio) {
+            Text(
+                stringResource(R.string.survey_waiting_explained, SurveyRecorder.RADIO_WAIT.inWholeMinutes.toInt()),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Stat(
+                value = state.measurementCount.toString(),
+                label = stringResource(R.string.survey_stat_measurements),
+                modifier = Modifier.weight(1f),
+            )
+            Stat(
+                value = state.relays.size.toString(),
+                label = stringResource(R.string.survey_stat_relays),
+                modifier = Modifier.weight(1f),
+                onClick = { showRelays = true }.takeIf { state.relays.isNotEmpty() },
+                onClickLabel = stringResource(R.string.survey_relays_open),
+            )
+            Stat(
+                value = last?.let { agoText(it.heardAtMs) } ?: "–",
+                label = stringResource(R.string.survey_stat_since_last),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        // While the radio is away GPS is off on purpose; the header and the line above say so.
+        if (!state.waitingForRadio) GpsStatus(state.fix)
+        last?.let { measurement ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                InfoRow(
+                    MeshtasticIcons.Snr,
+                    stringResource(
+                        R.string.survey_last_signal,
+                        measurement.rxSnr?.let { NumberFormatter.format(it, 2) } ?: "–",
+                        measurement.rxRssi?.toString() ?: "–",
+                    ),
+                )
+                measurement.relayByte?.let { byte ->
+                    val relay = relayText(byte, state.relays[byte]?.guess, relayNames)
+                    InfoRow(MeshtasticIcons.Route, stringResource(R.string.survey_last_relay, relay))
+                }
+            }
+        }
+        if (showRelays) RelaysDialog(state, relayNames, onDismiss = { showRelays = false })
+    }
+}
+
+/** One figure with its label under it; with [onClick], tappable and marked so. */
+@Composable
+private fun Stat(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+) {
+    val action =
+        if (onClick == null) {
+            Modifier.semantics(mergeDescendants = true) {}
+        } else {
+            Modifier.clip(MaterialTheme.shapes.small)
+                .clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+        }
+    Column(modifier.then(action).padding(vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                value,
+                style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+                color = if (onClick == null) Color.Unspecified else MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+            )
+            if (onClick != null) {
+                Icon(
+                    MeshtasticIcons.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** The fix's accuracy and age, in the error colour when SigSleuth would skip packets heard with it. */
+@Composable
+private fun GpsStatus(fix: SurveyFix?) {
+    val now = currentTime(monotonic = true)
+    val ageMs = fix?.let { (now - it.elapsedRealtimeMs).coerceAtLeast(0) }
+    val usable = fix != null && ageMs != null && usableFix(ageMs, fix.accuracyM)
+    val color = if (usable) Color.Unspecified else MaterialTheme.colorScheme.error
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (fix == null || ageMs == null) {
+            InfoRow(MeshtasticIcons.LocationDisabled, stringResource(R.string.survey_gps_none), color)
+        } else {
+            InfoRow(
+                MeshtasticIcons.MyLocation,
+                stringResource(
+                    R.string.survey_gps,
+                    fix.accuracyM?.let { NumberFormatter.format(it, 0) } ?: "?",
+                    (ageMs / MILLIS_PER_SECOND).toString(),
+                ),
+                color,
+            )
+        }
+        if (!usable) {
+            Text(
+                stringResource(R.string.survey_gps_skipped, SIGSLEUTH_MAX_FIX_AGE_S, SIGSLEUTH_MAX_ACCURACY_M),
+                style = MaterialTheme.typography.bodySmall,
+                color = color,
+                modifier = Modifier.padding(start = INFO_TEXT_INDENT),
+            )
+        }
+    }
+}
+
+private fun usableFix(ageMs: Long, accuracyM: Float?): Boolean =
+    ageMs <= SIGSLEUTH_MAX_FIX_AGE_S * MILLIS_PER_SECOND && (accuracyM ?: 0f) <= SIGSLEUTH_MAX_ACCURACY_M
+
+private val INFO_ICON_SIZE = 18.dp
+private val INFO_ICON_GAP = 8.dp
+private val INFO_TEXT_INDENT = INFO_ICON_SIZE + INFO_ICON_GAP
+
+/** A small icon and a line of text; the icon takes [color] too, or a muted one by default. */
+@Composable
+private fun InfoRow(icon: ImageVector, text: String, color: Color = Color.Unspecified) {
+    Row(horizontalArrangement = Arrangement.spacedBy(INFO_ICON_GAP)) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.padding(top = 1.dp).size(INFO_ICON_SIZE),
+            tint = color.takeOrElse { MaterialTheme.colorScheme.onSurfaceVariant },
+        )
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
+    }
+}
+
+/** The problem, and for location the way to fix it, since a refused permission is never asked again. */
+@Composable
+private fun ProblemBanner(problem: SurveyProblem) {
+    val context = LocalContext.current
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(MeshtasticIcons.ErrorOutline, contentDescription = null)
+            Text(
+                stringResource(problem.label()),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (problem == SurveyProblem.NO_LOCATION) {
+                TextButton(
+                    onClick = { openLocationSettings(context) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onErrorContainer),
+                ) {
+                    Text(stringResource(R.string.survey_open_settings))
+                }
+            }
+        }
+    }
+}
+
+/** The app's permissions while precise location is not granted, otherwise the system's location switch. */
+private fun openLocationSettings(context: Context) {
+    val precise =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+    val intent =
+        if (precise) {
+            Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+        }
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        // A device without that screen; the banner still says what to change.
+    }
+}
+
+/** Why the last session ended, when it ended on its own; a Stop needs no explaining. */
+@Composable
+@ReadOnlyComposable
+private fun SurveyStatus.endedNotice(): String? = when (this) {
+    SurveyStatus.RECORDING,
+    SurveyStatus.STOPPED,
+    -> null
+
+    SurveyStatus.NODE_CHANGED -> stringResource(R.string.survey_ended_node_changed)
+
+    SurveyStatus.LORA_CHANGED -> stringResource(R.string.survey_ended_lora_changed)
+
+    SurveyStatus.RADIO_LOST ->
+        stringResource(R.string.survey_ended_radio_lost, SurveyRecorder.RADIO_WAIT.inWholeMinutes.toInt())
+
+    SurveyStatus.INTERRUPTED -> stringResource(R.string.survey_ended_interrupted)
+}
+
+/** The session's radio, preset and frequency: "Base · LongFast · 869.525 MHz". */
+@Composable
+private fun radioText(session: SurveySession): String {
+    val node = session.receiverName.ifBlank { "!%08x".format(Locale.ROOT, session.receiverNodeId) }
+    val preset = session.modemPreset?.let(::presetName) ?: "SF${session.spreadingFactor}"
+    val frequency = session.frequencyMhz ?: return stringResource(R.string.survey_node, node, preset)
+    return stringResource(
+        R.string.survey_node_frequency,
+        node,
+        preset,
+        NumberFormatter.format(frequency, decimalPlaces = 3),
+    )
+}
+
+/** LONG_FAST as LongFast, the way channel names show presets. */
+private fun presetName(preset: String): String =
+    preset.split('_').joinToString("") { word -> word.lowercase().replaceFirstChar { it.uppercase() } }
 
 /** The relay byte with who most likely sent it on, worded as the guess it is. */
 @Composable
@@ -302,11 +614,16 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
         title = { Text(stringResource(R.string.survey_relays_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(R.string.survey_relays_explained), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    stringResource(R.string.survey_relays_explained),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 state.relays.entries
                     .sortedByDescending { it.value.packets }
                     .forEach { (byte, relay) ->
-                        Column {
+                        HorizontalDivider()
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(relayText(byte, relay.guess, names), style = MaterialTheme.typography.titleSmall)
                             Text(
                                 pluralStringResource(
@@ -316,13 +633,14 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                                     DateFormatter.formatRelativeTime(relay.lastHeardMs),
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             // A direct packet's sender is no guess, so it needs no evidence.
                             if (relay.guess !is RelayGuess.Direct) {
                                 relay.guess.nodeIds.forEach { id ->
                                     state.neighbours[id]?.let { sender ->
                                         Text(
-                                            candidateText(nodeName(id, names), sender, state.fix),
+                                            "• " + candidateText(nodeName(id, names), sender, state.fix),
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
@@ -366,102 +684,250 @@ private fun distanceText(meters: Double): String = if (meters < METERS_PER_KM) {
     stringResource(R.string.survey_distance_km, NumberFormatter.format(meters / METERS_PER_KM, 1))
 }
 
+/** The wall clock, or with [monotonic] the clock GPS fixes are timed on, updated every second. */
 @Composable
-private fun gpsText(state: SurveyState): String {
-    val fix = state.fix ?: return stringResource(R.string.survey_gps_none)
-    var now by remember { mutableLongStateOf(android.os.SystemClock.elapsedRealtime()) }
-    LaunchedEffect(fix) {
+private fun currentTime(monotonic: Boolean = false): Long {
+    fun read() = if (monotonic) SystemClock.elapsedRealtime() else nowMillis
+    var now by remember(monotonic) { mutableLongStateOf(read()) }
+    LaunchedEffect(monotonic) {
         while (true) {
-            now = android.os.SystemClock.elapsedRealtime()
+            now = read()
             delay(MILLIS_PER_SECOND)
         }
     }
-    val accuracy = fix.accuracyM?.let { NumberFormatter.format(it, 0) } ?: "?"
-    val age = ((now - fix.elapsedRealtimeMs).coerceAtLeast(0) / MILLIS_PER_SECOND).toString()
-    return stringResource(R.string.survey_gps, accuracy, age)
+    return now
 }
 
-@Composable
-private fun elapsedText(startedAt: Long): String {
-    var now by remember { mutableLongStateOf(nowMillis) }
-    LaunchedEffect(startedAt) {
-        while (true) {
-            now = nowMillis
-            delay(MILLIS_PER_SECOND)
-        }
-    }
-    val seconds = ((now - startedAt) / MILLIS_PER_SECOND).coerceAtLeast(0)
+/** A duration as h:mm:ss. */
+private fun clockText(millis: Long): String {
+    val seconds = (millis / MILLIS_PER_SECOND).coerceAtLeast(0)
     return "%d:%02d:%02d"
         .format(
             Locale.ROOT,
-            seconds / (SECONDS_PER_MINUTE * SECONDS_PER_MINUTE),
+            seconds / SECONDS_PER_HOUR,
             seconds / SECONDS_PER_MINUTE % SECONDS_PER_MINUTE,
             seconds % SECONDS_PER_MINUTE,
         )
 }
 
+/** How long ago [timeMs] was, coarsely: 12 s, 3 min, 2 h. */
 @Composable
-private fun UploadSettingsCard(
+private fun agoText(timeMs: Long): String {
+    val seconds = ((currentTime() - timeMs) / MILLIS_PER_SECOND).coerceAtLeast(0)
+    return when {
+        seconds < SECONDS_PER_MINUTE -> stringResource(R.string.survey_seconds, seconds.toInt())
+        seconds < SECONDS_PER_HOUR -> stringResource(R.string.survey_minutes, (seconds / SECONDS_PER_MINUTE).toInt())
+        else -> stringResource(R.string.survey_hours, (seconds / SECONDS_PER_HOUR).toInt())
+    }
+}
+
+/**
+ * Where uploads go, folded to one line once set: a server is entered once, so the form only opens on Set up or Edit.
+ */
+@Composable
+private fun UploadCard(
     settings: SurveyUploadSettings,
+    sessions: List<SurveySessionSummary>,
     uploading: Boolean,
     onSave: (SurveyUploadSettings) -> Unit,
     onAutomatic: (Boolean) -> Unit,
     onUpload: () -> Unit,
 ) {
+    var editing by rememberSaveable { mutableStateOf(false) }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.survey_upload),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (!editing) {
+                    TextButton(onClick = { editing = true }) {
+                        val action =
+                            if (settings.url.isBlank()) R.string.survey_upload_set_up else R.string.survey_upload_edit
+                        Text(stringResource(action))
+                    }
+                }
+            }
+            when {
+                editing ->
+                    ServerForm(
+                        settings,
+                        onSave = { edited ->
+                            if (edited != settings) onSave(edited)
+                            editing = false
+                        },
+                        onCancel = { editing = false },
+                    )
+
+                settings.url.isBlank() ->
+                    Text(
+                        stringResource(R.string.survey_upload_off),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                else -> UploadSummary(settings, sessions, uploading, onAutomatic, onUpload)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UploadSummary(
+    settings: SurveyUploadSettings,
+    sessions: List<SurveySessionSummary>,
+    uploading: Boolean,
+    onAutomatic: (Boolean) -> Unit,
+    onUpload: () -> Unit,
+) {
+    val pending = sessions.sumOf { (it.measurementCount - it.uploadedCount).coerceAtLeast(0) }
+    // Uploads go oldest session first and stop at the first failure, so the oldest error is the one in the way.
+    val error =
+        sessions
+            .lastOrNull { it.uploadedCount < it.measurementCount && it.session.lastUploadError != null }
+            ?.session
+            ?.lastUploadError
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            settings.url,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        when {
+            error != null ->
+                InfoRow(MeshtasticIcons.ErrorOutline, uploadErrorText(error), MaterialTheme.colorScheme.error)
+
+            pending > 0 ->
+                InfoRow(
+                    MeshtasticIcons.CloudUpload,
+                    pluralStringResource(R.plurals.survey_upload_pending, pending, pending),
+                )
+
+            else -> InfoRow(MeshtasticIcons.CheckCircle, stringResource(R.string.survey_upload_done))
+        }
+        // The whole row toggles, so the label is part of the touch target and is read with the switch.
+        Row(
+            Modifier.fillMaxWidth()
+                .toggleable(value = settings.automatic, role = Role.Switch, onValueChange = onAutomatic)
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.survey_upload_automatic), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.survey_upload_automatic_explained),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = settings.automatic, onCheckedChange = null)
+        }
+        OutlinedButton(onClick = onUpload, enabled = pending > 0 && !uploading, modifier = Modifier.fillMaxWidth()) {
+            if (uploading) {
+                CircularProgressIndicator(
+                    Modifier.size(ButtonDefaults.IconSize),
+                    color = LocalContentColor.current,
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(stringResource(R.string.survey_uploading))
+            } else {
+                Text(stringResource(R.string.survey_upload_now))
+            }
+        }
+    }
+}
+
+/** A refused password is the one failure the user fixes here; [SurveyUploader] words it "HTTP 401" or "HTTP 403". */
+@Composable
+@ReadOnlyComposable
+private fun uploadErrorText(error: String): String = if (error == "HTTP 401" || error == "HTTP 403") {
+    stringResource(R.string.survey_upload_failed_password, error)
+} else {
+    stringResource(R.string.survey_upload_failed, error)
+}
+
+@Composable
+private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSettings) -> Unit, onCancel: () -> Unit) {
     var url by rememberSaveable { mutableStateOf(settings.url) }
     var user by rememberSaveable { mutableStateOf(settings.user) }
     var password by rememberSaveable { mutableStateOf(settings.password) }
+    var showPassword by rememberSaveable { mutableStateOf(false) }
     val edited = SurveyUploadSettings(url.trim(), user.trim(), password, settings.automatic)
     val urlInvalid = edited.url.isNotEmpty() && !isUploadUrl(edited.url)
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.survey_upload), style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(
-                value = url,
-                onValueChange = { url = it },
-                label = { Text(stringResource(R.string.survey_upload_url)) },
-                placeholder = { Text("https://sigsleuth.example.org") },
-                isError = urlInvalid,
-                supportingText =
-                if (urlInvalid) {
-                    { Text(stringResource(R.string.survey_upload_url_invalid)) }
-                } else {
-                    null
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = user,
-                onValueChange = { user = it },
-                label = { Text(stringResource(R.string.survey_upload_user)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(stringResource(R.string.survey_upload_password)) },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.survey_upload_automatic), modifier = Modifier.weight(1f))
-                // Saves only the switch: unsaved field edits wait for Save.
-                Switch(checked = settings.automatic, onCheckedChange = onAutomatic)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { onSave(edited) }, enabled = edited != settings && !urlInvalid) {
-                    Text(stringResource(R.string.survey_save))
+    val save = { if (!urlInvalid) onSave(edited) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = url,
+            onValueChange = { url = it },
+            label = { Text(stringResource(R.string.survey_upload_url)) },
+            placeholder = { Text("https://sigsleuth.example.org") },
+            isError = urlInvalid,
+            supportingText = {
+                Text(
+                    stringResource(
+                        if (urlInvalid) R.string.survey_upload_url_invalid else R.string.survey_upload_url_hint,
+                    ),
+                )
+            },
+            singleLine = true,
+            keyboardOptions =
+            KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.Next,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = user,
+            onValueChange = { user = it },
+            label = { Text(stringResource(R.string.survey_upload_user)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text(stringResource(R.string.survey_upload_password)) },
+            singleLine = true,
+            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { showPassword = !showPassword }) {
+                    if (showPassword) {
+                        Icon(
+                            MeshtasticIcons.VisibilityOff,
+                            contentDescription = stringResource(R.string.survey_upload_hide_password),
+                        )
+                    } else {
+                        Icon(
+                            MeshtasticIcons.Visibility,
+                            contentDescription = stringResource(R.string.survey_upload_show_password),
+                        )
+                    }
                 }
-                OutlinedButton(onClick = onUpload, enabled = settings.url.isNotBlank() && !uploading) {
-                    Text(stringResource(R.string.survey_upload_now))
-                }
-                if (uploading) Text(stringResource(R.string.survey_uploading))
-            }
+            },
+            keyboardOptions =
+            KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { save() }),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.survey_cancel)) }
+            Button(onClick = save, enabled = !urlInvalid) { Text(stringResource(R.string.survey_save)) }
         }
     }
 }
@@ -470,70 +936,167 @@ private fun UploadSettingsCard(
 private fun SessionCard(
     summary: SurveySessionSummary,
     recording: Boolean,
-    onUpload: () -> Unit,
+    uploadsOn: Boolean,
     onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val session = summary.session
-    var confirmDelete by remember { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(DateFormatter.formatDateTime(session.startedAt), style = MaterialTheme.typography.titleSmall)
-            Text(
-                stringResource(
-                    R.string.survey_node,
-                    session.receiverName.ifBlank { "!%08x".format(Locale.ROOT, session.receiverNodeId) },
-                    session.modemPreset ?: "SF${session.spreadingFactor}",
-                ),
-            )
-            Text(
-                pluralStringResource(R.plurals.survey_measurements, summary.measurementCount, summary.measurementCount),
-            )
-            Text(stringResource(session.status.label()))
-            Text(stringResource(R.string.survey_uploaded_of, summary.uploadedCount, summary.measurementCount))
-            if (session.serverKept + session.serverSkipped > 0) {
-                Text(stringResource(R.string.survey_server_kept, session.serverKept, session.serverSkipped))
+        Column(
+            Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = if (recording) 16.dp else 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    DateFormatter.formatDateTime(session.startedAt),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                if (recording) {
+                    Text(
+                        stringResource(R.string.survey_recording),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
-            SurveyUploader.decodeSkipReasons(session.serverSkipReasons)
-                .takeIf { it.isNotEmpty() }
-                ?.let { reasons ->
-                    val text = reasons.entries.joinToString { (reason, count) -> "${reason.replace('_', ' ')} $count" }
-                    Text(stringResource(R.string.survey_server_skip_reasons, text))
-                }
-            session.lastUploadError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onUpload, enabled = summary.uploadedCount < summary.measurementCount) {
-                    Text(stringResource(R.string.survey_upload_now))
-                }
-                TextButton(onClick = onExport, enabled = !recording) { Text(stringResource(R.string.survey_export)) }
-                TextButton(onClick = { confirmDelete = true }, enabled = !recording) {
-                    Text(stringResource(R.string.survey_delete))
+            Text(radioText(session), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                sessionFacts(summary, recording),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            UploadProgress(summary, uploadsOn)
+            serverText(session)?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            session.lastUploadError?.let {
+                Text(
+                    uploadErrorText(it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            // A session still recording can be neither exported whole nor deleted, so it offers neither.
+            if (!recording) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(
+                        onClick = { confirmDelete = true },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) {
+                        Text(stringResource(R.string.survey_delete))
+                    }
+                    TextButton(onClick = onExport) { Text(stringResource(R.string.survey_export)) }
                 }
             }
         }
+        if (confirmDelete) {
+            DeleteDialog(
+                summary,
+                onConfirm = {
+                    confirmDelete = false
+                    onDelete()
+                },
+                onDismiss = { confirmDelete = false },
+            )
+        }
     }
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text(stringResource(R.string.survey_delete_title)) },
-            text = {
-                Text(stringResource(R.string.survey_delete_text, summary.uploadedCount, summary.measurementCount))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDelete = false
-                        onDelete()
-                    },
-                ) {
-                    Text(stringResource(R.string.survey_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.survey_cancel)) }
-            },
+}
+
+/** Length, size and how it ended: "1:12:03 · 1234 measurements · Stopped". */
+@Composable
+private fun sessionFacts(summary: SurveySessionSummary, recording: Boolean): String {
+    val session = summary.session
+    val count = pluralStringResource(R.plurals.survey_measurements, summary.measurementCount, summary.measurementCount)
+    if (recording) return count
+    val duration = session.endedAt?.let { clockText(it - session.startedAt) }
+    return listOfNotNull(duration, count, stringResource(session.status.label())).joinToString(" · ")
+}
+
+/** How much SigSleuth has; nothing while uploads are off and nothing was ever sent. */
+@Composable
+private fun UploadProgress(summary: SurveySessionSummary, uploadsOn: Boolean) {
+    val count = summary.measurementCount
+    val uploaded = summary.uploadedCount.coerceAtMost(count)
+    if (count == 0 || (!uploadsOn && uploaded == 0)) return
+    if (uploaded == count) {
+        InfoRow(MeshtasticIcons.CheckCircle, stringResource(R.string.survey_uploaded_all))
+    } else {
+        Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                stringResource(R.string.survey_uploaded_of, uploaded, count),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            LinearProgressIndicator(progress = { uploaded.toFloat() / count }, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** What SigSleuth kept and skipped, with the reasons for the skips. */
+@Composable
+private fun serverText(session: SurveySession): String? {
+    if (session.serverKept + session.serverSkipped == 0L) return null
+    val reasons =
+        SurveyUploader.decodeSkipReasons(session.serverSkipReasons).entries.map { (reason, count) ->
+            skipReasonText(reason, count)
+        }
+    return if (reasons.isEmpty()) {
+        stringResource(R.string.survey_server_kept, session.serverKept, session.serverSkipped)
+    } else {
+        stringResource(
+            R.string.survey_server_kept_reasons,
+            session.serverKept,
+            session.serverSkipped,
+            reasons.joinToString(),
         )
     }
+}
+
+/** SigSleuth's reason names (coverage.py `skip_reason`) in words. */
+@Composable
+@ReadOnlyComposable
+private fun skipReasonText(reason: String, count: Long): String = when (reason) {
+    "no_position" -> stringResource(R.string.survey_skip_no_position, count)
+    "inaccurate" -> stringResource(R.string.survey_skip_inaccurate, count, SIGSLEUTH_MAX_ACCURACY_M)
+    "old_fix" -> stringResource(R.string.survey_skip_old_fix, count, SIGSLEUTH_MAX_FIX_AGE_S)
+    "too_old" -> stringResource(R.string.survey_skip_too_old, count)
+    "in_future" -> stringResource(R.string.survey_skip_in_future, count)
+    "no_sender" -> stringResource(R.string.survey_skip_no_sender, count)
+    else -> stringResource(R.string.survey_skip_other, count, reason.replace('_', ' '))
+}
+
+@Composable
+private fun DeleteDialog(summary: SurveySessionSummary, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val count = summary.measurementCount
+    val kept = summary.session.serverKept.coerceAtMost(count.toLong())
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.survey_delete_title)) },
+        text = {
+            Text(
+                when {
+                    count == 0 -> stringResource(R.string.survey_delete_text_empty)
+
+                    // An uploaded row SigSleuth skipped was never stored, so it is not safe to delete.
+                    summary.session.serverSkipped > 0 -> stringResource(R.string.survey_delete_text_kept, kept, count)
+
+                    summary.uploadedCount >= count -> stringResource(R.string.survey_delete_text_uploaded, count)
+
+                    else -> stringResource(R.string.survey_delete_text, summary.uploadedCount, count)
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Text(stringResource(R.string.survey_delete))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.survey_cancel)) } },
+    )
 }
 
 private fun SurveyStatus.label(): Int = when (this) {

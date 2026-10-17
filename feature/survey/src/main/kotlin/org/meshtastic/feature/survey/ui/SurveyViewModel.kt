@@ -19,9 +19,7 @@ package org.meshtastic.feature.survey.ui
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -29,8 +27,12 @@ import kotlinx.coroutines.launch
 import org.koin.core.annotation.KoinViewModel
 import org.meshtastic.core.common.di.ApplicationCoroutineScope
 import org.meshtastic.core.common.util.safeCatching
+import org.meshtastic.core.model.ConnectionState
 import org.meshtastic.core.repository.NodeRepository
+import org.meshtastic.core.repository.ServiceRepository
+import org.meshtastic.core.ui.util.SnackbarManager
 import org.meshtastic.core.ui.viewmodel.stateInWhileSubscribed
+import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.SurveyCsv
 import org.meshtastic.feature.survey.SurveyDao
 import org.meshtastic.feature.survey.SurveyProblem
@@ -41,13 +43,9 @@ import org.meshtastic.feature.survey.SurveySettings
 import org.meshtastic.feature.survey.SurveyState
 import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
+import java.util.Locale
 
-/** Outcome of the last CSV export, for a one-line message on the screen. */
-enum class ExportResult {
-    SAVED,
-    FAILED,
-}
-
+@Suppress("LongParameterList")
 @KoinViewModel
 class SurveyViewModel(
     private val app: Application,
@@ -56,6 +54,8 @@ class SurveyViewModel(
     private val settings: SurveySettings,
     private val dao: SurveyDao,
     nodes: NodeRepository,
+    service: ServiceRepository,
+    private val snackbars: SnackbarManager,
     // Work that must outlive the screen: Stop, delete and export finish even if the user leaves.
     private val appScope: ApplicationCoroutineScope,
 ) : ViewModel() {
@@ -63,6 +63,15 @@ class SurveyViewModel(
     val uploading: StateFlow<Boolean> = uploader.uploading
     val sessions: StateFlow<List<SurveySessionSummary>> = dao.sessions().stateInWhileSubscribed(emptyList())
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
+
+    /** The connected radio's name, which Start would survey with; null while no radio is connected. */
+    val radioName: StateFlow<String?> =
+        combine(service.connectionState, nodes.ourNodeInfo) { connection, node ->
+            node
+                ?.takeIf { connection == ConnectionState.Connected }
+                ?.let { it.user.long_name.ifBlank { "!%08x".format(Locale.ROOT, it.num) } }
+        }
+            .stateInWhileSubscribed(null)
 
     /**
      * Short names of the nodes in this session's relay guesses. The node database is the connected radio's, which is
@@ -79,9 +88,6 @@ class SurveyViewModel(
                 .toMap()
         }
             .stateInWhileSubscribed(emptyMap())
-
-    private val mutableExportResult = MutableStateFlow<ExportResult?>(null)
-    val exportResult: StateFlow<ExportResult?> = mutableExportResult.asStateFlow()
 
     /** Call once location (and, on Android 13+, notification) permission is granted. */
     fun start() = SurveyService.start(app)
@@ -105,7 +111,12 @@ class SurveyViewModel(
 
     fun delete(sessionId: String) {
         if (state.value.session?.id == sessionId) return
-        appScope.launch { safeCatching { dao.deleteSession(sessionId) } }
+        appScope.launch {
+            val result = safeCatching { dao.deleteSession(sessionId) }
+            snackbars.showSnackbar(
+                app.getString(if (result.isSuccess) R.string.survey_deleted else R.string.survey_delete_failed),
+            )
+        }
     }
 
     fun export(sessionId: String, uri: Uri) {
@@ -115,11 +126,9 @@ class SurveyViewModel(
                     SurveyCsv.export(dao, sessionId) { out.write(it) }
                 }
             }
-            mutableExportResult.value = if (result.isSuccess) ExportResult.SAVED else ExportResult.FAILED
+            snackbars.showSnackbar(
+                app.getString(if (result.isSuccess) R.string.survey_export_saved else R.string.survey_export_failed),
+            )
         }
-    }
-
-    fun clearExportResult() {
-        mutableExportResult.value = null
     }
 }
