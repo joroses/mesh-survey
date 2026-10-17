@@ -194,8 +194,8 @@ internal data class UploadMeasurement(
     @SerialName("packet_id") val packetId: Long,
     @SerialName("rx_snr") val rxSnr: Float?,
     @SerialName("rx_rssi") val rxRssi: Int?,
-    @SerialName("hop_start") val hopStart: Int?,
-    @SerialName("hop_limit") val hopLimit: Int?,
+    @SerialName("hop_start") val hopStart: Int,
+    @SerialName("hop_limit") val hopLimit: Int,
     @SerialName("relay_byte") val relayByte: Int?,
     @SerialName("ok_to_mqtt") val okToMqtt: Boolean?,
     @SerialName("default_key") val defaultKey: Boolean?,
@@ -233,11 +233,10 @@ private fun SurveyMeasurement.toUpload() = UploadMeasurement(
     packetId = packetId,
     rxSnr = rxSnr,
     rxRssi = rxRssi,
-    // Firmware that predates hop_start sends 0, which means unknown, and makes hop_limit meaningless too.
-    // SigSleuth's MQTT
-    // side stores both as null for that, so the upload does the same.
-    hopStart = hopStart.takeIf { it != 0 },
-    hopLimit = hopLimit.takeIf { hopStart != 0 },
+    // Raw: a hop start of 0 is either firmware older than hop counts or a zero-hop packet, and SigSleuth tells them
+    // apart with the relay byte (known_hop_start).
+    hopStart = hopStart,
+    hopLimit = hopLimit,
     relayByte = relayByte,
     okToMqtt = okToMqtt,
     defaultKey = defaultKey,

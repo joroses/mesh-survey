@@ -223,15 +223,30 @@ class SurveyUploaderTest {
     }
 
     @Test
-    fun `a hop_start of 0 from old firmware is sent as unknown`() = runTest {
+    fun `a zero-hop packet heard from its sender keeps its hop counts`() = runTest {
         record("a", 1)
-        dao.measurements.replaceAll { it.copy(hopStart = 0, hopLimit = 3) }
+        // Sender 2's own relay byte, as on a Range Test packet heard straight from its sender.
+        dao.measurements.replaceAll { it.copy(hopStart = 0, hopLimit = 0, relayByte = 2) }
 
         uploader().upload()
 
         val row = received.single().getValue("measurements").jsonArray.single().jsonObject
-        assertEquals("null", row.getValue("hop_start").toString())
-        assertEquals("null", row.getValue("hop_limit").toString())
+        assertEquals("0", row.getValue("hop_start").toString())
+        assertEquals("0", row.getValue("hop_limit").toString())
+        assertEquals("2", row.getValue("relay_byte").toString())
+    }
+
+    @Test
+    fun `a hop_start of 0 from old firmware is sent raw for SigSleuth to judge`() = runTest {
+        record("a", 1)
+        dao.measurements.replaceAll { it.copy(hopStart = 0, hopLimit = 3, relayByte = null) }
+
+        uploader().upload()
+
+        val row = received.single().getValue("measurements").jsonArray.single().jsonObject
+        assertEquals("0", row.getValue("hop_start").toString())
+        assertEquals("3", row.getValue("hop_limit").toString())
+        assertEquals("null", row.getValue("relay_byte").toString())
     }
 
     @Test
