@@ -109,7 +109,7 @@ class SurveyViewModel(
     }
 
     fun saveServer(newSettings: SurveyUploadSettings) {
-        appScope.launch { settings.saveServer(newSettings.url, newSettings.user, newSettings.password) }
+        appScope.launch { uploader.saveServer(newSettings.url, newSettings.user, newSettings.password) }
     }
 
     fun setAutomatic(automatic: Boolean) {

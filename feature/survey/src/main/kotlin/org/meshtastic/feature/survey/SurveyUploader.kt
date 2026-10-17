@@ -64,6 +64,16 @@ class SurveyUploader(
         scope.launch { upload() }
     }
 
+    /**
+     * Saves where to upload. A new URL starts every session's upload over, since the old server's progress and counts
+     * say nothing about the new one; rows a server already holds cost only the resend.
+     */
+    suspend fun saveServer(url: String, user: String, password: String) {
+        if (!settings.saveServer(url, user, password)) return
+        // After any run in flight: it still posts to the old server and would save its progress over the reset.
+        runs.withLock { safeCatching { dao.resetUploads() } }
+    }
+
     /** The service calls this every [RECORDING_INTERVAL] while recording and once when the session ends. */
     suspend fun uploadIfAutomatic() {
         // An unreadable settings file skips this run; letting it throw would crash the app from the service's scope.

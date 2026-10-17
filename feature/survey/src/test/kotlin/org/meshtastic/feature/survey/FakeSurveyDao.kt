@@ -93,6 +93,17 @@ internal class FakeSurveyDao : SurveyDao {
         )
     }
 
+    override suspend fun resetUploads() = sessions.replaceAll {
+        it.copy(
+            uploadedSeq = 0,
+            lastUploadAt = null,
+            lastUploadError = null,
+            serverKept = 0,
+            serverSkipped = 0,
+            serverSkipReasons = null,
+        )
+    }
+
     override suspend fun uploadFailed(sessionId: String, error: String) =
         updateSession(sessionId) { it.copy(lastUploadError = error) }
 

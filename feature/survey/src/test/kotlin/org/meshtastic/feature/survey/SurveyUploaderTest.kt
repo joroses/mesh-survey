@@ -54,7 +54,11 @@ class SurveyUploaderTest {
 
             override suspend fun current(): SurveyUploadSettings = readError?.let { throw it } ?: super.current()
 
-            override suspend fun saveServer(url: String, user: String, password: String) = Unit
+            override suspend fun saveServer(url: String, user: String, password: String): Boolean {
+                val changed = settings.value.url != url
+                settings.value = settings.value.copy(url = url, user = user, password = password)
+                return changed
+            }
 
             override suspend fun setAutomatic(automatic: Boolean) = Unit
         }
@@ -152,6 +156,29 @@ class SurveyUploaderTest {
         )
         assertEquals(listOf(501L, 503L), dao.sessions.map { it.uploadedSeq })
         assertEquals("Basic dTpw", authorization)
+    }
+
+    @Test
+    fun `a new server URL gets every row again, with its own counts`() = runTest {
+        record("a", 2)
+        skipPerBatch = mapOf("no_position" to 1)
+        val uploader = uploader()
+        uploader.upload()
+
+        uploader.saveServer("https://maps.example/", "u", "new password")
+        uploader.upload()
+        assertEquals(1, received.size) // Same server: nothing to send.
+
+        uploader.saveServer("https://other.example", "u", "p")
+        assertEquals(0L, dao.sessions.single().uploadedSeq)
+        assertEquals(0L, dao.sessions.single().serverKept)
+        assertNull(dao.sessions.single().serverSkipReasons)
+        uploader.upload()
+
+        assertEquals(2, received.size)
+        assertEquals(2, received.last().getValue("measurements").jsonArray.size)
+        assertEquals(1L, dao.sessions.single().serverKept)
+        assertEquals(1L, dao.sessions.single().serverSkipped)
     }
 
     @Test

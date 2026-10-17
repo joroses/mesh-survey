@@ -64,8 +64,11 @@ interface SurveySettings {
 
     suspend fun current(): SurveyUploadSettings = settings.first()
 
-    /** Saves where to upload; leaves [SurveyUploadSettings.automatic] alone. */
-    suspend fun saveServer(url: String, user: String, password: String)
+    /**
+     * Saves where to upload; leaves [SurveyUploadSettings.automatic] alone. Returns whether the URL changed. Call
+     * [SurveyUploader.saveServer] instead, which also starts the uploads over for a new URL.
+     */
+    suspend fun saveServer(url: String, user: String, password: String): Boolean
 
     /**
      * Saves only the switch, so a tap right after Save, before the screen has the saved values, cannot write the old
@@ -94,12 +97,15 @@ class DataStoreSurveySettings(context: Application) : SurveySettings {
             )
         }
 
-    override suspend fun saveServer(url: String, user: String, password: String) {
+    override suspend fun saveServer(url: String, user: String, password: String): Boolean {
+        var changed = false
         store.edit {
+            changed = it[URL].orEmpty() != url.trim()
             it[URL] = url.trim()
             it[USER] = user.trim()
             it[PASSWORD] = password
         }
+        return changed
     }
 
     override suspend fun setAutomatic(automatic: Boolean) {

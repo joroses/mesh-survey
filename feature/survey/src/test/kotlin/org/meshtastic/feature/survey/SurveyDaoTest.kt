@@ -104,6 +104,27 @@ class SurveyDaoTest {
     }
 
     @Test
+    fun `resetting uploads makes every session pending again with no counts`() = runTest {
+        dao.insertSession(session("s", startedAt = 1))
+        val last = (1..3L).map { dao.insertMeasurement(measurement("s", it)) }.last()
+        dao.uploaded("s", last, at = 100, kept = 1, skipped = 2, skipReasons = """{"no_position":2}""")
+        dao.uploadFailed("s", "HTTP 503")
+
+        dao.resetUploads()
+
+        val pending = dao.sessionsToUpload().single()
+        assertEquals(0, pending.uploadedCount)
+        with(pending.session) {
+            assertEquals(0L, uploadedSeq)
+            assertEquals(null, lastUploadAt)
+            assertEquals(null, lastUploadError)
+            assertEquals(0L, serverKept)
+            assertEquals(0L, serverSkipped)
+            assertEquals(null, serverSkipReasons)
+        }
+    }
+
+    @Test
     fun `a session a dead process left recording ends at its last measurement`() = runTest {
         dao.insertSession(session("s", startedAt = 1))
         dao.insertMeasurement(measurement("s", 42))

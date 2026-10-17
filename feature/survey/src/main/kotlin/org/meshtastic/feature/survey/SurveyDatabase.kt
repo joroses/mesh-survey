@@ -195,6 +195,13 @@ interface SurveyDao {
         skipReasons: String?,
     )
 
+    /** Forgets every session's upload progress and SigSleuth's counts, which belong to the server they came from. */
+    @Query(
+        "UPDATE survey_session SET uploaded_seq = 0, last_upload_at = NULL, last_upload_error = NULL, " +
+            "server_kept = 0, server_skipped = 0, server_skip_reasons = NULL",
+    )
+    suspend fun resetUploads()
+
     @Query("UPDATE survey_session SET last_upload_error = :error WHERE id = :sessionId")
     suspend fun uploadFailed(sessionId: String, error: String)
 
