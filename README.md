@@ -3,7 +3,7 @@
 Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshtastic/Meshtastic-Android) that works with Meshtastic® nodes. It adds a **signal survey**: while a survey runs, the app records every LoRa packet the connected node hears, with the phone's GPS position, and can export each session as CSV or upload it to a [SigSleuth](https://github.com/joroses/sigsleuth) server. See [`feature/survey/README.md`](feature/survey/README.md) for how it works and which upstream files it changes.
 
 <p align="center">
-  <img src="feature/survey/docs/signal-survey.png" alt="The Signal survey screen: a Start button, and fields for a SigSleuth server's URL, user and password with automatic upload" width="300"/>
+  <img src="feature/survey/docs/signal-survey.png" alt="The Signal Survey screen: a Start button, and fields for a SigSleuth server's URL, user and password with automatic upload" width="300"/>
 </p>
 
 - **Modified work.** This fork has been modified from the upstream project since 2026-09: the signal survey, the app name, application ID and icons, and the source link on the About screen. The [commit history](https://github.com/joroses/mesh-survey/commits/feature/signal-survey) shows every change and its date.
@@ -15,7 +15,7 @@ Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshta
 
 A signal survey is a record of where you were and when. Read this before you start one.
 
-**What is recorded.** Nothing is recorded until you press Start in Settings → Advanced → Signal survey. While a survey runs, the app reads the phone's GPS once a second and, for every LoRa packet your node hears, saves a row in a database on the phone. Each row holds:
+**What is recorded.** Nothing is recorded until you press Start in Settings → Advanced → Signal Survey. While a survey runs, the app reads the phone's GPS once a second and, for every LoRa packet your node hears, saves a row in a database on the phone. Each row holds:
 
 - the time to the millisecond
 - your position: latitude, longitude, the fix's accuracy and age
@@ -41,6 +41,7 @@ The app has no server of its own: neither the author of this fork nor the Meshta
 Mesh Survey isn't on Google Play or F-Droid. Download an APK from [Releases](https://github.com/joroses/mesh-survey/releases):
 
 - **`arm64-v8a`:** almost every phone from the last several years.
+- **`armeabi-v7a`:** older or low-end phones with a 32-bit processor.
 - **`universal`:** if you're not sure. It's bigger, but runs on any phone.
 
 It installs as its own app, next to the official Meshtastic app, and doesn't touch its data. It needs Android 8.0 or newer.

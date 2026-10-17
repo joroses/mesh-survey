@@ -1790,7 +1790,7 @@
     <string name="shutdown_warning">⚠️ This will SHUTDOWN the node. Physical interaction will be required to turn it back on.</string>
     <string name="signal">Signal</string>
     <string name="signal_quality">Signal Quality</string>
-    <string name="signal_survey">Signal survey</string>
+    <string name="signal_survey">Signal Survey</string>
     <!-- SITE -->
     <string name="site_planner">Site Planner</string>
     <string name="site_planner_antenna_gain_dbi">Antenna gain (dBi)</string>

@@ -17,9 +17,9 @@
   -->
 <!-- English only, kept out of core:resources so upstream string changes never conflict with the fork. -->
 <resources>
-    <string name="survey_title">Signal survey</string>
+    <string name="survey_title">Signal Survey</string>
     <string name="survey_back">Back</string>
-    <string name="survey_intro">Records every LoRa packet your node hears, with where this phone was, and uploads the measurements to SigSleuth. Keep the radio connected and location on.</string>
+    <string name="survey_intro">Map where your mesh reaches. While recording, each packet your radio hears is saved with your location and its signal strength. Upload sessions to a SigSleuth server or export them as CSV. Keep the radio connected and location on.</string>
     <string name="survey_not_recording">Not recording</string>
     <string name="survey_recording">Recording</string>
     <!-- The notification's text while the radio is away; the screen uses the two strings after it. -->

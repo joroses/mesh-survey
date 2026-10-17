@@ -1,6 +1,6 @@
 # `:feature:survey`
 
-Signal survey, a fork-only feature (not in upstream Meshtastic-Android). While a survey runs, the phone records every LoRa packet its connected node hears, with where the phone was at that moment, in its own database. It uploads the records to SigSleuth (`POST /api/v1/coverage/uploads`) and can export a session as CSV. It lives in Settings → Advanced → Signal survey. Android only: it needs the phone's GPS.
+Signal survey, a fork-only feature (not in upstream Meshtastic-Android). While a survey runs, the phone records every LoRa packet its connected node hears, with where the phone was at that moment, in its own database. It uploads the records to SigSleuth (`POST /api/v1/coverage/uploads`) and can export a session as CSV. It lives in Settings → Advanced → Signal Survey. Android only: it needs the phone's GPS.
 
 ## How it works
 
@@ -92,7 +92,7 @@ Everything else, including the service's manifest entry and all other strings (E
 
 ## Build and try
 
-What a survey records and where it goes, for users, and how to build and sign a release APK to share, are in the top-level [README](../../README.md#privacy).
+See the top-level README for [what a survey records and where it goes](../../README.md#privacy) and [how to install a release APK](../../README.md#install).
 
 ```bash
 ./gradlew :feature:survey:testDebugUnitTest
