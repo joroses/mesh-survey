@@ -17,6 +17,7 @@
 package org.meshtastic.feature.survey
 
 import org.meshtastic.core.common.util.latLongToMeter
+import org.meshtastic.core.model.Node
 import org.meshtastic.proto.Config
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.days
@@ -30,6 +31,12 @@ val DIRECT_HISTORY = 30.days
 
 /** Within 1 km of a direct reception cell counts as near, allowing for cell size and GPS error. */
 const val NEAR = 1_000.0
+
+/**
+ * The farthest a candidate can be from the packet and still be one: from the nearest direct reception cell, or from its
+ * reported position. A node heard directly 200 km away on a road trip did not relay a packet heard here.
+ */
+const val FAR = 30_000.0
 
 private const val BYTE_MASK = 0xFFL
 private const val ZERO_BYTE_RELAY = 0xFF
@@ -63,7 +70,10 @@ sealed interface RelayGuess {
             get() = listOf(nodeId)
     }
 
-    /** None near (or recent without a fix), and the only one with this byte in the history. */
+    /**
+     * None near (or recent without a fix), and the only candidate left: heard directly elsewhere within [FAR], or
+     * reporting a position within [FAR]. Without a fix, the only one heard directly in the history.
+     */
     data class Possible(val nodeId: Long) : RelayGuess {
         override val nodeIds
             get() = listOf(nodeId)
@@ -109,8 +119,49 @@ data class DirectSender(val nodeId: Long, val lastDirectMs: Long, val places: Ma
         .minWithOrNull(compareBy<NearestDirect> { it.meters }.thenByDescending { it.heardAtMs })
 }
 
-/** One relay byte in this session: its packets, when the last arrived, and the guess made for that packet. */
-data class RelayStats(val packets: Int, val lastHeardMs: Long, val guess: RelayGuess)
+/** A node that could have relayed a packet, and how the survey knows of it. */
+sealed interface RelayCandidate {
+    val nodeId: Long
+
+    /** Heard directly by the survey radio; where and when are in [DirectNeighbours.all]. */
+    data class Heard(override val nodeId: Long) : RelayCandidate
+
+    /** Not heard directly, but the node database has it reporting this position. */
+    data class Reported(override val nodeId: Long, val latitude: Double, val longitude: Double) : RelayCandidate
+}
+
+private const val MILLIS_PER_SECOND = 1_000L
+
+/**
+ * The [nodes] with [relayByte] that report a position and were last heard since [sinceMs], other than the survey radio
+ * itself. A node the radio has not heard from in the history is unlikely to be relaying.
+ */
+fun reportedWith(
+    relayByte: Int,
+    nodes: Collection<Node>,
+    sinceMs: Long,
+    surveyNode: Int,
+): List<RelayCandidate.Reported> = nodes
+    .filter { relayByteOf(it.nodeId) == relayByte && it.num != surveyNode }
+    .filter { it.lastHeard * MILLIS_PER_SECOND >= sinceMs && it.validPosition != null }
+    .map { RelayCandidate.Reported(it.nodeId, it.latitude, it.longitude) }
+
+private val Node.nodeId: Long
+    get() = num.toUInt().toLong()
+
+/** A relay byte's guess and every candidate behind it: the guessed tier first, the rest after it by distance. */
+data class RelayEvidence(val guess: RelayGuess, val candidates: List<RelayCandidate>)
+
+/**
+ * One relay byte in this session: its packets, when the last arrived, and the guess made for that packet with all its
+ * candidates. A direct packet has none.
+ */
+data class RelayStats(
+    val packets: Int,
+    val lastHeardMs: Long,
+    val guess: RelayGuess,
+    val candidates: List<RelayCandidate> = emptyList(),
+)
 
 /**
  * The nodes the survey radio has heard directly, by relay byte, with when each was last heard so. Only these are
@@ -144,16 +195,20 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
     /**
      * Who relayed a packet from [senderId] with [relayByte], heard at [atMs]. The sender and known CLIENT_MUTE nodes
      * cannot be its relay; [roleOf] checks the survey radio's node database, and an unknown role keeps a candidate.
+     * [reported] are the database's nodes with this byte and a position; with a packet fix, those within [FAR] join the
+     * neighbours heard directly elsewhere. A reported position is the node's claim, not a reception, so it never makes
+     * a guess likely.
      */
     @Suppress("LongParameterList")
-    fun guess(
+    fun weigh(
         relayByte: Int,
         atMs: Long,
         senderId: Long,
         latitude: Double? = null,
         longitude: Double? = null,
         roleOf: (Long) -> Config.DeviceConfig.Role? = { null },
-    ): RelayGuess {
+        reported: List<RelayCandidate.Reported> = emptyList(),
+    ): RelayEvidence {
         val sinceMs = atMs - DIRECT_HISTORY.inWholeMilliseconds
         val candidates =
             byByte[relayByte]
@@ -164,24 +219,48 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
                 .filter { roleOf(it.nodeId) != Config.DeviceConfig.Role.CLIENT_MUTE }
         val recentMs = atMs - RECENT_DIRECT.inWholeMilliseconds
         if (latitude == null || longitude == null) {
-            val recent = candidates.filter { it.lastDirectMs >= recentMs }
-            val tier =
-                recent
-                    .ifEmpty { candidates }
-                    .sortedWith(compareByDescending<DirectSender> { it.lastDirectMs }.thenBy { it.nodeId })
-            return tierGuess(tier.map { it.nodeId }, likely = recent.isNotEmpty())
-        }
-        val distances = candidates.associate { it.nodeId to it.nearest(latitude, longitude, sinceMs) }
-        val ordered =
-            candidates.sortedWith(
-                compareBy<DirectSender> { distances[it.nodeId]?.meters ?: Double.POSITIVE_INFINITY }
-                    .thenBy { it.nodeId },
+            val newest =
+                candidates.sortedWith(compareByDescending<DirectSender> { it.lastDirectMs }.thenBy { it.nodeId })
+            val recent = newest.filter { it.lastDirectMs >= recentMs }
+            val tier = recent.ifEmpty { newest }
+            return RelayEvidence(
+                tierGuess(tier.map { it.nodeId }, likely = recent.isNotEmpty()),
+                newest.map { RelayCandidate.Heard(it.nodeId) },
             )
-        val near = ordered.filter { candidate ->
-            distances[candidate.nodeId]?.let { it.meters <= NEAR } ?: (candidate.lastDirectMs >= recentMs)
         }
-        return tierGuess(near.ifEmpty { ordered }.map { it.nodeId }, likely = near.isNotEmpty())
+        // A neighbour without cells in the history has no distance; it stays, after every one that has.
+        val heard = candidates.map { candidate ->
+            Ranked(RelayCandidate.Heard(candidate.nodeId), candidate.nearest(latitude, longitude, sinceMs)?.meters)
+        }
+        val near = heard.filter { ranked ->
+            ranked.meters?.let { it <= NEAR } ?: (all.getValue(ranked.candidate.nodeId).lastDirectMs >= recentMs)
+        }
+        val heardElsewhere = (heard - near.toSet()).filter { ranked -> ranked.meters?.let { it <= FAR } ?: true }
+        // A node heard directly only far away can still report a position nearby.
+        val kept = (near + heardElsewhere).mapTo(mutableSetOf()) { it.candidate.nodeId }
+        val reportedNearby =
+            reported
+                .filter { it.nodeId != senderId && it.nodeId !in kept }
+                .filter { roleOf(it.nodeId) != Config.DeviceConfig.Role.CLIENT_MUTE }
+                .mapNotNull { node ->
+                    latLongToMeter(node.latitude, node.longitude, latitude, longitude)
+                        .takeIf { it <= FAR }
+                        ?.let { Ranked(node, it) }
+                }
+        val byDistance = compareBy<Ranked> { it.meters ?: Double.POSITIVE_INFINITY }.thenBy { it.candidate.nodeId }
+        val nearTier = near.sortedWith(byDistance).map { it.candidate }
+        val possibleTier = (heardElsewhere + reportedNearby).sortedWith(byDistance).map { it.candidate }
+        val guess =
+            if (nearTier.isNotEmpty()) {
+                tierGuess(nearTier.map { it.nodeId }, likely = true)
+            } else {
+                tierGuess(possibleTier.map { it.nodeId }, likely = false)
+            }
+        return RelayEvidence(guess, nearTier + possibleTier)
     }
+
+    /** A candidate with its distance from the packet; null for a neighbour without cells in the history. */
+    private data class Ranked(val candidate: RelayCandidate, val meters: Double?)
 
     private fun tierGuess(nodeIds: List<Long>, likely: Boolean): RelayGuess = when {
         nodeIds.isEmpty() -> RelayGuess.Unknown

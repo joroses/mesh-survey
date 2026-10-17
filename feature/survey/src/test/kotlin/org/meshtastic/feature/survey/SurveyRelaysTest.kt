@@ -16,7 +16,9 @@
  */
 package org.meshtastic.feature.survey
 
+import org.meshtastic.core.model.Node
 import org.meshtastic.proto.Config
+import org.meshtastic.proto.Position
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -55,6 +57,21 @@ class SurveyRelaysTest {
     )
 
     private fun ago(minutes: Int) = now - minutes.minutes.inWholeMilliseconds
+
+    @Suppress("LongParameterList")
+    private fun DirectNeighbours.guess(
+        relayByte: Int,
+        atMs: Long,
+        senderId: Long,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        roleOf: (Long) -> Config.DeviceConfig.Role? = { null },
+        reported: List<RelayCandidate.Reported> = emptyList(),
+    ) = weigh(relayByte, atMs, senderId, latitude, longitude, roleOf, reported).guess
+
+    private fun heard(vararg ids: Long) = ids.map { RelayCandidate.Heard(it) }
+
+    private fun reported(id: Long, latitude: Double) = RelayCandidate.Reported(id, latitude, 0.0)
 
     @Test
     fun `a node ending in 00 relays as FF`() {
@@ -142,7 +159,7 @@ class SurveyRelaysTest {
         val neighbours = DirectNeighbours()
         neighbours.record(row(0x23F, 0x3F, at = ago(500), latitude = 0.1))
         neighbours.record(row(0x23F, 0x3F, at = ago(100), latitude = 0.5))
-        neighbours.record(row(0x13F, 0x3F, at = ago(1), latitude = 0.48)) // About 40 km away.
+        neighbours.record(row(0x13F, 0x3F, at = ago(1), latitude = 0.25)) // About 15 km away.
 
         assertEquals(RelayGuess.Likely(0x23F), neighbours.guessAt(0.1))
         // None near: the router's earlier reception still ranks before the chatty distant node.
@@ -164,7 +181,7 @@ class SurveyRelaysTest {
         val cutoff = now - DIRECT_HISTORY.inWholeMilliseconds
         val neighbours = DirectNeighbours()
         neighbours.record(row(0x13F, 0x3F, at = cutoff, latitude = 0.0))
-        neighbours.record(row(0x13F, 0x3F, latitude = 0.5))
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.2))
 
         assertEquals(RelayGuess.Likely(0x13F), neighbours.guessAt(0.0))
         assertEquals(RelayGuess.Possible(0x13F), neighbours.guessAt(0.0, now + 1))
@@ -304,4 +321,101 @@ class SurveyRelaysTest {
 
         assertEquals(RelayGuess.Likely(0x13F), neighbours.guess(0x3F, now, senderId = 0x500))
     }
+
+    @Test
+    fun `every candidate is listed, the guessed tier first and the rest by distance`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0))
+        neighbours.record(row(0x23F, 0x3F, latitude = 0.1)) // About 11 km away.
+        val positions = listOf(reported(0x33F, 0.02), reported(0x43F, 0.5)) // About 2 km and 55 km.
+
+        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = positions)
+
+        assertEquals(RelayGuess.Likely(0x13F), evidence.guess)
+        assertEquals(heard(0x13F) + reported(0x33F, 0.02) + heard(0x23F), evidence.candidates)
+    }
+
+    @Test
+    fun `a reported position joins the possible tier but never makes a guess likely`() {
+        val neighbours = DirectNeighbours()
+        val alone = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x33F, 0.0)))
+        assertEquals(RelayGuess.Possible(0x33F), alone.guess)
+
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.1))
+        assertEquals(
+            RelayGuess.Ambiguous(listOf(0x33F, 0x13F)),
+            neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x33F, 0.0))),
+        )
+    }
+
+    @Test
+    fun `candidates farther than 30 km are dropped, unless they report a position nearby`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 2.0)) // About 220 km away, on a road trip.
+        assertEquals(RelayGuess.Unknown, neighbours.guessAt(0.0))
+        val farReport = listOf(reported(0x23F, 0.3)) // About 33 km away.
+        assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, reported = farReport))
+
+        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x13F, 0.02)))
+        assertEquals(RelayGuess.Possible(0x13F), evidence.guess)
+        assertEquals(listOf(reported(0x13F, 0.02)), evidence.candidates)
+    }
+
+    @Test
+    fun `a node heard directly within reach is listed once, by its receptions`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.1))
+
+        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x13F, 0.0)))
+
+        assertEquals(heard(0x13F), evidence.candidates)
+    }
+
+    @Test
+    fun `reported positions skip the sender and mute nodes, and count only with a packet fix`() {
+        val neighbours = DirectNeighbours(listOf(DirectSender(0x13F, ago(90)), DirectSender(0x23F, ago(10))))
+        val positions = listOf(reported(0x33F, 0.0), reported(0x43F, 0.0), reported(0x500, 0.0))
+        val mute = { id: Long -> Config.DeviceConfig.Role.CLIENT_MUTE.takeIf { id == 0x43FL } }
+
+        // Neither has cells: the recent one is near, the other keeps no distance and goes last.
+        val located = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, mute, positions)
+        assertEquals(RelayGuess.Likely(0x23F), located.guess)
+        assertEquals(heard(0x23F) + reported(0x33F, 0.0) + heard(0x13F), located.candidates)
+
+        val fixless = neighbours.weigh(0x3F, now, 0x500, roleOf = mute, reported = positions)
+        assertEquals(RelayGuess.Likely(0x23F), fixless.guess)
+        assertEquals(heard(0x23F, 0x13F), fixless.candidates)
+    }
+
+    @Test
+    fun `reported nodes need the byte, a position and a recent hearing, and never the survey radio`() {
+        val since = ago(60)
+        fun node(num: Int, lastHeardMs: Long = now, latitude: Double = 0.5) = Node(
+            num = num,
+            lastHeard = (lastHeardMs / 1_000).toInt(),
+            position = position((latitude * 1e7).toInt(), 10_000_000),
+        )
+        val nodes =
+            listOf(
+                node(0x13F),
+                node(0x8000_023F.toInt()),
+                node(0x33F, lastHeardMs = since - 1_000),
+                node(0x43F, latitude = 0.0), // No position.
+                node(0x53F), // The survey radio.
+                node(0x140),
+            )
+
+        val found = reportedWith(0x3F, nodes, since, surveyNode = 0x53F)
+
+        assertEquals(listOf(0x13FL, 0x8000_023FL), found.map { it.nodeId })
+        assertEquals(0.5, found.first().latitude, 1e-6)
+        assertEquals(1.0, found.first().longitude, 1e-6)
+    }
 }
+
+private fun position(latitudeI: Int, longitudeI: Int) = Position.Builder()
+    .apply {
+        latitude_i = latitudeI
+        longitude_i = longitudeI
+    }
+    .build()

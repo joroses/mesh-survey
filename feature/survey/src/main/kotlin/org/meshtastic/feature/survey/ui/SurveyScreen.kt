@@ -101,6 +101,7 @@ import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 import org.meshtastic.core.common.util.DateFormatter
 import org.meshtastic.core.common.util.NumberFormatter
+import org.meshtastic.core.common.util.latLongToMeter
 import org.meshtastic.core.common.util.nowMillis
 import org.meshtastic.core.ui.component.EmptyState
 import org.meshtastic.core.ui.icon.ArrowBack
@@ -124,7 +125,9 @@ import org.meshtastic.core.ui.theme.StatusColors.StatusGreen
 import org.meshtastic.core.ui.theme.StatusColors.StatusYellow
 import org.meshtastic.feature.survey.DIRECT_HISTORY
 import org.meshtastic.feature.survey.DirectSender
+import org.meshtastic.feature.survey.FAR
 import org.meshtastic.feature.survey.R
+import org.meshtastic.feature.survey.RelayCandidate
 import org.meshtastic.feature.survey.RelayGuess
 import org.meshtastic.feature.survey.SurveyFix
 import org.meshtastic.feature.survey.SurveyProblem
@@ -606,7 +609,7 @@ private const val METERS_ROUNDING = 10
 
 private fun nodeName(id: Long, names: Map<Long, String>) = names[id] ?: "!%08x".format(Locale.ROOT, id)
 
-/** This session's relay bytes, most packets first, each with its guess and its candidates' direct receptions. */
+/** This session's relay bytes, most packets first, each with its guess and every candidate with how it is known. */
 @Composable
 private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss: () -> Unit) {
     AlertDialog(
@@ -635,16 +638,19 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            // A direct packet's sender is no guess, so it needs no evidence.
-                            if (relay.guess !is RelayGuess.Direct) {
-                                relay.guess.nodeIds.forEach { id ->
-                                    state.neighbours[id]?.let { sender ->
-                                        Text(
-                                            "• " + candidateText(nodeName(id, names), sender, state.fix),
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
+                            // Every candidate, not just the guessed tier, so the list shows how unsure the guess is.
+                            relay.candidates.forEach { candidate ->
+                                val name = nodeName(candidate.nodeId, names)
+                                val line =
+                                    when (candidate) {
+                                        is RelayCandidate.Heard ->
+                                            state.neighbours[candidate.nodeId]?.let {
+                                                candidateText(name, it, state.fix)
+                                            }
+
+                                        is RelayCandidate.Reported -> reportedText(name, candidate, state.fix)
                                     }
-                                }
+                                line?.let { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                             }
                         }
                     }
@@ -674,6 +680,15 @@ private fun candidateText(name: String, sender: DirectSender, fix: SurveyFix?): 
             DateFormatter.formatRelativeTime(earlier),
         )
     }
+}
+
+/** Distance from here to where [candidate] says it is, which is a claim rather than a reception. */
+@Composable
+@ReadOnlyComposable
+private fun reportedText(name: String, candidate: RelayCandidate.Reported, fix: SurveyFix?): String {
+    fix ?: return stringResource(R.string.survey_relay_candidate_reported, name, distanceText(FAR))
+    val meters = latLongToMeter(candidate.latitude, candidate.longitude, fix.latitude, fix.longitude)
+    return stringResource(R.string.survey_relay_candidate_reported_at, name, distanceText(meters))
 }
 
 @Composable

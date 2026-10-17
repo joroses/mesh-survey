@@ -329,13 +329,28 @@ class SurveyRecorder(
                 continue
             }
             val relayByte = row.relayByte
-            val guess = relayByte?.let { byte ->
+            val evidence = relayByte?.let { byte ->
                 if (row.isDirect()) {
-                    RelayGuess.Direct(row.senderNodeId)
+                    RelayEvidence(RelayGuess.Direct(row.senderNodeId), emptyList())
                 } else {
-                    current.neighbours.guess(byte, row.heardAtMs, row.senderNodeId, row.latitude, row.longitude) { id ->
-                        nodes.nodeDBbyNum.value[id.toInt()]?.user?.role
-                    }
+                    val db = nodes.nodeDBbyNum.value
+                    // Positions only count from a packet fix, so a fixless packet skips the scan.
+                    val reported =
+                        if (row.latitude == null) {
+                            emptyList()
+                        } else {
+                            val sinceMs = row.heardAtMs - DIRECT_HISTORY.inWholeMilliseconds
+                            reportedWith(byte, db.values, sinceMs, current.surveyNode)
+                        }
+                    current.neighbours.weigh(
+                        byte,
+                        row.heardAtMs,
+                        row.senderNodeId,
+                        row.latitude,
+                        row.longitude,
+                        roleOf = { id -> db[id.toInt()]?.user?.role },
+                        reported = reported,
+                    )
                 }
             }
             // After the guess, so a packet is never its own evidence.
@@ -345,11 +360,12 @@ class SurveyRecorder(
                     measurementCount = it.measurementCount + 1,
                     lastMeasurement = row.copy(seq = seq),
                     relays =
-                    if (relayByte == null || guess == null) {
+                    if (relayByte == null || evidence == null) {
                         it.relays
                     } else {
                         val packets = (it.relays[relayByte]?.packets ?: 0) + 1
-                        it.relays + (relayByte to RelayStats(packets, row.heardAtMs, guess))
+                        it.relays +
+                            (relayByte to RelayStats(packets, row.heardAtMs, evidence.guess, evidence.candidates))
                     },
                     neighbours = current.neighbours.all,
                 )

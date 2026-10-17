@@ -45,6 +45,7 @@ import org.meshtastic.proto.ChannelSettings
 import org.meshtastic.proto.Config
 import org.meshtastic.proto.LocalConfig
 import org.meshtastic.proto.MeshPacket
+import org.meshtastic.proto.Position
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -400,7 +401,10 @@ class SurveyRecorderTest {
             assertEquals(setOf(0x13FL), recorder.state.value.neighbours.keys)
 
             hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
-            assertEquals(RelayStats(2, 1_000_000, RelayGuess.Likely(0x13F)), relays()[0x3F])
+            assertEquals(
+                RelayStats(2, 1_000_000, RelayGuess.Likely(0x13F), listOf(RelayCandidate.Heard(0x13F))),
+                relays()[0x3F],
+            )
 
             hear(from = 0x500, hopsUsed = 1, relay = 0x77)
             assertEquals(RelayGuess.Unknown, relays()[0x77]?.guess)
@@ -474,6 +478,29 @@ class SurveyRecorderTest {
                 RelayGuess.Ambiguous(listOf(0x23F, 0x8000_013FL)),
                 recorder.state.value.relays[0x3F]?.guess,
             )
+        }
+
+    @Test
+    fun `nodes reporting a nearby position become candidates, but not the survey radio itself`() =
+        runTest(UnconfinedTestDispatcher()) {
+            fun positioned(num: Int) = TestDataFactory.createTestNode(num = num, lastHeard = 1_000)
+                .copy(
+                    position = position(100_000, 100_000), // 0.01°, about 1.6 km away.
+                )
+            nodes.setNodes(listOf(positioned(0x33F), positioned(1)))
+            val recorder = recorder()
+            recorder.start()
+            location.send(SurveyFix(5_000, 0.0, 0.0, 10f))
+
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x01)
+
+            val relay = recorder.state.value.relays.getValue(0x3F)
+            assertEquals(RelayGuess.Possible(0x33F), relay.guess)
+            val candidate = relay.candidates.single() as RelayCandidate.Reported
+            assertEquals(0x33F, candidate.nodeId)
+            assertEquals(0.01, candidate.latitude, 1e-9)
+            assertEquals(RelayGuess.Unknown, recorder.state.value.relays[0x01]?.guess)
         }
 
     @Test
@@ -555,3 +582,10 @@ private class FakeSurveyLocation : SurveyLocation {
 
     fun send(fix: SurveyFix) = onFix?.invoke(fix)
 }
+
+private fun position(latitudeI: Int, longitudeI: Int) = Position.Builder()
+    .apply {
+        latitude_i = latitudeI
+        longitude_i = longitudeI
+    }
+    .build()
