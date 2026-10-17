@@ -16,9 +16,11 @@
  */
 package org.meshtastic.feature.survey
 
+import org.meshtastic.core.model.Channel
 import org.meshtastic.core.model.util.isLora
 import org.meshtastic.core.model.util.rxTimeOrNull
 import org.meshtastic.core.model.util.snrOrNull
+import org.meshtastic.proto.ChannelSet
 import org.meshtastic.proto.MeshPacket
 import org.meshtastic.proto.MeshPacket.TransportMechanism
 
@@ -31,6 +33,14 @@ const val LATE_PACKET_MS = 60_000L
 
 private const val MILLIS_PER_SECOND = 1_000L
 private const val RELAY_BYTE_MASK = 0xFF
+private const val OK_TO_MQTT_MASK = 1
+
+/**
+ * The indices of the survey node's channels whose key is the default one, the only key SigSleuth decrypts. A decoded
+ * packet's `channel` is such an index; an encrypted one's is a hash, and it has no bitfield to read anyway.
+ */
+fun defaultKeyChannels(channels: ChannelSet): Set<Int> =
+    channels.settings.indices.filterTo(mutableSetOf()) { Channel(channels.settings[it]).psk == Channel.default.psk }
 
 /**
  * Turns a packet the survey node heard into a measurement, or null when it is not one: not heard over LoRa, relayed by
@@ -45,6 +55,7 @@ fun measurementOf(
     wallTimeMs: Long,
     elapsedRealtimeMs: Long,
     fix: SurveyFix?,
+    defaultKeyChannels: Set<Int>,
 ): SurveyMeasurement? {
     val rxTimeMs = packet.rxTimeOrNull()?.toUInt()?.toLong()?.times(MILLIS_PER_SECOND)
     val replayed = rxTimeMs != null && rxTimeMs < wallTimeMs - LATE_PACKET_MS
@@ -68,6 +79,10 @@ fun measurementOf(
         hopLimit = packet.hop_limit,
         // Older firmware sends no relay byte (0). The byte is only the last byte of the relay's node number.
         relayByte = packet.relay_node.takeIf { it != 0 }?.and(RELAY_BYTE_MASK),
+        // Firmware reads a missing bitfield as not OK (MQTT::onSend).
+        okToMqtt = packet.decoded?.let { ((it.bitfield ?: 0) and OK_TO_MQTT_MASK) != 0 },
+        // A direct message the survey node decrypted with its private key still carries a channel index.
+        defaultKey = packet.decoded?.let { packet.pki_encrypted != true && packet.channel in defaultKeyChannels },
     )
 }
 

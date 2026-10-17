@@ -197,6 +197,8 @@ internal data class UploadMeasurement(
     @SerialName("hop_start") val hopStart: Int?,
     @SerialName("hop_limit") val hopLimit: Int?,
     @SerialName("relay_byte") val relayByte: Int?,
+    @SerialName("ok_to_mqtt") val okToMqtt: Boolean?,
+    @SerialName("default_key") val defaultKey: Boolean?,
 )
 
 /** SigSleuth's answer: [lastSeq] is the batch's highest seq, saved or not; [skipped] counts unusable rows by reason. */
@@ -237,4 +239,6 @@ private fun SurveyMeasurement.toUpload() = UploadMeasurement(
     hopStart = hopStart.takeIf { it != 0 },
     hopLimit = hopLimit.takeIf { hopStart != 0 },
     relayByte = relayByte,
+    okToMqtt = okToMqtt,
+    defaultKey = defaultKey,
 )

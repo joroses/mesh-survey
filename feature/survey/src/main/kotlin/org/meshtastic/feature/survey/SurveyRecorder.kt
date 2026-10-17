@@ -177,6 +177,8 @@ class SurveyRecorder(
         val rows: Channel<SurveyMeasurement>,
         /** The candidates for relay guesses; only the writer touches it. */
         val neighbours: DirectNeighbours,
+        /** Follows the survey node's channels; see [defaultKeyChannels]. */
+        @Volatile var defaultKeyChannels: Set<Int>,
     ) {
         /**
          * The transport session whose node and LoRa settings the watcher has checked against this session; only its
@@ -242,7 +244,14 @@ class SurveyRecorder(
             .getOrDefault(emptyList())
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)
         val current =
-            Active(session, myNode.myNodeNum, address, rows, DirectNeighbours(history.map { it.toDirectSender() }))
+            Active(
+                session,
+                myNode.myNodeNum,
+                address,
+                rows,
+                DirectNeighbours(history.map { it.toDirectSender() }),
+                defaultKeyChannels(radioConfig.channelSetFlow.first()),
+            )
         mutableState.value = SurveyState(session = session, neighbours = current.neighbours.all)
         writer = scope.launch { write(current) }
         watcher = scope.launch { watch(current, lora) }
@@ -305,6 +314,7 @@ class SurveyRecorder(
                 clock.wallTimeMs(),
                 clock.elapsedRealtimeMs(),
                 fix,
+                current.defaultKeyChannels,
             )
         if (row != null && current.rows.trySend(row).isFailure) {
             Logger.w { "Signal survey queue full; dropped a packet" }
@@ -362,6 +372,7 @@ class SurveyRecorder(
         val sessionId = current.session.id
         var radioWait: Job? = null
         var loraSettle: Job? = null
+        launch { radioConfig.channelSetFlow.collect { current.defaultKeyChannels = defaultKeyChannels(it) } }
         combine(
             service.connectionState,
             nodes.myNodeInfo,

@@ -20,7 +20,7 @@ package org.meshtastic.feature.survey
 object SurveyCsv {
     const val HEADER =
         "session_id,seq,heard_at_ms,latitude,longitude,accuracy_m,fix_age_ms,sender_node_id,recipient_node_id," +
-            "packet_id,rx_snr,rx_rssi,hop_start,hop_limit,relay_byte\n"
+            "packet_id,rx_snr,rx_rssi,hop_start,hop_limit,relay_byte,ok_to_mqtt,default_key\n"
 
     private const val PAGE_SIZE = 500
 
@@ -40,6 +40,8 @@ object SurveyCsv {
         m.hopStart,
         m.hopLimit,
         m.relayByte,
+        m.okToMqtt,
+        m.defaultKey,
     )
         .joinToString(",", postfix = "\n") { it?.toString().orEmpty() }
 

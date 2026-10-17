@@ -20,6 +20,7 @@ A signal survey is a record of where you were and when. Read this before you sta
 - the time to the millisecond
 - your position: latitude, longitude, the fix's accuracy and age
 - the signal: SNR, RSSI, hop counts and relay byte
+- the sender's OK to MQTT bit and whether the channel uses the default key, when the node could decode the packet
 - the packet's sender node, recipient node and packet ID. These are other people's node numbers.
 
 Each session also saves your node's number and long name, and the radio settings. A busy mesh can produce several rows a second, so a session is a detailed track of your movements. A quiet mesh may produce none for minutes. Packets relayed over MQTT and packets from your own node are not recorded, and the app records nothing while the radio is disconnected.

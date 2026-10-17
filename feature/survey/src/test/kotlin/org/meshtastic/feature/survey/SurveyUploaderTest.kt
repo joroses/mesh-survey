@@ -129,6 +129,7 @@ class SurveyUploaderTest {
                     hopStart = 3,
                     hopLimit = 1,
                     relayByte = 0x1a,
+                    okToMqtt = false,
                 ),
             )
         }
@@ -190,6 +191,8 @@ class SurveyUploaderTest {
         assertEquals("null", row.getValue("rx_rssi").toString())
         assertEquals("0.0", row.getValue("rx_snr").toString())
         assertEquals(26, row.getValue("relay_byte").jsonPrimitive.content.toInt())
+        assertEquals("false", row.getValue("ok_to_mqtt").toString())
+        assertEquals("null", row.getValue("default_key").toString())
     }
 
     @Test

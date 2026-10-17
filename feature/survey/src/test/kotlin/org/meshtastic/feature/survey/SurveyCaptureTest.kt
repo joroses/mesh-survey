@@ -16,11 +16,17 @@
  */
 package org.meshtastic.feature.survey
 
+import okio.ByteString.Companion.decodeBase64
+import org.meshtastic.proto.ChannelSet
+import org.meshtastic.proto.ChannelSettings
+import org.meshtastic.proto.Data
 import org.meshtastic.proto.MeshPacket
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SurveyCaptureTest {
     private val now = 1_789_633_458_987L
@@ -43,8 +49,75 @@ class SurveyCaptureTest {
         }
         .build()
 
-    private fun capture(packet: MeshPacket, withFix: SurveyFix? = fix) =
-        measurementOf(packet, surveyNode = 99, sessionId = "s", wallTimeMs = now, elapsedRealtimeMs = elapsed, withFix)
+    private fun capture(packet: MeshPacket, withFix: SurveyFix? = fix) = measurementOf(
+        packet,
+        surveyNode = 99,
+        sessionId = "s",
+        wallTimeMs = now,
+        elapsedRealtimeMs = elapsed,
+        withFix,
+        defaultKeyChannels = setOf(0),
+    )
+
+    private fun decoded(bitfield: Int?) = Data.Builder().apply { this.bitfield = bitfield }.build()
+
+    @Test
+    fun `a decoded packet keeps its OK to MQTT bit and whether its channel uses the default key`() {
+        val ok = assertNotNull(capture(packet { decoded = decoded(bitfield = 0b11) }))
+        assertEquals(true, ok.okToMqtt)
+        assertEquals(true, ok.defaultKey)
+
+        val optedOut =
+            assertNotNull(
+                capture(
+                    packet {
+                        decoded = decoded(bitfield = 0b10)
+                        channel = 1
+                    },
+                ),
+            )
+        assertEquals(false, optedOut.okToMqtt)
+        assertEquals(false, optedOut.defaultKey)
+
+        val directMessage = packet {
+            decoded = decoded(bitfield = 1)
+            pki_encrypted = true
+        }
+        assertEquals(false, assertNotNull(capture(directMessage)).defaultKey)
+
+        // Firmware before the bitfield sends none; it reads that as not OK.
+        assertEquals(false, assertNotNull(capture(packet { decoded = decoded(bitfield = null) })).okToMqtt)
+    }
+
+    @Test
+    fun `an encrypted packet leaves both consent fields unknown`() {
+        val row = assertNotNull(capture(packet { channel = 0 }))
+        assertNull(row.okToMqtt)
+        assertNull(row.defaultKey)
+    }
+
+    @Test
+    fun `only the default key counts as default, whether short or expanded`() {
+        fun settings(psk: String) = ChannelSettings.Builder().apply { this.psk = psk.decodeBase64()!! }.build()
+        val channels =
+            ChannelSet.Builder()
+                .apply {
+                    settings =
+                        listOf(
+                            settings("AQ=="), // The short code for the default key.
+                            settings("1PG7OiApB1nwvP+rz05pAQ=="), // The same key written out.
+                            settings("Ag=="), // Another short key.
+                            settings("1fG7OiApB1nwvP+rz05pAQ=="), // A private key, one bit from the default.
+                            settings(""), // No encryption.
+                        )
+                }
+                .build()
+
+        val found = defaultKeyChannels(channels)
+
+        assertTrue(0 in found && 1 in found)
+        assertFalse(2 in found || 3 in found || 4 in found)
+    }
 
     @Test
     fun `a heard packet becomes a measurement with unsigned ids, the fix and its age`() {

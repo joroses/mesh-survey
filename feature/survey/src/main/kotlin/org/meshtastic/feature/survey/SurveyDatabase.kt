@@ -93,6 +93,10 @@ data class SurveyMeasurement(
     @ColumnInfo(name = "hop_start") val hopStart: Int,
     @ColumnInfo(name = "hop_limit") val hopLimit: Int,
     @ColumnInfo(name = "relay_byte") val relayByte: Int?,
+    /** The sender's OK to MQTT bit; null when the survey node could not decode the packet. */
+    @ColumnInfo(name = "ok_to_mqtt") val okToMqtt: Boolean? = null,
+    /** Whether the packet's channel uses the default key; null when the survey node could not decode the packet. */
+    @ColumnInfo(name = "default_key") val defaultKey: Boolean? = null,
 ) {
     override fun toString(): String = "SurveyMeasurement(seq=$seq, location redacted)"
 }
@@ -202,10 +206,10 @@ interface SurveyDao {
  */
 @Database(
     entities = [SurveySession::class, SurveyMeasurement::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
-    // 2: what SigSleuth kept and skipped of each session.
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key.
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class SurveyDatabase : RoomDatabase() {
     abstract fun surveyDao(): SurveyDao
