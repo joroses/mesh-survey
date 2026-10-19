@@ -152,14 +152,18 @@ interface SurveyDao {
     suspend fun measurementsAfter(sessionId: String, afterSeq: Long, limit: Int): List<SurveyMeasurement>
 
     /**
-     * Each cell where [receiverNodeId] heard a sender directly since [sinceMs], across sessions, with its latest direct
-     * time. Fixless receptions share a null-cell row. The `direct` WHERE clause repeats [isDirect], with
-     * [relayByteOf]'s `00` → `FF` mapping as the CASE.
+     * Each cell where [receiverNodeId] heard a sender directly since [sinceMs], across sessions on the same spreading
+     * factor, bandwidth and frequency, with its latest direct time. Fixless receptions share a null-cell row. The
+     * settings match as SigSleuth's `_link_key` does, so another network surveyed with the same radio adds no
+     * candidates; `IS` lets a session without a frequency match only others without one. The `direct` WHERE clause
+     * repeats [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE.
      */
     @Query(
         "WITH direct AS (SELECT m.sender_node_id, m.heard_at_ms, m.latitude, m.longitude " +
             "FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
-            "WHERE s.receiver_node_id = :receiverNodeId AND m.heard_at_ms >= :sinceMs " +
+            "WHERE s.receiver_node_id = :receiverNodeId AND s.spreading_factor = :spreadingFactor " +
+            "AND s.bandwidth_khz = :bandwidthKhz AND s.frequency_mhz IS :frequencyMhz " +
+            "AND m.heard_at_ms >= :sinceMs " +
             "AND m.hop_start = m.hop_limit " +
             "AND m.relay_byte = CASE WHEN m.sender_node_id % 256 = 0 THEN 255 ELSE m.sender_node_id % 256 END) " +
             "SELECT d.sender_node_id AS nodeId, MAX(d.heard_at_ms) AS lastDirectMs, " +
@@ -167,7 +171,18 @@ interface SurveyDao {
             "CAST(ROUND(d.longitude * 500) AS INTEGER) AS longitudeCell " +
             "FROM direct d GROUP BY d.sender_node_id, latitudeCell, longitudeCell",
     )
-    suspend fun directPlaces(receiverNodeId: Long, sinceMs: Long): List<DirectPlace>
+    suspend fun directPlaces(
+        receiverNodeId: Long,
+        spreadingFactor: Int,
+        bandwidthKhz: Float,
+        frequencyMhz: Float?,
+        sinceMs: Long,
+    ): List<DirectPlace>
+
+    /** [directPlaces] for [session]'s radio and settings. */
+    suspend fun directPlaces(session: SurveySession, sinceMs: Long): List<DirectPlace> = with(session) {
+        directPlaces(receiverNodeId, spreadingFactor, bandwidthKhz, frequencyMhz, sinceMs)
+    }
 
     @Query("UPDATE survey_session SET status = :status, ended_at = :endedAt WHERE id = :sessionId")
     suspend fun endSession(sessionId: String, status: SurveyStatus, endedAt: Long)

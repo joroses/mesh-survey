@@ -239,7 +239,7 @@ class SurveyRecorder(
         if (safeCatching { dao.insertSession(session) }.isFailure) return fail(SurveyProblem.STORAGE)
         // Without the history the guesses only start from this session's packets, which is no reason not to record.
         val history = safeCatching {
-            dao.directPlaces(session.receiverNodeId, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
+            dao.directPlaces(session, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
         }
             .getOrDefault(emptyList())
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)

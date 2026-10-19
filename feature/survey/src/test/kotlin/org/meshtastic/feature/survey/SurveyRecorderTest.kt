@@ -504,48 +504,54 @@ class SurveyRecorderTest {
         }
 
     @Test
-    fun `an earlier session with the same radio seeds the guesses`() = runTest(UnconfinedTestDispatcher()) {
-        val earlier = "earlier"
-        dao.insertSession(
-            SurveySession(
-                id = earlier,
-                startedAt = 0,
-                status = SurveyStatus.STOPPED,
-                receiverNodeId = 1,
-                receiverName = "",
-                modemPreset = "LONG_FAST",
-                spreadingFactor = 11,
-                bandwidthKhz = 250f,
-                frequencyMhz = null,
-                appVersion = "test",
-            ),
-        )
-        dao.insertMeasurement(
-            SurveyMeasurement(
-                sessionId = earlier,
-                heardAtMs = 999_000,
-                latitude = null,
-                longitude = null,
-                accuracyM = null,
-                fixAgeMs = null,
-                senderNodeId = 0x13F,
-                recipientNodeId = 0xFFFFFFFF,
-                packetId = 1,
-                rxSnr = null,
-                rxRssi = null,
-                hopStart = HOP_START,
-                hopLimit = HOP_START,
-                relayByte = 0x3F,
-            ),
-        )
-        val recorder = recorder()
-        recorder.start()
+    fun `an earlier session with the same radio and settings seeds the guesses`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // Another network surveyed with the same radio, here on another frequency, adds no candidates.
+            for (
+            (earlier, frequency, sender) in
+            listOf(Triple("earlier", 869.525f, 0x13FL), Triple("other", 869.4625f, 0x23FL))
+            ) {
+                dao.insertSession(
+                    SurveySession(
+                        id = earlier,
+                        startedAt = 0,
+                        status = SurveyStatus.STOPPED,
+                        receiverNodeId = 1,
+                        receiverName = "",
+                        modemPreset = "LONG_FAST",
+                        spreadingFactor = 11,
+                        bandwidthKhz = 250f,
+                        frequencyMhz = frequency,
+                        appVersion = "test",
+                    ),
+                )
+                dao.insertMeasurement(
+                    SurveyMeasurement(
+                        sessionId = earlier,
+                        heardAtMs = 999_000,
+                        latitude = null,
+                        longitude = null,
+                        accuracyM = null,
+                        fixAgeMs = null,
+                        senderNodeId = sender,
+                        recipientNodeId = 0xFFFFFFFF,
+                        packetId = 1,
+                        rxSnr = null,
+                        rxRssi = null,
+                        hopStart = HOP_START,
+                        hopLimit = HOP_START,
+                        relayByte = 0x3F,
+                    ),
+                )
+            }
+            val recorder = recorder()
+            recorder.start()
 
-        hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
 
-        assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.relays[0x3F]?.guess)
-        assertEquals(setOf(0x13FL), recorder.state.value.neighbours.keys)
-    }
+            assertEquals(RelayGuess.Likely(0x13F), recorder.state.value.relays[0x3F]?.guess)
+            assertEquals(setOf(0x13FL), recorder.state.value.neighbours.keys)
+        }
 
     @Test
     fun `a problem met while recording ends with the session`() = runTest(UnconfinedTestDispatcher()) {

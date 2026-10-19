@@ -33,15 +33,23 @@ class SurveyDaoTest {
 
     @AfterTest fun close() = database.close()
 
-    private fun session(id: String, startedAt: Long, receiverNodeId: Long = 1) = SurveySession(
+    @Suppress("LongParameterList")
+    private fun session(
+        id: String,
+        startedAt: Long,
+        receiverNodeId: Long = 1,
+        spreadingFactor: Int = 11,
+        bandwidthKhz: Float = 250f,
+        frequencyMhz: Float? = 869.525f,
+    ) = SurveySession(
         id = id,
         startedAt = startedAt,
         receiverNodeId = receiverNodeId,
         receiverName = "Survey node",
         modemPreset = "LONG_FAST",
-        spreadingFactor = 11,
-        bandwidthKhz = 250f,
-        frequencyMhz = 869.525f,
+        spreadingFactor = spreadingFactor,
+        bandwidthKhz = bandwidthKhz,
+        frequencyMhz = frequencyMhz,
         appVersion = "test",
     )
 
@@ -138,44 +146,61 @@ class SurveyDaoTest {
     }
 
     @Test
-    fun `direct places group cells and fixless rows and keep only this radio's direct history`() = runTest {
-        // Exercise the real SQL and the recorder's fake against the same evidence.
-        for (subject in listOf(dao, FakeSurveyDao())) {
-            subject.insertSession(session("old", startedAt = 1))
-            subject.insertSession(session("new", startedAt = 50))
-            subject.insertSession(session("other radio", startedAt = 1, receiverNodeId = 9))
-            subject.insertMeasurement(measurement("old", 10, sender = 0x102, relayByte = 0x02, latitude = 1.0))
-            subject.insertMeasurement(measurement("new", 55, sender = 0x102, relayByte = 0x02, latitude = 1.0002))
-            subject.insertMeasurement(measurement("new", 54, sender = 0x102, relayByte = 0x02, latitude = -0.001))
-            subject.insertMeasurement(measurement("new", 59, sender = 0x102, relayByte = 0x02))
-            subject.insertMeasurement(measurement("new", 60, sender = 0x102, relayByte = 0x02))
-            subject.insertMeasurement(measurement("new", 61, sender = 0x200, relayByte = 0xFF)) // 00 maps to FF.
-            subject.insertMeasurement(measurement("new", 62, sender = 0x103, hopLimit = 2, relayByte = 0x03))
-            subject.insertMeasurement(measurement("new", 63, sender = 0x104, relayByte = 0x3F)) // Another node's byte.
-            subject.insertMeasurement(measurement("new", 64, sender = 0x105)) // No relay byte.
-            subject.insertMeasurement(measurement("old", 9, sender = 0x106, relayByte = 0x06)) // Before the cutoff.
-            subject.insertMeasurement(measurement("other radio", 70, sender = 0x107, relayByte = 0x07))
+    fun `direct places group cells and fixless rows and keep only this radio's direct history on these settings`() =
+        runTest {
+            // Exercise the real SQL and the recorder's fake against the same evidence.
+            for (subject in listOf(dao, FakeSurveyDao())) {
+                subject.insertSession(session("old", startedAt = 1))
+                subject.insertSession(session("new", startedAt = 50))
+                subject.insertSession(session("other radio", startedAt = 1, receiverNodeId = 9))
+                subject.insertMeasurement(measurement("old", 10, sender = 0x102, relayByte = 0x02, latitude = 1.0))
+                subject.insertMeasurement(measurement("new", 55, sender = 0x102, relayByte = 0x02, latitude = 1.0002))
+                subject.insertMeasurement(measurement("new", 54, sender = 0x102, relayByte = 0x02, latitude = -0.001))
+                subject.insertMeasurement(measurement("new", 59, sender = 0x102, relayByte = 0x02))
+                subject.insertMeasurement(measurement("new", 60, sender = 0x102, relayByte = 0x02))
+                subject.insertMeasurement(measurement("new", 61, sender = 0x200, relayByte = 0xFF)) // 00 maps to FF.
+                subject.insertMeasurement(measurement("new", 62, sender = 0x103, hopLimit = 2, relayByte = 0x03))
+                subject.insertMeasurement(
+                    measurement("new", 63, sender = 0x104, relayByte = 0x3F),
+                ) // Another node's byte.
+                subject.insertMeasurement(measurement("new", 64, sender = 0x105)) // No relay byte.
+                subject.insertMeasurement(measurement("old", 9, sender = 0x106, relayByte = 0x06)) // Before the cutoff.
+                subject.insertMeasurement(measurement("other radio", 70, sender = 0x107, relayByte = 0x07))
+                // The same radio on another network: each setting that differs keeps its senders out.
+                subject.insertSession(session("other factor", startedAt = 1, spreadingFactor = 9))
+                subject.insertSession(session("other bandwidth", startedAt = 1, bandwidthKhz = 125f))
+                subject.insertSession(session("other frequency", startedAt = 1, frequencyMhz = 869.4625f))
+                subject.insertSession(session("no frequency", startedAt = 1, frequencyMhz = null))
+                subject.insertMeasurement(measurement("other factor", 71, sender = 0x108, relayByte = 0x08))
+                subject.insertMeasurement(measurement("other bandwidth", 72, sender = 0x109, relayByte = 0x09))
+                subject.insertMeasurement(measurement("other frequency", 73, sender = 0x10A, relayByte = 0x0A))
+                subject.insertMeasurement(measurement("no frequency", 74, sender = 0x10B, relayByte = 0x0B))
 
-            val places = subject.directPlaces(receiverNodeId = 1, sinceMs = 10)
+                val places = subject.directPlaces(session("new", startedAt = 50), sinceMs = 10)
+                // A session without a frequency matches only others without one.
+                assertEquals(
+                    listOf(DirectPlace(0x10B, 74, null, null)),
+                    subject.directPlaces(session("no frequency", startedAt = 1, frequencyMhz = null), sinceMs = 10),
+                )
 
-            assertEquals(
-                setOf(
-                    DirectPlace(0x102, 55, 500, 1000),
-                    DirectPlace(0x102, 54, -1, 1000),
-                    DirectPlace(0x102, 60, null, null),
-                    DirectPlace(0x200, 61, null, null),
-                ),
-                places.toSet(),
-            )
-            assertEquals(4, places.size)
-            val neighbours = DirectNeighbours(places.map { it.toDirectSender() })
-            assertEquals(
-                DirectSender(0x102, 60, mapOf(DirectCell(500, 1000) to 55L, DirectCell(-1, 1000) to 54L)),
-                neighbours.all[0x102],
-            )
-            assertEquals(DirectSender(0x200, 61), neighbours.all[0x200])
+                assertEquals(
+                    setOf(
+                        DirectPlace(0x102, 55, 500, 1000),
+                        DirectPlace(0x102, 54, -1, 1000),
+                        DirectPlace(0x102, 60, null, null),
+                        DirectPlace(0x200, 61, null, null),
+                    ),
+                    places.toSet(),
+                )
+                assertEquals(4, places.size)
+                val neighbours = DirectNeighbours(places.map { it.toDirectSender() })
+                assertEquals(
+                    DirectSender(0x102, 60, mapOf(DirectCell(500, 1000) to 55L, DirectCell(-1, 1000) to 54L)),
+                    neighbours.all[0x102],
+                )
+                assertEquals(DirectSender(0x200, 61), neighbours.all[0x200])
+            }
         }
-    }
 
     @Test
     fun `deleting a session deletes its measurements`() = runTest {
