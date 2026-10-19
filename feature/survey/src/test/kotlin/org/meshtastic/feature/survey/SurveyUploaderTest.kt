@@ -74,6 +74,9 @@ class SurveyUploaderTest {
     private var fail = false
     private var authorization: String? = null
 
+    /** How many times a background retry was queued. */
+    private var retries = 0
+
     /** Rows the server skips in every batch, by reason. */
     private var skipPerBatch = emptyMap<String, Int>()
 
@@ -98,6 +101,11 @@ class SurveyUploaderTest {
             HttpClient(engine),
             clock,
             object : ApplicationCoroutineScope, CoroutineScope by backgroundScope {},
+            object : SurveyUploadRetry {
+                override fun schedule() {
+                    retries++
+                }
+            },
         )
     }
 
@@ -197,16 +205,20 @@ class SurveyUploaderTest {
     }
 
     @Test
-    fun `unreadable settings skip the run instead of throwing`() = runTest {
+    fun `unreadable settings keep the run retryable until settings can be read`() = runTest {
         record("a", 1)
         settings.readError = IOException("disk")
         val uploader = uploader()
 
-        uploader.uploadIfAutomatic()
-        uploader.upload()
+        assertFalse(uploader.uploadIfAutomatic())
+        assertFalse(uploader.upload())
 
         assertTrue(received.isEmpty())
         assertEquals(0L, dao.sessions.single().uploadedSeq)
+
+        settings.readError = null
+        assertTrue(uploader.uploadIfAutomatic())
+        assertEquals(1L, dao.sessions.single().uploadedSeq)
     }
 
     @Test
@@ -293,6 +305,7 @@ class SurveyUploaderTest {
         assertNull(authorization)
         assertEquals(0L, dao.sessions.single().uploadedSeq)
         assertTrue(dao.sessions.single().lastUploadError!!.contains("https://"))
+        assertEquals(0, retries) // Retrying cannot help until the URL is fixed.
         assertTrue(isUploadUrl("http://localhost:8001") && isUploadUrl("HTTPS://sigsleuth.example.org/"))
     }
 
@@ -320,5 +333,40 @@ class SurveyUploaderTest {
 
         assertEquals(3L, dao.sessions.single().uploadedSeq)
         assertNull(dao.sessions.single().lastUploadError)
+    }
+
+    @Test
+    fun `a failed automatic upload queues a retry, which runs until it succeeds`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        fail = true
+
+        assertFalse(uploader.uploadIfAutomatic())
+        assertEquals(1, retries)
+
+        // The worker's own run: still failing, so WorkManager tries again later (KEEP leaves the queued retry as is).
+        assertFalse(uploader.uploadIfAutomatic())
+        assertEquals(2, retries)
+
+        fail = false
+        assertTrue(uploader.uploadIfAutomatic())
+        assertEquals(3L, dao.sessions.single().uploadedSeq)
+        assertTrue(uploader.upload()) // Nothing left: done.
+        assertEquals(2, retries) // A success queues nothing.
+    }
+
+    @Test
+    fun `with automatic uploads off, a failure queues nothing and a queued retry does nothing`() = runTest {
+        record("a", 3)
+        settings.settings.value = settings.settings.value.copy(automatic = false)
+        val uploader = uploader()
+        fail = true
+
+        assertFalse(uploader.upload()) // Upload now.
+        assertEquals(0, retries)
+
+        fail = false
+        assertTrue(uploader.uploadIfAutomatic())
+        assertEquals(0L, dao.sessions.single().uploadedSeq)
     }
 }

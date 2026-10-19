@@ -46,7 +46,8 @@ import kotlin.time.Duration.Companion.seconds
  * is the rows after the session's `uploaded_seq`; the `last_seq` the server returns becomes the new `uploaded_seq`. The
  * server ignores rows it already holds, so a repeated batch saves nothing twice.
  *
- * A run stops at the first failure and saves its error; the next run tries again. Two runs never overlap.
+ * A run stops at the first failure and saves its error; the next run tries again. With automatic uploads on, a failed
+ * run also queues [SurveyUploadRetry], which tries again once the phone is online. Two runs never overlap.
  */
 @Single
 class SurveyUploader(
@@ -55,6 +56,7 @@ class SurveyUploader(
     private val http: HttpClient,
     private val clock: SurveyClock,
     private val scope: ApplicationCoroutineScope,
+    private val retry: SurveyUploadRetry,
 ) {
     private val runs = Mutex()
     private val mutableUploading = MutableStateFlow(false)
@@ -74,28 +76,46 @@ class SurveyUploader(
         runs.withLock { safeCatching { dao.resetUploads() } }
     }
 
-    /** The service calls this every [RECORDING_INTERVAL] while recording and once when the session ends. */
-    suspend fun uploadIfAutomatic() {
-        // An unreadable settings file skips this run; letting it throw would crash the app from the service's scope.
-        if (safeCatching { settings.current() }.getOrNull()?.automatic == true) upload()
+    /**
+     * The service calls this every [RECORDING_INTERVAL] while recording and once when the session ends, and
+     * [SurveyUploadWorker] after a failure. Returns false when a later run may get further, as [upload] does.
+     */
+    suspend fun uploadIfAutomatic(): Boolean {
+        // An unreadable settings file skips this run but keeps a queued background retry alive.
+        val target = safeCatching { settings.current() }.getOrNull() ?: return false
+        return if (target.automatic) upload() else true
     }
 
-    suspend fun upload() = runs.withLock {
-        val target = safeCatching { settings.current() }.getOrNull() ?: return@withLock
-        if (target.url.isBlank()) return@withLock
+    /**
+     * Returns false when settings could not be read or a session failed to upload, so a later run may get further. A
+     * missing or invalid URL returns true: nothing will change until it is fixed.
+     */
+    suspend fun upload(): Boolean = runs.withLock {
+        val target = safeCatching { settings.current() }.getOrNull() ?: return@withLock false
+        if (target.url.isBlank()) return@withLock true
         mutableUploading.value = true
-        try {
-            // A database error ends the run like a network error; the next run tries again.
-            val sessions = safeCatching { dao.sessionsToUpload() }.getOrDefault(emptyList())
-            if (!isUploadUrl(target.url)) {
-                sessions.firstOrNull()?.let { safeCatching { dao.uploadFailed(it.session.id, INVALID_URL) } }
-                return@withLock
+        val sent =
+            try {
+                send(target)
+            } finally {
+                mutableUploading.value = false
             }
-            for (pending in sessions) {
-                if (!safeCatching { uploadSession(pending.session, target) }.getOrDefault(false)) break
-            }
-        } finally {
-            mutableUploading.value = false
+        // Surveys go where no gateway listens, often with no mobile data either: try again once the phone is online.
+        if (!sent && target.automatic) {
+            safeCatching { retry.schedule() }.onFailure { Logger.w { "Signal survey upload retry not queued: $it" } }
+        }
+        sent
+    }
+
+    private suspend fun send(target: SurveyUploadSettings): Boolean {
+        // A database error ends the run like a network error; the next run tries again.
+        val sessions = safeCatching { dao.sessionsToUpload() }.getOrNull() ?: return false
+        return if (isUploadUrl(target.url)) {
+            // all() stops at the first failure.
+            sessions.all { safeCatching { uploadSession(it.session, target) }.getOrDefault(false) }
+        } else {
+            sessions.firstOrNull()?.let { safeCatching { dao.uploadFailed(it.session.id, INVALID_URL) } }
+            true
         }
     }
 

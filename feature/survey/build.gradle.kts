@@ -52,6 +52,8 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.koin.androidx.workmanager)
     implementation(libs.ktor.client.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kermit)
