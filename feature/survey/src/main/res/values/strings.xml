@@ -56,19 +56,18 @@
     <string name="survey_relay_ambiguous">%1$s: %2$s</string>
     <string name="survey_relay_or">%1$s or %2$s</string>
     <string name="survey_relays_open">Show relays</string>
-    <string name="survey_relays_title">Relays this session</string>
-    <string name="survey_relays_explained">≈ likely: the only node with that byte heard directly within 1 km of here. ? possible: none heard near here, and one candidate within 30 km, heard directly elsewhere in the last 30 days or reporting its position. “Heard directly” distances are from the nearest place this phone heard the node, not from the node. “Reports a position” distances are from where the node says it is.</string>
-    <plurals name="survey_relay_packets">
-        <item quantity="one">%1$d packet, last %2$s</item>
-        <item quantity="other">%1$d packets, last %2$s</item>
-    </plurals>
-    <!-- %2$s and %4$s are relative times ("3 min. ago"), %3$s a distance. -->
-    <string name="survey_relay_candidate">%1$s: heard directly %2$s</string>
-    <string name="survey_relay_candidate_at">%1$s: heard directly %2$s, %3$s from here</string>
-    <string name="survey_relay_candidate_earlier">%1$s: heard directly %2$s, nearest reception %3$s from here (%4$s)</string>
-    <!-- %2$s is a distance. -->
-    <string name="survey_relay_candidate_reported_at">%1$s: reports a position %2$s from here</string>
-    <string name="survey_relay_candidate_reported">%1$s: reports a position within %2$s of where the packet was heard</string>
+    <string name="survey_relays_title">Relays</string>
+    <!-- Legend for the relay list: 📡 marks a distance to where this phone heard the node, 📍 one to where the node says it is. -->
+    <string name="survey_relays_explained">≈ likely (1 km) · ? possible (30 km) · 📡 heard here · 📍 says it\'s here</string>
+    <!-- %1$d is a packet count, %2$s a relative time ("3 min. ago"). -->
+    <string name="survey_relay_packets">%1$d × · %2$s</string>
+    <!-- %1$s is a relative time ("3 min. ago"). -->
+    <string name="survey_relay_candidate">📡 %1$s</string>
+    <!-- %1$s is a distance, %2$s a relative time. -->
+    <string name="survey_relay_candidate_at">📡 %1$s · %2$s</string>
+    <!-- %1$s is a distance. -->
+    <string name="survey_relay_candidate_reported_at">📍 %1$s</string>
+    <string name="survey_relay_candidate_reported">📍 within %1$s</string>
     <string name="survey_distance_m">%1$d m</string>
     <string name="survey_distance_km">%1$s km</string>
     <string name="survey_close">Close</string>

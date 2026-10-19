@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -627,30 +628,41 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                     .forEach { (byte, relay) ->
                         HorizontalDivider()
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(relayText(byte, relay.guess, names), style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                pluralStringResource(
-                                    R.plurals.survey_relay_packets,
-                                    relay.packets,
-                                    relay.packets,
-                                    DateFormatter.formatRelativeTime(relay.lastHeardMs),
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    relayText(byte, relay.guess, names),
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    stringResource(
+                                        R.string.survey_relay_packets,
+                                        relay.packets,
+                                        DateFormatter.formatRelativeTime(relay.lastHeardMs),
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                             // Every candidate, not just the guessed tier, so the list shows how unsure the guess is.
                             relay.candidates.forEach { candidate ->
-                                val name = nodeName(candidate.nodeId, names)
-                                val line =
+                                val detail =
                                     when (candidate) {
                                         is RelayCandidate.Heard ->
-                                            state.neighbours[candidate.nodeId]?.let {
-                                                candidateText(name, it, state.fix)
-                                            }
+                                            state.neighbours[candidate.nodeId]?.let { candidateText(it, state.fix) }
 
-                                        is RelayCandidate.Reported -> reportedText(name, candidate, state.fix)
+                                        is RelayCandidate.Reported -> reportedText(candidate, state.fix)
                                     }
-                                line?.let { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                                detail?.let {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            nodeName(candidate.nodeId, names),
+                                            Modifier.widthIn(min = 48.dp),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                        Text(it, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
                             }
                         }
                     }
@@ -660,35 +672,32 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
     )
 }
 
-/** Latest direct time, distance to the nearest reception cell, and that cell's time when it differs. */
+/**
+ * Distance to the nearest reception cell and when that cell was heard, or without a fix the latest direct time. A later
+ * direct reception elsewhere is left out to keep the line short.
+ */
 @Composable
-private fun candidateText(name: String, sender: DirectSender, fix: SurveyFix?): String {
-    val heard = DateFormatter.formatRelativeTime(sender.lastDirectMs)
+private fun candidateText(sender: DirectSender, fix: SurveyFix?): String {
     val nearest =
         fix?.let { sender.nearest(it.latitude, it.longitude, nowMillis - DIRECT_HISTORY.inWholeMilliseconds) }
-            ?: return stringResource(R.string.survey_relay_candidate, name, heard)
-    val distance = distanceText(nearest.meters)
-    val earlier = nearest.heardAtMs.takeIf { it != sender.lastDirectMs }
-    return if (earlier == null) {
-        stringResource(R.string.survey_relay_candidate_at, name, heard, distance)
-    } else {
-        stringResource(
-            R.string.survey_relay_candidate_earlier,
-            name,
-            heard,
-            distance,
-            DateFormatter.formatRelativeTime(earlier),
-        )
-    }
+            ?: return stringResource(
+                R.string.survey_relay_candidate,
+                DateFormatter.formatRelativeTime(sender.lastDirectMs),
+            )
+    return stringResource(
+        R.string.survey_relay_candidate_at,
+        distanceText(nearest.meters),
+        DateFormatter.formatRelativeTime(nearest.heardAtMs),
+    )
 }
 
 /** Distance from here to where [candidate] says it is, which is a claim rather than a reception. */
 @Composable
 @ReadOnlyComposable
-private fun reportedText(name: String, candidate: RelayCandidate.Reported, fix: SurveyFix?): String {
-    fix ?: return stringResource(R.string.survey_relay_candidate_reported, name, distanceText(FAR))
+private fun reportedText(candidate: RelayCandidate.Reported, fix: SurveyFix?): String {
+    fix ?: return stringResource(R.string.survey_relay_candidate_reported, distanceText(FAR))
     val meters = latLongToMeter(candidate.latitude, candidate.longitude, fix.latitude, fix.longitude)
-    return stringResource(R.string.survey_relay_candidate_reported_at, name, distanceText(meters))
+    return stringResource(R.string.survey_relay_candidate_reported_at, distanceText(meters))
 }
 
 @Composable
