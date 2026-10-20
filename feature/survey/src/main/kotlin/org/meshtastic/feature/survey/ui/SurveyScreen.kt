@@ -124,6 +124,7 @@ import org.meshtastic.core.ui.icon.Visibility
 import org.meshtastic.core.ui.icon.VisibilityOff
 import org.meshtastic.core.ui.theme.StatusColors.StatusGreen
 import org.meshtastic.core.ui.theme.StatusColors.StatusYellow
+import org.meshtastic.core.ui.util.KeepScreenOn
 import org.meshtastic.feature.survey.DIRECT_HISTORY
 import org.meshtastic.feature.survey.DirectSender
 import org.meshtastic.feature.survey.FAR
@@ -156,6 +157,9 @@ fun SurveyScreen(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val uploadSettings by viewModel.uploadSettings.collectAsStateWithLifecycle()
     val uploading by viewModel.uploading.collectAsStateWithLifecycle()
+    val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
+    // Only while this screen is in front: Android drops the flag once the app is in the background.
+    KeepScreenOn(keepScreenOn && state.session != null)
 
     val permissions =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
@@ -199,7 +203,15 @@ fun SurveyScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "recording") {
-                RecordingCard(state, radioName, relayNames, onStart = requestStart, onStop = viewModel::stop)
+                RecordingCard(
+                    state,
+                    radioName,
+                    relayNames,
+                    keepScreenOn = keepScreenOn,
+                    onKeepScreenOn = viewModel::setKeepScreenOn,
+                    onStart = requestStart,
+                    onStop = viewModel::stop,
+                )
             }
             uploadSettings?.let { current ->
                 item(key = "upload") {
@@ -263,6 +275,8 @@ private fun RecordingCard(
     state: SurveyState,
     radioName: String?,
     relayNames: Map<Long, String>,
+    keepScreenOn: Boolean,
+    onKeepScreenOn: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -276,6 +290,7 @@ private fun RecordingCard(
                 RecordingDetails(state, session, relayNames)
             }
             state.problem?.let { ProblemBanner(it) }
+            KeepScreenOnRow(keepScreenOn, onKeepScreenOn)
             if (session == null) {
                 Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
                     Icon(
@@ -300,6 +315,24 @@ private fun RecordingCard(
                 }
             }
         }
+    }
+}
+
+/** The whole row toggles, so the label is part of the touch target and is read with the switch. */
+@Composable
+private fun KeepScreenOnRow(keepScreenOn: Boolean, onKeepScreenOn: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .toggleable(value = keepScreenOn, role = Role.Switch, onValueChange = onKeepScreenOn)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.survey_keep_screen_on),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Switch(checked = keepScreenOn, onCheckedChange = null)
     }
 }
 

@@ -30,6 +30,7 @@
     <string name="survey_radio_none">No radio connected</string>
     <string name="survey_start">Start</string>
     <string name="survey_stop">Stop</string>
+    <string name="survey_keep_screen_on">Keep screen on</string>
     <!-- %1$s is the radio's name, %2$s its preset (LongFast) or spreading factor (SF11), %3$s the frequency. -->
     <string name="survey_node">%1$s · %2$s</string>
     <string name="survey_node_frequency">%1$s · %2$s · %3$s MHz</string>

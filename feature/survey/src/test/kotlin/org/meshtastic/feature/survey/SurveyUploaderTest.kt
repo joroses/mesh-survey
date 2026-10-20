@@ -61,6 +61,10 @@ class SurveyUploaderTest {
             }
 
             override suspend fun setAutomatic(automatic: Boolean) = Unit
+
+            override val keepScreenOn = MutableStateFlow(false)
+
+            override suspend fun setKeepScreenOn(keepScreenOn: Boolean) = Unit
         }
     private val clock =
         object : SurveyClock {

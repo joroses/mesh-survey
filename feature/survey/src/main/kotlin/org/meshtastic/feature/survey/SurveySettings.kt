@@ -75,6 +75,11 @@ interface SurveySettings {
      * URL or password back.
      */
     suspend fun setAutomatic(automatic: Boolean)
+
+    /** Whether the survey screen keeps the display on while recording, as in a car. Off unless the user turns it on. */
+    val keepScreenOn: Flow<Boolean>
+
+    suspend fun setKeepScreenOn(keepScreenOn: Boolean)
 }
 
 @Single
@@ -112,10 +117,17 @@ class DataStoreSurveySettings(context: Application) : SurveySettings {
         store.edit { it[AUTOMATIC] = automatic }
     }
 
+    override val keepScreenOn: Flow<Boolean> = store.data.map { it[KEEP_SCREEN_ON] ?: false }
+
+    override suspend fun setKeepScreenOn(keepScreenOn: Boolean) {
+        store.edit { it[KEEP_SCREEN_ON] = keepScreenOn }
+    }
+
     private companion object {
         val URL = stringPreferencesKey("url")
         val USER = stringPreferencesKey("user")
         val PASSWORD = stringPreferencesKey("password")
         val AUTOMATIC = booleanPreferencesKey("automatic")
+        val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
     }
 }

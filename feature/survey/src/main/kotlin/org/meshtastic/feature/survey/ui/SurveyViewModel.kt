@@ -72,6 +72,7 @@ class SurveyViewModel(
         }
             .stateInWhileSubscribed(emptyList())
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
+    val keepScreenOn: StateFlow<Boolean> = settings.keepScreenOn.stateInWhileSubscribed(false)
 
     /** The connected radio's name, which Start would survey with; null while no radio is connected. */
     val radioName: StateFlow<String?> =
@@ -118,6 +119,10 @@ class SurveyViewModel(
 
     fun setAutomatic(automatic: Boolean) {
         appScope.launch { settings.setAutomatic(automatic) }
+    }
+
+    fun setKeepScreenOn(keepScreenOn: Boolean) {
+        appScope.launch { settings.setKeepScreenOn(keepScreenOn) }
     }
 
     fun upload() = uploader.uploadNow()
