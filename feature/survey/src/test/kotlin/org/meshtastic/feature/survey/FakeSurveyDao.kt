@@ -88,7 +88,13 @@ internal class FakeSurveyDao : SurveyDao {
             }
             .map { (place, rows) ->
                 val (nodeId, cell) = place
-                DirectPlace(nodeId, rows.maxOf { it.heardAtMs }, cell?.latitude, cell?.longitude)
+                DirectPlace(
+                    nodeId,
+                    rows.maxOf { it.heardAtMs },
+                    cell?.latitude,
+                    cell?.longitude,
+                    rows.mapNotNull { it.signal() }.maxOrNull(),
+                )
             }
     }
 

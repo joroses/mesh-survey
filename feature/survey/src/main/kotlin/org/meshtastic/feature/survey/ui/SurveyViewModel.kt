@@ -84,15 +84,15 @@ class SurveyViewModel(
             .stateInWhileSubscribed(null)
 
     /**
-     * Short names of the nodes in this session's relay guesses and candidates. The node database is the connected
-     * radio's, which is the survey radio; a node missing from it has no entry here.
+     * Short names of the nodes in this session's relay guesses, candidates and ruled-out nodes. The node database is
+     * the connected radio's, which is the survey radio; a node missing from it has no entry here.
      */
     val relayNames: StateFlow<Map<Long, String>> =
         combine(
             state
                 .map { current ->
                     current.relays.values.flatMapTo(mutableSetOf()) { relay ->
-                        relay.guess.nodeIds + relay.candidates.map { it.nodeId }
+                        relay.guess.nodeIds + relay.candidates.map { it.nodeId } + relay.ruledOut.map { it.nodeId }
                     }
                 }
                 .distinctUntilChanged(),

@@ -688,16 +688,18 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
 
                                         is RelayCandidate.Reported -> reportedText(candidate, state.fix)
                                     }
-                                detail?.let {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            nodeName(candidate.nodeId, names),
-                                            Modifier.widthIn(min = 48.dp),
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                        Text(it, style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
+                                detail?.let { RelayCandidateLine(nodeName(candidate.nodeId, names), it) }
+                            }
+                            // Nodes heard here too weakly to have sent this packet, so the list says why they left.
+                            relay.ruledOut.forEach { node ->
+                                RelayCandidateLine(
+                                    nodeName(node.nodeId, names),
+                                    stringResource(
+                                        R.string.survey_relay_ruled_out,
+                                        node.strongestHere.roundToInt(),
+                                        node.packetSignal.roundToInt(),
+                                    ),
+                                )
                             }
                         }
                     }
@@ -705,6 +707,15 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.survey_close)) } },
     )
+}
+
+/** A node's short name with how it is known, or why it was ruled out. */
+@Composable
+private fun RelayCandidateLine(name: String, detail: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(name, Modifier.widthIn(min = 48.dp), style = MaterialTheme.typography.bodySmall)
+        Text(detail, style = MaterialTheme.typography.bodySmall)
+    }
 }
 
 /**

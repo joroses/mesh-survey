@@ -117,11 +117,25 @@ data class SurveySessionSummary(
     @ColumnInfo(name = "last_seq") val lastSeq: Long,
 )
 
-/** One sender's latest direct reception in a cell; a fixless reception has two null cell coordinates. */
-data class DirectPlace(val nodeId: Long, val lastDirectMs: Long, val latitudeCell: Int?, val longitudeCell: Int?) {
+/**
+ * One sender's latest direct reception in a cell and its strongest [signalOf] there (null when no row had RSSI); a
+ * fixless reception has two null cell coordinates.
+ */
+data class DirectPlace(
+    val nodeId: Long,
+    val lastDirectMs: Long,
+    val latitudeCell: Int?,
+    val longitudeCell: Int?,
+    val strongestSignal: Double? = null,
+) {
     fun toDirectSender(): DirectSender {
         val cell = latitudeCell?.let { lat -> longitudeCell?.let { lon -> DirectCell(lat, lon) } }
-        return DirectSender(nodeId, lastDirectMs, cell?.let { mapOf(it to lastDirectMs) }.orEmpty())
+        return DirectSender(
+            nodeId,
+            lastDirectMs,
+            cell?.let { mapOf(it to lastDirectMs) }.orEmpty(),
+            cell?.let { c -> strongestSignal?.let { mapOf(c to it) } }.orEmpty(),
+        )
     }
 }
 
@@ -167,13 +181,14 @@ interface SurveyDao {
 
     /**
      * Each cell where [receiverNodeId] heard a sender directly since [sinceMs], across sessions on the same spreading
-     * factor, bandwidth and frequency, with its latest direct time. Fixless receptions share a null-cell row. The
-     * settings match as SigSleuth's `_link_key` does, so another network surveyed with the same radio adds no
-     * candidates; `IS` lets a session without a frequency match only others without one. The `direct` WHERE clause
-     * repeats [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE.
+     * factor, bandwidth and frequency, with its latest direct time and strongest signal. Fixless receptions share a
+     * null-cell row. The settings match as SigSleuth's `_link_key` does, so another network surveyed with the same
+     * radio adds no candidates; `IS` lets a session without a frequency match only others without one. The `direct`
+     * WHERE clause repeats [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE; the signal CASE repeats
+     * [signalOf] (aggregate MAX skips its NULLs; two-argument MIN is the scalar one).
      */
     @Query(
-        "WITH direct AS (SELECT m.sender_node_id, m.heard_at_ms, m.latitude, m.longitude " +
+        "WITH direct AS (SELECT m.sender_node_id, m.heard_at_ms, m.latitude, m.longitude, m.rx_rssi, m.rx_snr " +
             "FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
             "WHERE s.receiver_node_id = :receiverNodeId AND s.spreading_factor = :spreadingFactor " +
             "AND s.bandwidth_khz = :bandwidthKhz AND s.frequency_mhz IS :frequencyMhz " +
@@ -182,7 +197,9 @@ interface SurveyDao {
             "AND m.relay_byte = CASE WHEN m.sender_node_id % 256 = 0 THEN 255 ELSE m.sender_node_id % 256 END) " +
             "SELECT d.sender_node_id AS nodeId, MAX(d.heard_at_ms) AS lastDirectMs, " +
             "CAST(ROUND(d.latitude * 500) AS INTEGER) AS latitudeCell, " +
-            "CAST(ROUND(d.longitude * 500) AS INTEGER) AS longitudeCell " +
+            "CAST(ROUND(d.longitude * 500) AS INTEGER) AS longitudeCell, " +
+            "MAX(CASE WHEN d.rx_rssi IS NULL OR d.rx_rssi = 0 THEN NULL " +
+            "ELSE d.rx_rssi + MIN(COALESCE(d.rx_snr, 0), 0) END) AS strongestSignal " +
             "FROM direct d GROUP BY d.sender_node_id, latitudeCell, longitudeCell",
     )
     suspend fun directPlaces(

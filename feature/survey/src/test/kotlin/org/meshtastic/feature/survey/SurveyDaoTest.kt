@@ -66,6 +66,8 @@ class SurveyDaoTest {
         hopLimit: Int = 3,
         relayByte: Int? = null,
         latitude: Double? = null,
+        rssi: Int? = null,
+        snr: Float? = null,
     ) = SurveyMeasurement(
         sessionId = sessionId,
         heardAtMs = heardAt,
@@ -76,8 +78,8 @@ class SurveyDaoTest {
         senderNodeId = sender,
         recipientNodeId = 4_294_967_295,
         packetId = heardAt,
-        rxSnr = null,
-        rxRssi = null,
+        rxSnr = snr,
+        rxRssi = rssi,
         hopStart = hopStart,
         hopLimit = hopLimit,
         relayByte = relayByte,
@@ -225,6 +227,45 @@ class SurveyDaoTest {
                 assertEquals(DirectSender(0x200, 61), neighbours.all[0x200])
             }
         }
+
+    @Test
+    fun `direct places keep each cell's strongest signal, ignoring RSSI 0, and none without RSSI`() = runTest {
+        for (subject in listOf(dao, FakeSurveyDao())) {
+            subject.insertSession(session("s", startedAt = 1))
+            fun direct(at: Long, sender: Long, rssi: Int?, snr: Float?) = measurement(
+                "s",
+                at,
+                sender,
+                relayByte = sender.toInt() and 0xFF,
+                latitude = 1.0,
+                rssi = rssi,
+                snr = snr,
+            )
+            subject.insertMeasurement(direct(10, 0x102, -110, -5f))
+            subject.insertMeasurement(direct(11, 0x102, -100, 3f)) // A positive SNR adds nothing.
+            subject.insertMeasurement(direct(12, 0x102, 0, 9f)) // RSSI 0 is unset, not the strongest.
+            subject.insertMeasurement(direct(13, 0x102, null, null))
+            subject.insertMeasurement(direct(14, 0x103, null, -3f))
+            subject.insertMeasurement(direct(15, 0x103, 0, null))
+            subject.insertMeasurement(direct(16, 0x104, -120, -10.5f))
+            subject.insertMeasurement(direct(17, 0x105, -95, null)) // No SNR: RSSI alone.
+
+            val places = subject.directPlaces(session("s", startedAt = 1), sinceMs = 0)
+
+            assertEquals(
+                setOf(
+                    DirectPlace(0x102, 13, 500, 1000, -100.0),
+                    DirectPlace(0x103, 15, 500, 1000, null),
+                    DirectPlace(0x104, 16, 500, 1000, -130.5),
+                    DirectPlace(0x105, 17, 500, 1000, -95.0),
+                ),
+                places.toSet(),
+            )
+            val neighbours = DirectNeighbours(places.map { it.toDirectSender() })
+            assertEquals(mapOf(DirectCell(500, 1000) to -100.0), neighbours.all.getValue(0x102).signals)
+            assertEquals(emptyMap(), neighbours.all.getValue(0x103).signals)
+        }
+    }
 
     @Test
     fun `deleting a session deletes its measurements`() = runTest {

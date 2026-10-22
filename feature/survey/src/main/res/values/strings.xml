@@ -58,8 +58,8 @@
     <string name="survey_relay_or">%1$s or %2$s</string>
     <string name="survey_relays_open">Show relays</string>
     <string name="survey_relays_title">Relays</string>
-    <!-- Legend for the relay list: 📡 marks a distance to where this phone heard the node, 📍 one to where the node says it is. -->
-    <string name="survey_relays_explained">≈ likely (1 km) · ? possible (30 km) · 📡 heard here · 📍 says it\'s here</string>
+    <!-- Legend for the relay list: 📡 marks a distance to where this phone heard the node, 📍 one to where the node says it is, ✕ a node ruled out because the packet arrived far stronger than it is ever heard here. -->
+    <string name="survey_relays_explained">≈ likely (1 km) · ? possible (30 km) · 📡 heard here · 📍 says it\'s here · ✕ too strong</string>
     <!-- %1$d is a packet count, %2$s a relative time ("3 min. ago"). -->
     <string name="survey_relay_packets">%1$d × · %2$s</string>
     <!-- %1$s is a relative time ("3 min. ago"). -->
@@ -69,6 +69,8 @@
     <!-- %1$s is a distance. -->
     <string name="survey_relay_candidate_reported_at">📍 %1$s</string>
     <string name="survey_relay_candidate_reported">📍 within %1$s</string>
+    <!-- A node ruled out as the relay: %1$d is its strongest signal heard near here in dBm, %2$d this packet's, both negative. -->
+    <string name="survey_relay_ruled_out">✕ %1$d dBm here at best, this packet %2$d</string>
     <string name="survey_distance_m">%1$d m</string>
     <string name="survey_distance_km">%1$s km</string>
     <string name="survey_close">Close</string>

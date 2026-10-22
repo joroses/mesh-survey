@@ -39,6 +39,8 @@ class SurveyRelaysTest {
         hopLimit: Int = 3,
         at: Long = now,
         latitude: Double? = null,
+        rssi: Int? = null,
+        snr: Float? = null,
     ) = SurveyMeasurement(
         sessionId = "s",
         heardAtMs = at,
@@ -49,8 +51,8 @@ class SurveyRelaysTest {
         senderNodeId = sender,
         recipientNodeId = 0xFFFFFFFF,
         packetId = 1,
-        rxSnr = null,
-        rxRssi = null,
+        rxSnr = snr,
+        rxRssi = rssi,
         hopStart = hopStart,
         hopLimit = hopLimit,
         relayByte = relayByte,
@@ -410,6 +412,129 @@ class SurveyRelaysTest {
         assertEquals(listOf(0x13FL, 0x8000_023FL), found.map { it.nodeId })
         assertEquals(0.5, found.first().latitude, 1e-6)
         assertEquals(1.0, found.first().longitude, 1e-6)
+    }
+
+    /** Weighs a packet for byte 3f with [signal], at [latitude] on the meridian. */
+    private fun DirectNeighbours.weighSignal(
+        signal: Double?,
+        latitude: Double? = 0.0,
+        reported: List<RelayCandidate.Reported> = emptyList(),
+    ) = weigh(0x3F, now, 0x500, latitude, latitude?.let { 0.0 }, reported = reported, signal = signal)
+
+    @Test
+    fun `a signal is RSSI plus any negative SNR, and RSSI 0 or missing is none`() {
+        assertEquals(-130.0, signalOf(-120, -10f))
+        assertEquals(-120.0, signalOf(-120, 5f))
+        assertEquals(-120.0, signalOf(-120, null))
+        assertNull(signalOf(0, -5f))
+        assertNull(signalOf(null, -5f))
+    }
+
+    @Test
+    fun `a far node heard weakly here is ruled out when the packet arrives far stronger`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, at = ago(500), latitude = 0.0, rssi = -118, snr = -8f))
+        val packet = signalOf(-45, 10f)
+        val home = listOf(reported(0x23F, 0.1)) // About 11 km away.
+
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.weighSignal(signal = null).guess)
+        val alone = neighbours.weighSignal(packet)
+        assertEquals(RelayGuess.Unknown, alone.guess)
+        assertEquals(emptyList(), alone.candidates)
+        assertEquals(listOf(RuledOut(0x13F, -126.0, -45.0)), alone.ruledOut)
+        val withHome = neighbours.weighSignal(packet, reported = home)
+        assertEquals(RelayGuess.Possible(0x23F), withHome.guess)
+        assertEquals(home, withHome.candidates)
+        assertEquals(listOf(RuledOut(0x13F, -126.0, -45.0)), withHome.ruledOut)
+    }
+
+    @Test
+    fun `exactly 30 dB stronger is kept and anything more is ruled out`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0, rssi = -100))
+
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.weighSignal(-70.0).guess)
+        assertEquals(RelayGuess.Unknown, neighbours.weighSignal(-69.5).guess)
+    }
+
+    @Test
+    fun `a negative SNR in the history counts towards the margin`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0, rssi = -120, snr = -10f))
+
+        // 21 dB over its RSSI alone, but 31 dB over its signal.
+        assertEquals(listOf(RuledOut(0x13F, -130.0, -99.0)), neighbours.weighSignal(-99.0).ruledOut)
+    }
+
+    @Test
+    fun `only readings within one kilometre are compared`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, at = ago(500), latitude = 0.0, rssi = -125))
+
+        assertEquals(RelayGuess.Unknown, neighbours.weighSignal(-45.0, latitude = 0.008).guess)
+        // Heard only farther away: it stays in its tier.
+        val farther = neighbours.weighSignal(-45.0, latitude = 0.010)
+        assertEquals(RelayGuess.Possible(0x13F), farther.guess)
+        assertEquals(emptyList(), farther.ruledOut)
+
+        // Near by a cell without a signal; the weak reading 11 km away does not count here.
+        val nearby = DirectNeighbours()
+        nearby.record(row(0x13F, 0x3F, latitude = 0.0))
+        nearby.record(row(0x13F, 0x3F, latitude = 0.1, rssi = -125))
+        assertEquals(RelayGuess.Likely(0x13F), nearby.weighSignal(-45.0).guess)
+    }
+
+    @Test
+    fun `a packet without a signal or a fix is not checked`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0, rssi = -125))
+
+        assertEquals(RelayGuess.Likely(0x13F), neighbours.weighSignal(signalOf(0, 5f)).guess)
+        val fixless = neighbours.weighSignal(-45.0, latitude = null)
+        assertEquals(RelayGuess.Likely(0x13F), fixless.guess)
+        assertEquals(emptyList(), fixless.ruledOut)
+    }
+
+    @Test
+    fun `with one near candidate ruled out the other becomes likely`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0, rssi = -118, snr = -8f))
+        neighbours.record(row(0x23F, 0x3F, latitude = 0.0002, rssi = -60, snr = 8f))
+        assertEquals(RelayGuess.Ambiguous(listOf(0x13F, 0x23F)), neighbours.weighSignal(null).guess)
+
+        val evidence = neighbours.weighSignal(-45.0)
+        assertEquals(RelayGuess.Likely(0x23F), evidence.guess)
+        assertEquals(heard(0x23F), evidence.candidates)
+        assertEquals(listOf(0x13FL), evidence.ruledOut.map { it.nodeId })
+    }
+
+    @Test
+    fun `a ruled-out node does not come back by its reported position`() {
+        val neighbours = DirectNeighbours()
+        neighbours.record(row(0x13F, 0x3F, latitude = 0.0, rssi = -118, snr = -8f))
+
+        val evidence = neighbours.weighSignal(-45.0, reported = listOf(reported(0x13F, 0.0)))
+
+        assertEquals(RelayGuess.Unknown, evidence.guess)
+        assertEquals(emptyList(), evidence.candidates)
+        assertEquals(listOf(0x13FL), evidence.ruledOut.map { it.nodeId })
+    }
+
+    @Test
+    fun `a neighbour keeps each cell's strongest signal without mutating snapshots`() {
+        val cell = DirectCell.of(0.0, 0.0)
+        val neighbours =
+            DirectNeighbours(listOf(DirectSender(0x13F, ago(10), mapOf(cell to ago(10)), mapOf(cell to -90.0))))
+        val snapshot = neighbours.all
+        neighbours.record(row(0x13F, 0x3F, at = ago(5), latitude = 0.0, rssi = -110)) // Weaker, newer.
+        neighbours.record(row(0x13F, 0x3F, at = ago(4), latitude = 0.0)) // No signal.
+        assertEquals(mapOf(cell to -90.0), neighbours.all.getValue(0x13F).signals)
+
+        neighbours.record(row(0x13F, 0x3F, at = ago(3), latitude = 0.0, rssi = -80))
+        assertEquals(mapOf(cell to -80.0), neighbours.all.getValue(0x13F).signals)
+        assertEquals(mapOf(cell to -90.0), snapshot.getValue(0x13F).signals)
+        assertEquals(-80.0, neighbours.all.getValue(0x13F).strongestWithin(0.0, 0.0, NEAR, ago(30)))
+        assertNull(neighbours.all.getValue(0x13F).strongestWithin(0.0, 0.0, NEAR, ago(2)))
     }
 }
 

@@ -352,6 +352,7 @@ class SurveyRecorder(
                         row.longitude,
                         roleOf = { id -> db[id.toInt()]?.user?.role },
                         reported = reported,
+                        signal = row.signal(),
                     )
                 }
             }
@@ -366,8 +367,9 @@ class SurveyRecorder(
                         it.relays
                     } else {
                         val packets = (it.relays[relayByte]?.packets ?: 0) + 1
-                        it.relays +
-                            (relayByte to RelayStats(packets, row.heardAtMs, evidence.guess, evidence.candidates))
+                        val stats =
+                            with(evidence) { RelayStats(packets, row.heardAtMs, guess, candidates, ruledOut) }
+                        it.relays + (relayByte to stats)
                     },
                     neighbours = current.neighbours.all,
                 )
