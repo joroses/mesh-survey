@@ -42,9 +42,10 @@ import kotlin.io.encoding.Base64
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Uploads every measurement SigSleuth does not have yet, oldest session first, in batches of [BATCH_SIZE]. Each batch
- * is the rows after the session's `uploaded_seq`; the `last_seq` the server returns becomes the new `uploaded_seq`. The
- * server ignores rows it already holds, so a repeated batch saves nothing twice.
+ * Uploads every measurement SigSleuth does not have yet, oldest session first, in batches of [BATCH_SIZE], from the
+ * sessions the user lets go ([SurveySession.upload]); the others stay on the phone. Each batch is the rows after the
+ * session's `uploaded_seq`; the `last_seq` the server returns becomes the new `uploaded_seq`. The server ignores rows
+ * it already holds, so a repeated batch saves nothing twice.
  *
  * A run stops at the first failure and saves its error; the next run tries again. With automatic uploads on, a failed
  * run also queues [SurveyUploadRetry], which tries again once the phone is online. Two runs never overlap.
@@ -59,11 +60,38 @@ class SurveyUploader(
     private val retry: SurveyUploadRetry,
 ) {
     private val runs = Mutex()
+
+    // Starting a session and flipping the automatic switch take turns, so a switch flipped as a session starts
+    // either reaches that session's flag or is read by the start.
+    private val consent = Mutex()
     private val mutableUploading = MutableStateFlow(false)
     val uploading: StateFlow<Boolean> = mutableUploading.asStateFlow()
 
-    fun uploadNow() {
-        scope.launch { upload() }
+    /** Lets [sessionId] go to SigSleuth and uploads it, for the Upload buttons. */
+    fun uploadNow(sessionId: String) {
+        scope.launch {
+            // A session that cannot be marked is not sent; the run still sends the sessions already allowed.
+            safeCatching { dao.setUpload(sessionId, true) }
+            upload()
+        }
+    }
+
+    /**
+     * Runs [start] with whether the new session may be uploaded: automatic uploads are on, and unreadable settings keep
+     * it on the phone. [start] must have published its session by the time it returns, for [setAutomatic] to find.
+     */
+    suspend fun startSession(start: suspend (upload: Boolean) -> Boolean): Boolean = consent.withLock {
+        start(safeCatching { settings.current().automatic }.getOrDefault(false))
+    }
+
+    /**
+     * Turns automatic uploads on or off; the session [recordingSessionId] returns, the one recording now if any,
+     * follows the switch. It is read after any start in progress. Rows already sent stay on the server; turning it off
+     * keeps the rest of the session on the phone.
+     */
+    suspend fun setAutomatic(automatic: Boolean, recordingSessionId: () -> String?) = consent.withLock {
+        settings.setAutomatic(automatic)
+        recordingSessionId()?.let { safeCatching { dao.setUpload(it, automatic) } }
     }
 
     /**
@@ -127,6 +155,8 @@ class SurveyUploader(
         var skipped = session.serverSkipped
         val skipReasons = decodeSkipReasons(session.serverSkipReasons).toMutableMap()
         while (true) {
+            // Checked before every batch: automatic uploads may have been turned off while this run was sending.
+            if (!dao.uploadAllowed(session.id)) return true
             val rows = dao.measurementsAfter(session.id, afterSeq, BATCH_SIZE)
             if (rows.isEmpty()) return true
             val ack = post(target, UploadRequest(session.toUpload(), rows.map { it.toUpload() }))

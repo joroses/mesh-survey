@@ -217,7 +217,7 @@ fun SurveyScreen(
                 item(key = "upload") {
                     UploadCard(
                         current,
-                        sessions,
+                        sessions.firstOrNull { it.session.id == state.session?.id },
                         uploading,
                         onSave = viewModel::saveServer,
                         onAutomatic = viewModel::setAutomatic,
@@ -247,6 +247,8 @@ fun SurveyScreen(
                     summary = summary,
                     recording = summary.session.id == state.session?.id,
                     uploadsOn = uploadsOn,
+                    uploading = uploading,
+                    onUpload = { viewModel.upload(summary.session.id) },
                     onExport = {
                         exportSessionId = summary.session.id
                         exporter.launch(csvFileName(summary))
@@ -780,15 +782,16 @@ private fun agoText(timeMs: Long): String {
 
 /**
  * Where uploads go, folded to one line once set: a server is entered once, so the form only opens on Set up or Edit.
+ * Its status and Upload now are about [recording], the session recording now; ended sessions have their own button.
  */
 @Composable
 private fun UploadCard(
     settings: SurveyUploadSettings,
-    sessions: List<SurveySessionSummary>,
+    recording: SurveySessionSummary?,
     uploading: Boolean,
     onSave: (SurveyUploadSettings) -> Unit,
     onAutomatic: (Boolean) -> Unit,
-    onUpload: () -> Unit,
+    onUpload: (String) -> Unit,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -825,7 +828,7 @@ private fun UploadCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
-                else -> UploadSummary(settings, sessions, uploading, onAutomatic, onUpload)
+                else -> UploadSummary(settings, recording, uploading, onAutomatic, onUpload)
             }
         }
     }
@@ -834,18 +837,13 @@ private fun UploadCard(
 @Composable
 private fun UploadSummary(
     settings: SurveyUploadSettings,
-    sessions: List<SurveySessionSummary>,
+    recording: SurveySessionSummary?,
     uploading: Boolean,
     onAutomatic: (Boolean) -> Unit,
-    onUpload: () -> Unit,
+    onUpload: (String) -> Unit,
 ) {
-    val pending = sessions.sumOf { (it.measurementCount - it.uploadedCount).coerceAtLeast(0) }
-    // Uploads go oldest session first and stop at the first failure, so the oldest error is the one in the way.
-    val error =
-        sessions
-            .lastOrNull { it.uploadedCount < it.measurementCount && it.session.lastUploadError != null }
-            ?.session
-            ?.lastUploadError
+    val pending = recording?.pendingCount ?: 0
+    val error = recording?.session?.lastUploadError?.takeIf { pending > 0 }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             settings.url,
@@ -855,6 +853,8 @@ private fun UploadSummary(
             overflow = TextOverflow.Ellipsis,
         )
         when {
+            recording == null -> Unit
+
             error != null ->
                 InfoRow(MeshtasticIcons.ErrorOutline, uploadErrorText(error), MaterialTheme.colorScheme.error)
 
@@ -873,31 +873,39 @@ private fun UploadSummary(
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.survey_upload_automatic), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    stringResource(R.string.survey_upload_automatic_explained),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                stringResource(R.string.survey_upload_automatic),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
             Switch(checked = settings.automatic, onCheckedChange = null)
         }
-        OutlinedButton(onClick = onUpload, enabled = pending > 0 && !uploading, modifier = Modifier.fillMaxWidth()) {
-            if (uploading) {
-                CircularProgressIndicator(
-                    Modifier.size(ButtonDefaults.IconSize),
-                    color = LocalContentColor.current,
-                    strokeWidth = 2.dp,
-                )
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(stringResource(R.string.survey_uploading))
-            } else {
-                Text(stringResource(R.string.survey_upload_now))
+        // Ended sessions are uploaded from their own cards, so nothing is sent that the user did not pick.
+        recording?.let { current ->
+            OutlinedButton(
+                onClick = { onUpload(current.session.id) },
+                enabled = pending > 0 && !uploading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (uploading) {
+                    CircularProgressIndicator(
+                        Modifier.size(ButtonDefaults.IconSize),
+                        color = LocalContentColor.current,
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text(stringResource(R.string.survey_uploading))
+                } else {
+                    Text(stringResource(R.string.survey_upload_now))
+                }
             }
         }
     }
 }
+
+/** Measurements SigSleuth does not have yet. */
+private val SurveySessionSummary.pendingCount: Int
+    get() = (measurementCount - uploadedCount).coerceAtLeast(0)
 
 /** A refused password is the one failure the user fixes here; [SurveyUploader] words it "HTTP 401" or "HTTP 403". */
 @Composable
@@ -994,6 +1002,8 @@ private fun SessionCard(
     summary: SurveySessionSummary,
     recording: Boolean,
     uploadsOn: Boolean,
+    uploading: Boolean,
+    onUpload: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -1045,6 +1055,12 @@ private fun SessionCard(
                         Text(stringResource(R.string.survey_delete))
                     }
                     TextButton(onClick = onExport) { Text(stringResource(R.string.survey_export)) }
+                    // Disabled, not spinning, during a run: the run may be another session's.
+                    if (uploadsOn && summary.pendingCount > 0) {
+                        TextButton(onClick = onUpload, enabled = !uploading) {
+                            Text(stringResource(R.string.survey_upload_session))
+                        }
+                    }
                 }
             }
         }
@@ -1071,12 +1087,12 @@ private fun sessionFacts(summary: SurveySessionSummary, recording: Boolean): Str
     return listOfNotNull(duration, count, stringResource(session.status.label())).joinToString(" · ")
 }
 
-/** How much SigSleuth has; nothing while uploads are off and nothing was ever sent. */
+/** How much SigSleuth has; nothing when nothing was ever sent and uploads are off or the session is private. */
 @Composable
 private fun UploadProgress(summary: SurveySessionSummary, uploadsOn: Boolean) {
     val count = summary.measurementCount
     val uploaded = summary.uploadedCount.coerceAtMost(count)
-    if (count == 0 || (!uploadsOn && uploaded == 0)) return
+    if (count == 0 || ((!uploadsOn || !summary.session.upload) && uploaded == 0)) return
     if (uploaded == count) {
         InfoRow(MeshtasticIcons.CheckCircle, stringResource(R.string.survey_uploaded_all))
     } else {

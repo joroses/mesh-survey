@@ -43,7 +43,8 @@ enum class SurveyStatus {
 
 /**
  * One recording run with one survey node and one set of LoRa settings. Node numbers are stored unsigned, as SigSleuth
- * expects them. [uploadedSeq] is the highest measurement [SurveyMeasurement.seq] SigSleuth has acknowledged.
+ * expects them. [uploadedSeq] is the highest measurement [SurveyMeasurement.seq] SigSleuth has acknowledged. Only a
+ * session with [upload] set is ever sent.
  */
 @Entity(tableName = "survey_session")
 data class SurveySession(
@@ -70,6 +71,12 @@ data class SurveySession(
     @ColumnInfo(name = "server_skipped", defaultValue = "0") val serverSkipped: Long = 0,
     /** SigSleuth's skip reasons and their counts, as a JSON object (`{"no_position": 180}`); null before any skip. */
     @ColumnInfo(name = "server_skip_reasons") val serverSkipReasons: String? = null,
+    /**
+     * Whether the user lets this session go to SigSleuth: set when it starts with automatic uploads on or the user
+     * uploads it, cleared when automatic uploads are turned off while it records. Sessions from before version 4 start
+     * private.
+     */
+    @ColumnInfo(defaultValue = "0") val upload: Boolean = false,
 )
 
 /**
@@ -143,8 +150,15 @@ interface SurveyDao {
      */
     fun sessions(): Flow<List<SurveySessionSummary>> = sessionRows().map { summaries() }
 
-    @Query("$SUMMARY GROUP BY s.id HAVING MAX(m.seq) > s.uploaded_seq ORDER BY s.started_at")
+    @Query("$SUMMARY WHERE s.upload GROUP BY s.id HAVING MAX(m.seq) > s.uploaded_seq ORDER BY s.started_at")
     suspend fun sessionsToUpload(): List<SurveySessionSummary>
+
+    /** Whether [sessionId] may still be sent; false once it is private again or deleted. */
+    @Query("SELECT EXISTS(SELECT 1 FROM survey_session WHERE id = :sessionId AND upload)")
+    suspend fun uploadAllowed(sessionId: String): Boolean
+
+    @Query("UPDATE survey_session SET upload = :upload WHERE id = :sessionId")
+    suspend fun setUpload(sessionId: String, upload: Boolean)
 
     @Query(
         "SELECT * FROM survey_measurement WHERE session_id = :sessionId AND seq > :afterSeq ORDER BY seq LIMIT :limit",
@@ -239,10 +253,12 @@ interface SurveyDao {
  */
 @Database(
     entities = [SurveySession::class, SurveyMeasurement::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
-    // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key.
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key. 4: whether
+    // each session may be uploaded.
+    autoMigrations =
+    [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
 )
 abstract class SurveyDatabase : RoomDatabase() {
     abstract fun surveyDao(): SurveyDao

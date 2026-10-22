@@ -117,15 +117,16 @@ class SurveyViewModel(
         appScope.launch { uploader.saveServer(newSettings.url, newSettings.user, newSettings.password) }
     }
 
+    /** The session recording now follows the switch; ended sessions keep what they have. */
     fun setAutomatic(automatic: Boolean) {
-        appScope.launch { settings.setAutomatic(automatic) }
+        appScope.launch { uploader.setAutomatic(automatic) { state.value.session?.id } }
     }
 
     fun setKeepScreenOn(keepScreenOn: Boolean) {
         appScope.launch { settings.setKeepScreenOn(keepScreenOn) }
     }
 
-    fun upload() = uploader.uploadNow()
+    fun upload(sessionId: String) = uploader.uploadNow(sessionId)
 
     fun delete(sessionId: String) {
         if (state.value.session?.id == sessionId) return

@@ -84,7 +84,7 @@ class SurveyService : Service() {
             return START_NOT_STICKY
         }
         job = scope.launch {
-            if (recorder.start()) {
+            if (uploader.startSession { recorder.start(upload = it) }) {
                 val whileRecording = listOf(launch { updateNotification() }, launch { uploadWhileRecording() })
                 recorder.state.first { it.session == null }
                 // Join, not just cancel: a notify() still running would bring the notification back after removal.

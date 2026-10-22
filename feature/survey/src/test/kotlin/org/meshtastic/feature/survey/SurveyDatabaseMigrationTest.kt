@@ -30,6 +30,7 @@ import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 /**
@@ -92,6 +93,25 @@ class SurveyDatabaseMigrationTest {
             assertEquals(5, session.serverKept)
             assertEquals(2, session.serverSkipped)
             assertEquals("{\"no_position\":2}", session.serverSkipReasons)
+            assertOldMeasurement(dao)
+        }
+    }
+
+    @Test
+    fun `version 3 sessions migrate to version 4 as private, so nothing old is sent unasked`() = runTest {
+        createDatabase(version = 3) {
+            execSQL(
+                "INSERT INTO survey_session (id, started_at, status, receiver_node_id, receiver_name, " +
+                    "spreading_factor, bandwidth_khz, app_version, uploaded_seq, server_kept, server_skipped) " +
+                    "VALUES ('s', 1000, 'STOPPED', 1, 'Survey node', 11, 250.0, 'test', 0, 0, 0)",
+            )
+            insertMeasurement()
+        }
+
+        withCurrentDatabase { dao ->
+            val session = dao.sessions().first().single().session
+            assertFalse(session.upload)
+            assertEquals(emptyList(), dao.sessionsToUpload())
             assertOldMeasurement(dao)
         }
     }

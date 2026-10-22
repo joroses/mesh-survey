@@ -23,6 +23,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SurveyDaoTest {
     private val database =
@@ -41,6 +43,7 @@ class SurveyDaoTest {
         spreadingFactor: Int = 11,
         bandwidthKhz: Float = 250f,
         frequencyMhz: Float? = 869.525f,
+        upload: Boolean = true,
     ) = SurveySession(
         id = id,
         startedAt = startedAt,
@@ -51,6 +54,7 @@ class SurveyDaoTest {
         bandwidthKhz = bandwidthKhz,
         frequencyMhz = frequencyMhz,
         appVersion = "test",
+        upload = upload,
     )
 
     @Suppress("LongParameterList")
@@ -93,6 +97,26 @@ class SurveyDaoTest {
         assertEquals(oldSeqs[2], pending.first().session.uploadedSeq)
         assertEquals(oldSeqs.drop(3), dao.measurementsAfter("old", oldSeqs[2], limit = 500).map { it.seq })
         assertEquals(oldSeqs.subList(3, 4), dao.measurementsAfter("old", oldSeqs[2], limit = 1).map { it.seq })
+    }
+
+    @Test
+    fun `a private session is never pending until it is allowed`() = runTest {
+        dao.insertSession(session("private", startedAt = 1, upload = false))
+        dao.insertSession(session("shared", startedAt = 2))
+        dao.insertMeasurement(measurement("private", 1))
+        dao.insertMeasurement(measurement("shared", 2))
+
+        assertEquals(listOf("shared"), dao.sessionsToUpload().map { it.session.id })
+        assertFalse(dao.uploadAllowed("private"))
+        assertFalse(dao.uploadAllowed("missing"))
+
+        dao.setUpload("private", true)
+        assertTrue(dao.uploadAllowed("private"))
+        assertEquals(listOf("private", "shared"), dao.sessionsToUpload().map { it.session.id })
+
+        // A new server resets the progress, not the user's choice.
+        dao.resetUploads()
+        assertTrue(dao.uploadAllowed("private"))
     }
 
     @Test

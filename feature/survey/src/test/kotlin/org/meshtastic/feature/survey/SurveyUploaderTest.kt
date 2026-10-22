@@ -60,7 +60,9 @@ class SurveyUploaderTest {
                 return changed
             }
 
-            override suspend fun setAutomatic(automatic: Boolean) = Unit
+            override suspend fun setAutomatic(automatic: Boolean) {
+                settings.value = settings.value.copy(automatic = automatic)
+            }
 
             override val keepScreenOn = MutableStateFlow(false)
 
@@ -84,12 +86,16 @@ class SurveyUploaderTest {
     /** Rows the server skips in every batch, by reason. */
     private var skipPerBatch = emptyMap<String, Int>()
 
+    /** Runs as each batch arrives, before the server answers. */
+    private var onBatch: () -> Unit = {}
+
     private fun TestScope.uploader(): SurveyUploader {
         val engine = MockEngine { request ->
             authorization = request.headers[HttpHeaders.Authorization]
             if (fail) return@MockEngine respondError(HttpStatusCode.ServiceUnavailable)
             val body = Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject
             received += body
+            onBatch()
             val rows = body.getValue("measurements").jsonArray
             val lastSeq = rows.last().jsonObject.getValue("seq").jsonPrimitive.long
             val skipped = skipPerBatch.entries.joinToString { (reason, count) -> "\"$reason\": $count" }
@@ -113,7 +119,7 @@ class SurveyUploaderTest {
         )
     }
 
-    private suspend fun record(sessionId: String, count: Int) {
+    private suspend fun record(sessionId: String, count: Int, upload: Boolean = true) {
         if (dao.sessions.none { it.id == sessionId }) {
             dao.insertSession(
                 SurveySession(
@@ -126,6 +132,7 @@ class SurveyUploaderTest {
                     bandwidthKhz = 250f,
                     frequencyMhz = 869.525f,
                     appVersion = "test",
+                    upload = upload,
                 ),
             )
         }
@@ -168,6 +175,58 @@ class SurveyUploaderTest {
         )
         assertEquals(listOf(501L, 503L), dao.sessions.map { it.uploadedSeq })
         assertEquals("Basic dTpw", authorization)
+    }
+
+    @Test
+    fun `a private session stays on the phone until its Upload button sends it`() = runTest {
+        record("private", 2, upload = false)
+        record("shared", 1)
+        val uploader = uploader()
+
+        uploader.upload()
+        assertEquals(listOf("shared"), received.map { it.getValue("session").jsonObject["id"]!!.jsonPrimitive.content })
+        assertEquals(0L, dao.sessions.first().uploadedSeq)
+
+        uploader.uploadNow("private")
+        // Starts the button's run, which then holds the run lock while the mock server answers off this dispatcher;
+        // a second run waits for it and finds nothing left.
+        testScheduler.runCurrent()
+        assertTrue(uploader.upload())
+
+        assertEquals(2, received.size)
+        assertEquals("private", received.last().getValue("session").jsonObject["id"]!!.jsonPrimitive.content)
+        assertEquals(2L, dao.sessions.first().uploadedSeq)
+    }
+
+    @Test
+    fun `turning automatic uploads off keeps the rest of the recording session here`() = runTest {
+        record("a", 2)
+        val uploader = uploader()
+        uploader.upload()
+
+        record("a", 2)
+        uploader.setAutomatic(false) { "a" }
+        assertFalse(settings.settings.value.automatic)
+        uploader.upload()
+
+        assertEquals(1, received.size)
+        assertEquals(2L, dao.sessions.single().uploadedSeq)
+
+        uploader.setAutomatic(true) { "a" }
+        uploader.upload()
+        assertEquals(4L, dao.sessions.single().uploadedSeq)
+    }
+
+    @Test
+    fun `a session made private during a run gets no further batch`() = runTest {
+        record("a", SurveyUploader.BATCH_SIZE + 1)
+        val uploader = uploader()
+        onBatch = { dao.sessions.replaceAll { it.copy(upload = false) } }
+
+        assertTrue(uploader.upload())
+
+        assertEquals(1, received.size)
+        assertEquals(SurveyUploader.BATCH_SIZE.toLong(), dao.sessions.single().uploadedSeq)
     }
 
     @Test

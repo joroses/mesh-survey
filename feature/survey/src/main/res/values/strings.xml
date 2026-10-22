@@ -100,9 +100,9 @@
     <string name="survey_upload_show_password">Show password</string>
     <string name="survey_upload_hide_password">Hide password</string>
     <string name="survey_upload_automatic">Upload automatically</string>
-    <string name="survey_upload_automatic_explained">Every minute while recording, and when a session ends. A failed upload is tried again once the phone is online.</string>
     <string name="survey_save">Save</string>
     <string name="survey_upload_now">Upload now</string>
+    <string name="survey_upload_session">Upload</string>
     <string name="survey_uploading">Uploading…</string>
     <plurals name="survey_upload_pending">
         <item quantity="one">%1$d measurement waiting to upload</item>

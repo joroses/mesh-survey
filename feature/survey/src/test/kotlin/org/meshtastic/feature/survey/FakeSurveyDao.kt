@@ -52,7 +52,14 @@ internal class FakeSurveyDao : SurveyDao {
 
     override fun sessionRows() = MutableStateFlow(sessions.toList())
 
-    override suspend fun sessionsToUpload() = summaries().filter { it.lastSeq > it.session.uploadedSeq }
+    override suspend fun sessionsToUpload() = summaries()
+        .filter { it.session.upload && it.lastSeq > it.session.uploadedSeq }
+        .sortedBy { it.session.startedAt }
+
+    override suspend fun uploadAllowed(sessionId: String) = sessions.any { it.id == sessionId && it.upload }
+
+    override suspend fun setUpload(sessionId: String, upload: Boolean) =
+        updateSession(sessionId) { it.copy(upload = upload) }
 
     override suspend fun measurementsAfter(sessionId: String, afterSeq: Long, limit: Int) =
         measurements.filter { it.sessionId == sessionId && it.seq > afterSeq }.take(limit)

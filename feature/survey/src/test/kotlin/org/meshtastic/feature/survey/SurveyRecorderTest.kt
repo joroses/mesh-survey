@@ -151,8 +151,9 @@ class SurveyRecorderTest {
         runTest(UnconfinedTestDispatcher()) {
             val recorder = recorder()
 
-            assertTrue(recorder.start())
+            assertTrue(recorder.start(upload = true))
             val session = dao.sessions.single()
+            assertTrue(session.upload)
             assertEquals("LONG_FAST", session.modemPreset)
             assertEquals(11, session.spreadingFactor)
             assertEquals(250f, session.bandwidthKhz)

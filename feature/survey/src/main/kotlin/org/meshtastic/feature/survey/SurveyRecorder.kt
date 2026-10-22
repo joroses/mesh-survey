@@ -213,8 +213,9 @@ class SurveyRecorder(
         }
     }
 
+    /** Starts a session; [upload] says whether it may go to SigSleuth ([SurveySession.upload]). */
     @Suppress("ReturnCount")
-    suspend fun start(): Boolean = lifecycle.withLock {
+    suspend fun start(upload: Boolean = false): Boolean = lifecycle.withLock {
         recovery.join()
         if (active != null) return true
         val myNode = nodes.myNodeInfo.value
@@ -235,6 +236,7 @@ class SurveyRecorder(
                 bandwidthKhz = lora.bandwidthKhz,
                 frequencyMhz = lora.frequency.takeIf { it > 0f },
                 appVersion = buildConfig.versionName,
+                upload = upload,
             )
         if (safeCatching { dao.insertSession(session) }.isFailure) return fail(SurveyProblem.STORAGE)
         // Without the history the guesses only start from this session's packets, which is no reason not to record.
