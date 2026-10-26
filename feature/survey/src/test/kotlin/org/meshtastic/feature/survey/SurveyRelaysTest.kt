@@ -68,8 +68,8 @@ class SurveyRelaysTest {
         latitude: Double? = null,
         longitude: Double? = null,
         roleOf: (Long) -> Config.DeviceConfig.Role? = { null },
-        reported: List<RelayCandidate.Reported> = emptyList(),
-    ) = weigh(relayByte, atMs, senderId, latitude, longitude, roleOf, reported).guess
+        placed: List<RelayCandidate.Placed> = emptyList(),
+    ) = weigh(relayByte, atMs, senderId, latitude, longitude, roleOf, placed).guess
 
     private fun heard(vararg ids: Long) = ids.map { RelayCandidate.Heard(it) }
 
@@ -331,7 +331,7 @@ class SurveyRelaysTest {
         neighbours.record(row(0x23F, 0x3F, latitude = 0.1)) // About 11 km away.
         val positions = listOf(reported(0x33F, 0.02), reported(0x43F, 0.5)) // About 2 km and 55 km.
 
-        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = positions)
+        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, placed = positions)
 
         assertEquals(RelayGuess.Likely(0x13F), evidence.guess)
         assertEquals(heard(0x13F) + reported(0x33F, 0.02) + heard(0x23F), evidence.candidates)
@@ -340,13 +340,13 @@ class SurveyRelaysTest {
     @Test
     fun `a reported position joins the possible tier but never makes a guess likely`() {
         val neighbours = DirectNeighbours()
-        val alone = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x33F, 0.0)))
+        val alone = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, placed = listOf(reported(0x33F, 0.0)))
         assertEquals(RelayGuess.Possible(0x33F), alone.guess)
 
         neighbours.record(row(0x13F, 0x3F, latitude = 0.1))
         assertEquals(
             RelayGuess.Ambiguous(listOf(0x33F, 0x13F)),
-            neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x33F, 0.0))),
+            neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, placed = listOf(reported(0x33F, 0.0))),
         )
     }
 
@@ -356,9 +356,9 @@ class SurveyRelaysTest {
         neighbours.record(row(0x13F, 0x3F, latitude = 2.0)) // About 220 km away, on a road trip.
         assertEquals(RelayGuess.Unknown, neighbours.guessAt(0.0))
         val farReport = listOf(reported(0x23F, 0.3)) // About 33 km away.
-        assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, reported = farReport))
+        assertEquals(RelayGuess.Unknown, neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, placed = farReport))
 
-        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x13F, 0.02)))
+        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, placed = listOf(reported(0x13F, 0.02)))
         assertEquals(RelayGuess.Possible(0x13F), evidence.guess)
         assertEquals(listOf(reported(0x13F, 0.02)), evidence.candidates)
     }
@@ -368,7 +368,7 @@ class SurveyRelaysTest {
         val neighbours = DirectNeighbours()
         neighbours.record(row(0x13F, 0x3F, latitude = 0.1))
 
-        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, reported = listOf(reported(0x13F, 0.0)))
+        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, placed = listOf(reported(0x13F, 0.0)))
 
         assertEquals(heard(0x13F), evidence.candidates)
     }
@@ -384,7 +384,7 @@ class SurveyRelaysTest {
         assertEquals(RelayGuess.Likely(0x23F), located.guess)
         assertEquals(heard(0x23F) + reported(0x33F, 0.0) + heard(0x13F), located.candidates)
 
-        val fixless = neighbours.weigh(0x3F, now, 0x500, roleOf = mute, reported = positions)
+        val fixless = neighbours.weigh(0x3F, now, 0x500, roleOf = mute, placed = positions)
         assertEquals(RelayGuess.Likely(0x23F), fixless.guess)
         assertEquals(heard(0x23F, 0x13F), fixless.candidates)
     }
@@ -414,12 +414,49 @@ class SurveyRelaysTest {
         assertEquals(1.0, found.first().longitude, 1e-6)
     }
 
+    @Test
+    fun `a placed node counts out to its reach on SigSleuth's map, and only ever as possible`() {
+        val neighbours = DirectNeighbours()
+        val reaching = RelayCandidate.Mapped(0x13F, 0.5, 0.0, reachMeters = 60_000.0, estimated = false) // 55 km.
+        val beyond = RelayCandidate.Mapped(0x23F, 0.6, 0.0, reachMeters = 60_000.0, estimated = true) // 67 km.
+        val noReach = reported(0x33F, 0.5) // 30 km is its limit.
+
+        val evidence = neighbours.weigh(0x3F, now, 0x500, 0.0, 0.0, placed = listOf(reaching, beyond, noReach))
+        assertEquals(RelayGuess.Possible(0x13F), evidence.guess)
+        assertEquals(listOf(reaching), evidence.candidates)
+
+        neighbours.record(row(0x43F, 0x3F, latitude = 0.0))
+        assertEquals(RelayGuess.Likely(0x43F), neighbours.guess(0x3F, now, 0x500, 0.0, 0.0, placed = listOf(reaching)))
+    }
+
+    @Test
+    fun `the node database's nodes take their reach from SigSleuth's map, which adds the ones it lacks`() {
+        val inDatabase =
+            Node(num = 0x13F, lastHeard = (now / 1_000).toInt(), position = position(5_000_000, 10_000_000))
+        val mapped =
+            MappedNodes(
+                0,
+                listOf(
+                    MappedNode(0x13F, "A", 0.4, 1.0, estimated = false, reachMeters = 90_000.0),
+                    MappedNode(0x23F, "B", 0.6, 1.0, estimated = true, reachMeters = null),
+                    MappedNode(0x53F, "S", 0.0, 1.0, estimated = false, reachMeters = null), // The survey radio.
+                    MappedNode(0x140, "C", 0.0, 1.0, estimated = false, reachMeters = null),
+                ),
+            )
+
+        val placed = placedWith(0x3F, listOf(inDatabase), mapped, ago(60), surveyNode = 0x53F)
+
+        assertEquals(listOf(0x13FL to 90_000.0, 0x23FL to null), placed.map { it.nodeId to it.reachMeters })
+        assertEquals(0.5, placed.first().latitude, 1e-6) // The radio's own copy of its position.
+        assertEquals(listOf(true, false), placed.map { it is RelayCandidate.Reported })
+    }
+
     /** Weighs a packet for byte 3f with [signal], at [latitude] on the meridian. */
     private fun DirectNeighbours.weighSignal(
         signal: Double?,
         latitude: Double? = 0.0,
-        reported: List<RelayCandidate.Reported> = emptyList(),
-    ) = weigh(0x3F, now, 0x500, latitude, latitude?.let { 0.0 }, reported = reported, signal = signal)
+        placed: List<RelayCandidate.Placed> = emptyList(),
+    ) = weigh(0x3F, now, 0x500, latitude, latitude?.let { 0.0 }, placed = placed, signal = signal)
 
     @Test
     fun `a signal is RSSI plus any negative SNR, and RSSI 0 or missing is none`() {
@@ -442,7 +479,7 @@ class SurveyRelaysTest {
         assertEquals(RelayGuess.Unknown, alone.guess)
         assertEquals(emptyList(), alone.candidates)
         assertEquals(listOf(RuledOut(0x13F, -126.0, -45.0)), alone.ruledOut)
-        val withHome = neighbours.weighSignal(packet, reported = home)
+        val withHome = neighbours.weighSignal(packet, placed = home)
         assertEquals(RelayGuess.Possible(0x23F), withHome.guess)
         assertEquals(home, withHome.candidates)
         assertEquals(listOf(RuledOut(0x13F, -126.0, -45.0)), withHome.ruledOut)
@@ -513,7 +550,7 @@ class SurveyRelaysTest {
         val neighbours = DirectNeighbours()
         neighbours.record(row(0x13F, 0x3F, latitude = 0.0, rssi = -118, snr = -8f))
 
-        val evidence = neighbours.weighSignal(-45.0, reported = listOf(reported(0x13F, 0.0)))
+        val evidence = neighbours.weighSignal(-45.0, placed = listOf(reported(0x13F, 0.0)))
 
         assertEquals(RelayGuess.Unknown, evidence.guess)
         assertEquals(emptyList(), evidence.candidates)

@@ -77,9 +77,13 @@ data class SurveyState(
     val relays: Map<Int, RelayStats> = emptyMap(),
     /** The nodes the survey radio has heard directly, this session and in the [DIRECT_HISTORY] before it. */
     val neighbours: Map<Long, DirectSender> = emptyMap(),
+    /** SigSleuth's relay node list this session uses, if any. */
+    val mapped: MappedNodes? = null,
     val problem: SurveyProblem? = null,
     /** How the last session ended, until the next one starts. */
     val lastEnd: SurveyStatus? = null,
+    /** Upload replies can arrive before the writer publishes a relay byte's first packet. */
+    internal val pendingServerAnswers: Map<Int, ServerAnswer> = emptyMap(),
 )
 
 /**
@@ -165,6 +169,8 @@ class SurveyRecorder(
     private val radioConfig: RadioConfigRepository,
     private val buildConfig: BuildConfigProvider,
     private val scope: ApplicationCoroutineScope,
+    private val relayNodes: SurveyRelayNodes,
+    answers: SurveyAnswers,
 ) {
     private val mutableState = MutableStateFlow(SurveyState())
     val state: StateFlow<SurveyState> = mutableState.asStateFlow()
@@ -179,6 +185,8 @@ class SurveyRecorder(
         val neighbours: DirectNeighbours,
         /** Follows the survey node's channels; see [defaultKeyChannels]. */
         @Volatile var defaultKeyChannels: Set<Int>,
+        /** SigSleuth's relay node list, replaced when a fresher one arrives. */
+        @Volatile var mapped: MappedNodes?,
     ) {
         /**
          * The transport session whose node and LoRa settings the watcher has checked against this session; only its
@@ -198,11 +206,13 @@ class SurveyRecorder(
     private val lifecycle = Mutex()
     private var writer: Job? = null
     private var watcher: Job? = null
+    private var refresher: Job? = null
 
     // A session left recording belongs to a process that died; mark it before any new session starts.
     private val recovery = scope.launch { safeCatching { dao.interruptRecording() } }
 
     init {
+        answers.listener = ::onServerAnswers
         // "Connect a radio first" is out of date as soon as one connects.
         scope.launch {
             service.connectionState.collect { connection ->
@@ -244,6 +254,7 @@ class SurveyRecorder(
             dao.directPlaces(session, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
         }
             .getOrDefault(emptyList())
+        val mapped = safeCatching { relayNodes.saved(lora.spreadingFactor) }.getOrNull()
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)
         val current =
             Active(
@@ -253,10 +264,12 @@ class SurveyRecorder(
                 rows,
                 DirectNeighbours(history.map { it.toDirectSender() }),
                 defaultKeyChannels(radioConfig.channelSetFlow.first()),
+                mapped,
             )
-        mutableState.value = SurveyState(session = session, neighbours = current.neighbours.all)
+        mutableState.value = SurveyState(session = session, neighbours = current.neighbours.all, mapped = mapped)
         writer = scope.launch { write(current) }
         watcher = scope.launch { watch(current, lora) }
+        refresher = scope.launch { refreshRelayNodes(current) }
         active = current
         tap.listener = ::onPacket
         resumeGps()
@@ -270,6 +283,7 @@ class SurveyRecorder(
         if (sessionId != null && sessionId != current.session.id) return@withLock
         active = null
         tap.listener = null
+        refresher?.cancel()
         // The watcher may be resuming GPS on another thread right now; let it finish before GPS goes off for good.
         watcher?.cancelAndJoin()
         pauseGps()
@@ -337,12 +351,12 @@ class SurveyRecorder(
                 } else {
                     val db = nodes.nodeDBbyNum.value
                     // Positions only count from a packet fix, so a fixless packet skips the scan.
-                    val reported =
+                    val placed =
                         if (row.latitude == null) {
                             emptyList()
                         } else {
                             val sinceMs = row.heardAtMs - DIRECT_HISTORY.inWholeMilliseconds
-                            reportedWith(byte, db.values, sinceMs, current.surveyNode)
+                            placedWith(byte, db.values, current.mapped, sinceMs, current.surveyNode)
                         }
                     current.neighbours.weigh(
                         byte,
@@ -351,7 +365,7 @@ class SurveyRecorder(
                         row.latitude,
                         row.longitude,
                         roleOf = { id -> db[id.toInt()]?.user?.role },
-                        reported = reported,
+                        placed = placed,
                         signal = row.signal(),
                     )
                 }
@@ -366,14 +380,64 @@ class SurveyRecorder(
                     if (relayByte == null || evidence == null) {
                         it.relays
                     } else {
-                        val packets = (it.relays[relayByte]?.packets ?: 0) + 1
+                        val known = it.relays[relayByte]
                         val stats =
-                            with(evidence) { RelayStats(packets, row.heardAtMs, guess, candidates, ruledOut) }
+                            with(evidence) {
+                                RelayStats(
+                                    (known?.packets ?: 0) + 1,
+                                    row.heardAtMs,
+                                    guess,
+                                    candidates,
+                                    ruledOut,
+                                    known?.server ?: it.pendingServerAnswers[relayByte],
+                                )
+                            }
                         it.relays + (relayByte to stats)
                     },
+                    pendingServerAnswers =
+                    if (relayByte == null) it.pendingServerAnswers else it.pendingServerAnswers - relayByte,
                     neighbours = current.neighbours.all,
                 )
             }
+        }
+    }
+
+    /** Keeps SigSleuth's answer for each relay byte's newest uploaded packet, for the session recording now. */
+    private fun onServerAnswers(sessionId: String, answers: List<ServerAnswer>) {
+        mutableState.update { state ->
+            if (state.session?.id != sessionId) return@update state
+            answers.fold(state) { current, answer ->
+                val stats = current.relays[answer.relayByte]
+                val known = stats?.server ?: current.pendingServerAnswers[answer.relayByte]
+                when {
+                    known != null && known.seq > answer.seq -> current
+                    stats == null ->
+                        current.copy(pendingServerAnswers = current.pendingServerAnswers + (answer.relayByte to answer))
+
+                    else -> current.copy(relays = current.relays + (answer.relayByte to stats.copy(server = answer)))
+                }
+            }
+        }
+    }
+
+    /**
+     * Fetches SigSleuth's relay node list once the saved one is stale, trying again every [RELAY_NODES_RETRY]: a survey
+     * often starts where the phone has no signal.
+     */
+    private suspend fun refreshRelayNodes(current: Active) {
+        var warned = false
+        while (true) {
+            safeCatching { relayNodes.refresh(current.session.spreadingFactor) }
+                .onFailure {
+                    if (!warned) Logger.w { "Signal survey relay node list not fetched: ${it::class.simpleName}" }
+                    warned = true
+                }
+                .getOrNull()
+                ?.let { fresh ->
+                    current.mapped = fresh
+                    mutableState.update { if (it.session?.id == current.session.id) it.copy(mapped = fresh) else it }
+                }
+            delay(RELAY_NODES_RETRY)
         }
     }
 
@@ -490,6 +554,9 @@ class SurveyRecorder(
 
         /** How long LoRa settings must differ from the session's before it ends. */
         val LORA_SETTLE = 10.seconds
+
+        /** How often a recording session checks whether SigSleuth's relay node list needs fetching. */
+        val RELAY_NODES_RETRY = 10.minutes
         private const val QUEUE_CAPACITY = 256
     }
 }

@@ -19,11 +19,17 @@ package org.meshtastic.feature.survey.di
 import android.app.Application
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import io.ktor.client.HttpClient
 import org.koin.core.annotation.ComponentScan
 import org.koin.core.annotation.Module
 import org.koin.core.annotation.Single
+import org.meshtastic.feature.survey.FileSurveyRelayNodes
+import org.meshtastic.feature.survey.SurveyClock
 import org.meshtastic.feature.survey.SurveyDao
 import org.meshtastic.feature.survey.SurveyDatabase
+import org.meshtastic.feature.survey.SurveyRelayNodes
+import org.meshtastic.feature.survey.SurveySettings
+import java.io.File
 
 @Module
 @ComponentScan("org.meshtastic.feature.survey")
@@ -35,4 +41,12 @@ class FeatureSurveyModule {
             .build()
 
     @Single fun provideSurveyDao(database: SurveyDatabase): SurveyDao = database.surveyDao()
+
+    @Single
+    fun provideSurveyRelayNodes(
+        context: Application,
+        settings: SurveySettings,
+        http: HttpClient,
+        clock: SurveyClock,
+    ): SurveyRelayNodes = FileSurveyRelayNodes(File(context.filesDir, "survey"), settings, http, clock)
 }

@@ -131,6 +131,7 @@ import org.meshtastic.feature.survey.FAR
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayCandidate
 import org.meshtastic.feature.survey.RelayGuess
+import org.meshtastic.feature.survey.ServerAnswer
 import org.meshtastic.feature.survey.SurveyFix
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveyRecorder
@@ -658,6 +659,18 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                state.mapped?.let { mapped ->
+                    Text(
+                        pluralStringResource(
+                            R.plurals.survey_relays_map,
+                            mapped.count,
+                            mapped.count,
+                            DateFormatter.formatRelativeTime(mapped.fetchedAtMs),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 state.relays.entries
                     .sortedByDescending { it.value.packets }
                     .forEach { (byte, relay) ->
@@ -679,6 +692,13 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            relay.server?.let { answer ->
+                                Text(
+                                    serverText(answer, names),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                             // Every candidate, not just the guessed tier, so the list shows how unsure the guess is.
                             relay.candidates.forEach { candidate ->
                                 val detail =
@@ -686,7 +706,7 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                                         is RelayCandidate.Heard ->
                                             state.neighbours[candidate.nodeId]?.let { candidateText(it, state.fix) }
 
-                                        is RelayCandidate.Reported -> reportedText(candidate, state.fix)
+                                        is RelayCandidate.Placed -> placedText(candidate, state.fix)
                                     }
                                 detail?.let { RelayCandidateLine(nodeName(candidate.nodeId, names), it) }
                             }
@@ -737,13 +757,54 @@ private fun candidateText(sender: DirectSender, fix: SurveyFix?): String {
     )
 }
 
-/** Distance from here to where [candidate] says it is, which is a claim rather than a reception. */
+/**
+ * Distance from here to where [candidate] is said to be, which is a claim rather than a reception, with its reach when
+ * that is what let it in from farther than [FAR].
+ */
 @Composable
 @ReadOnlyComposable
-private fun reportedText(candidate: RelayCandidate.Reported, fix: SurveyFix?): String {
-    fix ?: return stringResource(R.string.survey_relay_candidate_reported, distanceText(FAR))
+private fun placedText(candidate: RelayCandidate.Placed, fix: SurveyFix?): String {
+    val mapped = candidate is RelayCandidate.Mapped
+    if (fix == null) {
+        return stringResource(
+            if (mapped) R.string.survey_relay_candidate_mapped else R.string.survey_relay_candidate_reported,
+            distanceText(candidate.withinMeters),
+        )
+    }
     val meters = latLongToMeter(candidate.latitude, candidate.longitude, fix.latitude, fix.longitude)
-    return stringResource(R.string.survey_relay_candidate_reported_at, distanceText(meters))
+    val distance =
+        distanceText(meters).let {
+            if ((candidate as? RelayCandidate.Mapped)?.estimated == true) {
+                stringResource(R.string.survey_distance_about, it)
+            } else {
+                it
+            }
+        }
+    val line =
+        stringResource(
+            if (mapped) R.string.survey_relay_candidate_mapped_at else R.string.survey_relay_candidate_reported_at,
+            distance,
+        )
+    val reach = candidate.reachMeters?.takeIf { it > FAR }
+    return if (reach == null) line else stringResource(R.string.survey_relay_candidate_reach, line, distanceText(reach))
+}
+
+/** SigSleuth's answer for one of this byte's uploaded packets, which may be older than the guess above it. */
+@Composable
+private fun serverText(answer: ServerAnswer, names: Map<Long, String>): String {
+    val time = DateFormatter.formatRelativeTime(answer.heardAtMs)
+    val node = answer.nodeId ?: return stringResource(R.string.survey_relay_server_unknown, time)
+    val how =
+        when (answer.how) {
+            "direct" -> stringResource(R.string.survey_server_direct)
+            "survey_link" -> stringResource(R.string.survey_server_survey_link)
+            "gateway_link" -> stringResource(R.string.survey_server_gateway_link)
+            "sender_link" -> stringResource(R.string.survey_server_sender_link)
+            "reported" -> stringResource(R.string.survey_server_reported)
+            "only_candidate" -> stringResource(R.string.survey_server_only_candidate)
+            else -> answer.how
+        }
+    return stringResource(R.string.survey_relay_server, nodeName(node, names), how, time)
 }
 
 @Composable

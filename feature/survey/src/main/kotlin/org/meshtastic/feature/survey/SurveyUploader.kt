@@ -18,6 +18,7 @@ package org.meshtastic.feature.survey
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -38,6 +39,7 @@ import kotlinx.serialization.json.Json
 import org.koin.core.annotation.Single
 import org.meshtastic.core.common.di.ApplicationCoroutineScope
 import org.meshtastic.core.common.util.safeCatching
+import kotlin.concurrent.Volatile
 import kotlin.io.encoding.Base64
 import kotlin.time.Duration.Companion.seconds
 
@@ -49,6 +51,8 @@ import kotlin.time.Duration.Companion.seconds
  *
  * A run stops at the first failure and saves its error; the next run tries again. With automatic uploads on, a failed
  * run also queues [SurveyUploadRetry], which tries again once the phone is online. Two runs never overlap.
+ *
+ * Each reply names the node SigSleuth decided every saved row heard; those of relayed packets go to [answers].
  */
 @Single
 class SurveyUploader(
@@ -58,6 +62,7 @@ class SurveyUploader(
     private val clock: SurveyClock,
     private val scope: ApplicationCoroutineScope,
     private val retry: SurveyUploadRetry,
+    private val answers: SurveyAnswers,
 ) {
     private val runs = Mutex()
 
@@ -183,6 +188,7 @@ class SurveyUploader(
                 skipped,
                 skipReasons.takeIf { it.isNotEmpty() }?.let { json.encodeToString(it) },
             )
+            answers.listener?.invoke(session.id, serverAnswers(rows, response))
             // A server that acknowledges less than it was sent would otherwise get the same batch forever.
             if (lastSeq < rows.last().seq) {
                 dao.uploadFailed(session.id, "Server kept $lastSeq of ${rows.last().seq}")
@@ -196,11 +202,7 @@ class SurveyUploader(
         safeCatching {
             val response =
                 http.post(target.url.trimEnd('/') + UPLOAD_PATH) {
-                    // SigSleuth ignores the user name, so a password alone must still be sent.
-                    if (target.user.isNotBlank() || target.password.isNotEmpty()) {
-                        val credentials = Base64.encode("${target.user}:${target.password}".encodeToByteArray())
-                        header(HttpHeaders.Authorization, "Basic $credentials")
-                    }
+                    authorize(target)
                     setBody(TextContent(json.encodeToString(request), ContentType.Application.Json))
                 }
             if (!response.status.isSuccess()) throw UploadException("HTTP ${response.status.value}")
@@ -224,6 +226,39 @@ class SurveyUploader(
             ignoreUnknownKeys = true
             explicitNulls = true
         }
+    }
+}
+
+/** Hands SigSleuth's answers from upload replies to the recorder, which shows those of the session it records. */
+@Single
+class SurveyAnswers {
+    @Volatile var listener: ((sessionId: String, answers: List<ServerAnswer>) -> Unit)? = null
+}
+
+/** The upload password as HTTP Basic. SigSleuth ignores the user name, so a password alone must still be sent. */
+internal fun HttpRequestBuilder.authorize(target: SurveyUploadSettings) {
+    if (target.user.isNotBlank() || target.password.isNotEmpty()) {
+        val credentials = Base64.encode("${target.user}:${target.password}".encodeToByteArray())
+        header(HttpHeaders.Authorization, "Basic $credentials")
+    }
+}
+
+/** SigSleuth's answers for the [rows] this phone thought relayed, from the reply to their upload. */
+internal fun serverAnswers(rows: List<SurveyMeasurement>, response: UploadResponse): List<ServerAnswer> {
+    val heard = response.heard.associateBy { it.seq }
+    val names =
+        response.nodes
+            .mapNotNull { node ->
+                (node.shortName?.takeIf(String::isNotBlank) ?: node.longName?.takeIf(String::isNotBlank))?.let {
+                    node.nodeId to it
+                }
+            }
+            .toMap()
+    return rows.mapNotNull { row ->
+        val relayByte = row.relayByte?.takeUnless { row.isDirect() }
+        val answer = heard[row.seq]
+        if (relayByte == null || answer == null) return@mapNotNull null
+        ServerAnswer(row.seq, row.heardAtMs, relayByte, answer.nodeId, answer.how, answer.nodeId?.let(names::get))
     }
 }
 
@@ -261,13 +296,29 @@ internal data class UploadMeasurement(
     @SerialName("default_key") val defaultKey: Boolean?,
 )
 
-/** SigSleuth's answer: [lastSeq] is the batch's highest seq, saved or not; [skipped] counts unusable rows by reason. */
+/**
+ * SigSleuth's answer: [lastSeq] is the batch's highest seq, saved or not; [skipped] counts unusable rows by reason.
+ * [heard] has the node each usable row heard, as SigSleuth's map shows it, and [nodes] the names of those named; older
+ * servers send neither.
+ */
 @Serializable
 internal data class UploadResponse(
     val saved: Long = 0,
     @SerialName("already_saved") val alreadySaved: Long = 0,
     val skipped: Map<String, Long> = emptyMap(),
     @SerialName("last_seq") val lastSeq: Long,
+    val heard: List<UploadHeard> = emptyList(),
+    val nodes: List<UploadNode> = emptyList(),
+)
+
+@Serializable
+internal data class UploadHeard(val seq: Long, @SerialName("node_id") val nodeId: Long? = null, val how: String)
+
+@Serializable
+internal data class UploadNode(
+    @SerialName("node_id") val nodeId: Long,
+    @SerialName("long_name") val longName: String? = null,
+    @SerialName("short_name") val shortName: String? = null,
 )
 
 private fun SurveySession.toUpload() = UploadSession(

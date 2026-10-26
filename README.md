@@ -30,6 +30,7 @@ Each session also saves your node's number and long name, and the radio settings
 
 - **Upload:** only to a server whose address you enter yourself. Uploading is off until you enter one. Once you do, "Upload automatically" is on by default: each new session goes to that server every minute while you record, and again when it ends. Turn it off before or during a session to keep that session on the phone; you can still upload it later with its Upload button. Nothing recorded with it off is sent unless you tap Upload. Uploads go over HTTPS, with the password in a header, never in the address.
 - **CSV export:** goes wherever you choose to share the file.
+- **Relay list download:** with a server address entered, a recording session downloads that server's list of nodes that could have relayed your packets, at most once a day, so relay guesses work offline. The request carries only your radio's spreading factor and the password, never your position.
 
 The app has no server of its own: neither the author of this fork nor the Meshtastic project receives any survey data.
 

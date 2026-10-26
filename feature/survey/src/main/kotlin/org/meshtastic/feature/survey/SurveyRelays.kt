@@ -34,7 +34,8 @@ const val NEAR = 1_000.0
 
 /**
  * The farthest a candidate can be from the packet and still be one: from the nearest direct reception cell, or from its
- * reported position. A node heard directly 200 km away on a road trip did not relay a packet heard here.
+ * reported position unless SigSleuth knows it reaches farther. A node heard directly 200 km away on a road trip did not
+ * relay a packet heard here.
  */
 const val FAR = 30_000.0
 
@@ -94,7 +95,8 @@ sealed interface RelayGuess {
 
     /**
      * None near (or recent without a fix), and the only candidate left: heard directly elsewhere within [FAR], or
-     * reporting a position within [FAR]. Without a fix, the only one heard directly in the history.
+     * placed within [FAR] or its reach ([RelayCandidate.Placed]). Without a fix, the only one heard directly in the
+     * history.
      */
     data class Possible(val nodeId: Long) : RelayGuess {
         override val nodeIds
@@ -162,9 +164,70 @@ sealed interface RelayCandidate {
     /** Heard directly by the survey radio; where and when are in [DirectNeighbours.all]. */
     data class Heard(override val nodeId: Long) : RelayCandidate
 
+    /**
+     * Known by a position, which is a claim rather than a reception: a candidate within [FAR] of the packet, or within
+     * its [reachMeters], the longest link SigSleuth trusts it to have sent, when that is longer.
+     */
+    sealed interface Placed : RelayCandidate {
+        val latitude: Double
+        val longitude: Double
+        val reachMeters: Double?
+
+        val withinMeters: Double
+            get() = maxOf(FAR, reachMeters ?: 0.0)
+    }
+
     /** Not heard directly, but the node database has it reporting this position. */
-    data class Reported(override val nodeId: Long, val latitude: Double, val longitude: Double) : RelayCandidate
+    data class Reported(
+        override val nodeId: Long,
+        override val latitude: Double,
+        override val longitude: Double,
+        override val reachMeters: Double? = null,
+    ) : Placed
+
+    /**
+     * Neither heard directly nor in the node database, but on SigSleuth's map here; [estimated] when SigSleuth placed
+     * it from its neighbours.
+     */
+    data class Mapped(
+        override val nodeId: Long,
+        override val latitude: Double,
+        override val longitude: Double,
+        override val reachMeters: Double?,
+        val estimated: Boolean,
+    ) : Placed
 }
+
+/** A node SigSleuth says could relay on the survey's spreading factor ([SurveyRelayNodes]). */
+data class MappedNode(
+    val nodeId: Long,
+    val shortName: String?,
+    val latitude: Double,
+    val longitude: Double,
+    val estimated: Boolean,
+    val reachMeters: Double?,
+)
+
+/** SigSleuth's relay node list, fetched at [fetchedAtMs], by relay byte, with the short names it knows. */
+class MappedNodes(val fetchedAtMs: Long, nodes: List<MappedNode>) {
+    val count = nodes.size
+    val byByte: Map<Int, List<MappedNode>> = nodes.groupBy { relayByteOf(it.nodeId) }
+    val names: Map<Long, String> = nodes.mapNotNull { node -> node.shortName?.let { node.nodeId to it } }.toMap()
+}
+
+/**
+ * SigSleuth's answer for one uploaded packet this phone thought relayed: the node it heard, or null when it could not
+ * tell, and [how] it decided, in its own words (`survey_link`, `gateway_link`, `sender_link`, `reported`,
+ * `only_candidate`, `direct`, `unknown`).
+ */
+data class ServerAnswer(
+    val seq: Long,
+    val heardAtMs: Long,
+    val relayByte: Int,
+    val nodeId: Long?,
+    val how: String,
+    val shortName: String?,
+)
 
 private const val MILLIS_PER_SECOND = 1_000L
 
@@ -181,6 +244,27 @@ fun reportedWith(
     .filter { relayByteOf(it.nodeId) == relayByte && it.num != surveyNode }
     .filter { it.lastHeard * MILLIS_PER_SECOND >= sinceMs && it.validPosition != null }
     .map { RelayCandidate.Reported(it.nodeId, it.latitude, it.longitude) }
+
+/**
+ * The [reportedWith] nodes, with their reach from [mapped], then the [mapped] nodes with [relayByte] the node database
+ * lacks: the node's own report beats SigSleuth's copy, as this radio heard it.
+ */
+fun placedWith(
+    relayByte: Int,
+    nodes: Collection<Node>,
+    mapped: MappedNodes?,
+    sinceMs: Long,
+    surveyNode: Int,
+): List<RelayCandidate.Placed> {
+    val onMap = mapped?.byByte?.get(relayByte).orEmpty().filter { it.nodeId != surveyNode.toUInt().toLong() }
+    val reach = onMap.associate { it.nodeId to it.reachMeters }
+    val reported = reportedWith(relayByte, nodes, sinceMs, surveyNode).map { it.copy(reachMeters = reach[it.nodeId]) }
+    val inDatabase = reported.mapTo(mutableSetOf()) { it.nodeId }
+    return reported +
+        onMap
+            .filter { it.nodeId !in inDatabase }
+            .map { RelayCandidate.Mapped(it.nodeId, it.latitude, it.longitude, it.reachMeters, it.estimated) }
+}
 
 private val Node.nodeId: Long
     get() = num.toUInt().toLong()
@@ -200,7 +284,8 @@ data class RelayEvidence(
 
 /**
  * One relay byte in this session: its packets, when the last arrived, and the guess made for that packet with all its
- * candidates. A direct packet has none.
+ * candidates. A direct packet has none. [server] is SigSleuth's answer for the newest of its packets uploaded so far,
+ * which is often an earlier one.
  */
 data class RelayStats(
     val packets: Int,
@@ -208,6 +293,7 @@ data class RelayStats(
     val guess: RelayGuess,
     val candidates: List<RelayCandidate> = emptyList(),
     val ruledOut: List<RuledOut> = emptyList(),
+    val server: ServerAnswer? = null,
 )
 
 /**
@@ -244,10 +330,10 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
     /**
      * Who relayed a packet from [senderId] with [relayByte], heard at [atMs]. The sender and known CLIENT_MUTE nodes
      * cannot be its relay; [roleOf] checks the survey radio's node database, and an unknown role keeps a candidate.
-     * [reported] are the database's nodes with this byte and a position; with a packet fix, those within [FAR] join the
-     * neighbours heard directly elsewhere. A reported position is the node's claim, not a reception, so it never makes
-     * a guess likely. With a fix and the packet's [signal], a neighbour whose strongest direct signal within [NEAR] is
-     * more than [TOO_STRONG_DB] weaker is ruled out of every tier for this packet.
+     * [placed] are the nodes with this byte known by a position ([placedWith]); with a packet fix, those within their
+     * [RelayCandidate.Placed.withinMeters] join the neighbours heard directly elsewhere. A position is a claim, not a
+     * reception, so it never makes a guess likely. With a fix and the packet's [signal], a neighbour whose strongest
+     * direct signal within [NEAR] is more than [TOO_STRONG_DB] weaker is ruled out of every tier for this packet.
      */
     @Suppress("LongParameterList")
     fun weigh(
@@ -257,7 +343,7 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
         latitude: Double? = null,
         longitude: Double? = null,
         roleOf: (Long) -> Config.DeviceConfig.Role? = { null },
-        reported: List<RelayCandidate.Reported> = emptyList(),
+        placed: List<RelayCandidate.Placed> = emptyList(),
         signal: Double? = null,
     ): RelayEvidence {
         val sinceMs = atMs - DIRECT_HISTORY.inWholeMilliseconds
@@ -300,21 +386,21 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
             ranked.meters?.let { it <= NEAR } ?: (all.getValue(ranked.candidate.nodeId).lastDirectMs >= recentMs)
         }
         val heardElsewhere = (heard - near.toSet()).filter { ranked -> ranked.meters?.let { it <= FAR } ?: true }
-        // A node heard directly only far away can still report a position nearby.
-        // A node ruled out by its signal must not come back by its reported position.
+        // A node heard directly only far away can still be placed nearby.
+        // A node ruled out by its signal must not come back by its position.
         val kept = (near + heardElsewhere).mapTo(mutableSetOf()) { it.candidate.nodeId }
-        val reportedNearby =
-            reported
+        val placedNearby =
+            placed
                 .filter { it.nodeId != senderId && it.nodeId !in kept && it.nodeId !in excluded }
                 .filter { roleOf(it.nodeId) != Config.DeviceConfig.Role.CLIENT_MUTE }
                 .mapNotNull { node ->
                     latLongToMeter(node.latitude, node.longitude, latitude, longitude)
-                        .takeIf { it <= FAR }
+                        .takeIf { it <= node.withinMeters }
                         ?.let { Ranked(node, it) }
                 }
         val byDistance = compareBy<Ranked> { it.meters ?: Double.POSITIVE_INFINITY }.thenBy { it.candidate.nodeId }
         val nearTier = near.sortedWith(byDistance).map { it.candidate }
-        val possibleTier = (heardElsewhere + reportedNearby).sortedWith(byDistance).map { it.candidate }
+        val possibleTier = (heardElsewhere + placedNearby).sortedWith(byDistance).map { it.candidate }
         val guess =
             if (nearTier.isNotEmpty()) {
                 tierGuess(nearTier.map { it.nodeId }, likely = true)

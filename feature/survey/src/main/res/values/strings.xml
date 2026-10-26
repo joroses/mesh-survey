@@ -58,8 +58,22 @@
     <string name="survey_relay_or">%1$s or %2$s</string>
     <string name="survey_relays_open">Show relays</string>
     <string name="survey_relays_title">Relays</string>
-    <!-- Legend for the relay list: 📡 marks a distance to where this phone heard the node, 📍 one to where the node says it is, ✕ a node ruled out because the packet arrived far stronger than it is ever heard here. -->
-    <string name="survey_relays_explained">≈ likely (1 km) · ? possible (30 km) · 📡 heard here · 📍 says it\'s here · ✕ too strong</string>
+    <!-- Legend for the relay list: 📡 marks a distance to where this phone heard the node, 📍 one to where the node says it is, 🗺 one to where SigSleuth's map puts it, ✕ a node ruled out because the packet arrived far stronger than it is ever heard here. -->
+    <string name="survey_relays_explained">≈ likely (1 km) · ? possible (30 km or its reach) · 📡 heard here · 📍 says it\'s here · 🗺 on SigSleuth\'s map · ✕ too strong</string>
+    <!-- %1$d is how many nodes SigSleuth listed, %2$s when the list was fetched ("3 h ago"). -->
+    <plurals name="survey_relays_map">
+        <item quantity="one">🗺 SigSleuth\'s map: %1$d node, %2$s</item>
+        <item quantity="other">🗺 SigSleuth\'s map: %1$d nodes, %2$s</item>
+    </plurals>
+    <!-- SigSleuth's answer for an uploaded packet with this relay byte: %1$s the node's short name, %2$s how SigSleuth knows, %3$s when the packet was heard ("3 min. ago"). -->
+    <string name="survey_relay_server">SigSleuth: %1$s, %2$s · %3$s</string>
+    <string name="survey_relay_server_unknown">SigSleuth: unknown · %1$s</string>
+    <string name="survey_server_direct">heard directly</string>
+    <string name="survey_server_survey_link">heard nearby by a survey</string>
+    <string name="survey_server_gateway_link">linked to a gateway that heard it</string>
+    <string name="survey_server_sender_link">linked to the sender</string>
+    <string name="survey_server_reported">says it relayed it</string>
+    <string name="survey_server_only_candidate">the only one that could</string>
     <!-- %1$d is a packet count, %2$s a relative time ("3 min. ago"). -->
     <string name="survey_relay_packets">%1$d × · %2$s</string>
     <!-- %1$s is a relative time ("3 min. ago"). -->
@@ -69,10 +83,16 @@
     <!-- %1$s is a distance. -->
     <string name="survey_relay_candidate_reported_at">📍 %1$s</string>
     <string name="survey_relay_candidate_reported">📍 within %1$s</string>
+    <string name="survey_relay_candidate_mapped_at">🗺 %1$s</string>
+    <string name="survey_relay_candidate_mapped">🗺 within %1$s</string>
+    <!-- %1$s is a candidate's line, %2$s the longest link SigSleuth trusts it to have sent. -->
+    <string name="survey_relay_candidate_reach">%1$s · reaches %2$s</string>
     <!-- A node ruled out as the relay: %1$d is its strongest signal heard near here in dBm, %2$d this packet's, both negative. -->
     <string name="survey_relay_ruled_out">✕ %1$d dBm here at best, this packet %2$d</string>
     <string name="survey_distance_m">%1$d m</string>
     <string name="survey_distance_km">%1$s km</string>
+    <!-- A distance to a position SigSleuth estimated from the node's neighbours. -->
+    <string name="survey_distance_about">~%1$s</string>
     <string name="survey_close">Close</string>
     <!-- Why the last session ended on its own; shown until the next one starts. -->
     <string name="survey_ended_node_changed">The last session ended because another radio connected.</string>

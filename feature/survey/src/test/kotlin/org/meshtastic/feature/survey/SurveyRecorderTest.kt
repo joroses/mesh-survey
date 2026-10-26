@@ -85,6 +85,17 @@ class SurveyRecorderTest {
 
     private lateinit var radio: FakeRadioInterfaceService
 
+    /** SigSleuth's relay node list as saved on the phone, and the one a refresh fetches, once. */
+    private var savedMapped: MappedNodes? = null
+    private var fetchedMapped: MappedNodes? = null
+    private val relayNodes =
+        object : SurveyRelayNodes {
+            override suspend fun saved(spreadingFactor: Int) = savedMapped
+
+            override suspend fun refresh(spreadingFactor: Int) = fetchedMapped.also { fetchedMapped = null }
+        }
+    private val answers = SurveyAnswers()
+
     /** Set to make the clock throw, which fails capturing a packet. */
     private var clockError: IllegalStateException? = null
 
@@ -129,6 +140,8 @@ class SurveyRecorderTest {
             radioConfig,
             FakeBuildConfigProvider(versionName = "2.8.3-survey"),
             object : ApplicationCoroutineScope, CoroutineScope by backgroundScope {},
+            relayNodes,
+            answers,
         )
     }
 
@@ -503,6 +516,77 @@ class SurveyRecorderTest {
             assertEquals(0.01, candidate.latitude, 1e-9)
             assertEquals(RelayGuess.Unknown, recorder.state.value.relays[0x01]?.guess)
         }
+
+    @Test
+    fun `SigSleuth's map adds the nodes within their reach, and a fetched list replaces the saved one`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // 0.5° is 55.6 km: only a node known to reach 60 km can have relayed a packet heard here.
+            val reaching = MappedNode(0x43F, "FAR", 0.5, 0.0, estimated = false, reachMeters = 60_000.0)
+            val unknownReach = MappedNode(0x53F, "NOR", 0.5, 0.0, estimated = false, reachMeters = null)
+            savedMapped = MappedNodes(0, listOf(unknownReach))
+            fetchedMapped = MappedNodes(1, listOf(reaching, unknownReach))
+            val recorder = recorder()
+            recorder.start()
+            location.send(SurveyFix(5_000, 0.0, 0.0, 10f))
+
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+
+            assertEquals(1L, recorder.state.value.mapped?.fetchedAtMs)
+            val relay = recorder.state.value.relays.getValue(0x3F)
+            assertEquals(RelayGuess.Possible(0x43F), relay.guess)
+            assertEquals(listOf(RelayCandidate.Mapped(0x43F, 0.5, 0.0, 60_000.0, false)), relay.candidates)
+        }
+
+    @Test
+    fun `SigSleuth's answers go to the recording session's relay bytes, the newest packet's kept`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val recorder = recorder()
+            recorder.start()
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            val session = dao.sessions.single().id
+            fun answer(seq: Long, node: Long?) = ServerAnswer(seq, 1_000_000, 0x3F, node, "survey_link", "FAR")
+
+            answers.listener?.invoke(session, listOf(answer(2, 0x43F)))
+            // An earlier packet's answer arriving late, and another session's, change nothing.
+            answers.listener?.invoke(session, listOf(answer(1, null)))
+            answers.listener?.invoke("other", listOf(answer(3, null)))
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+
+            val relay = recorder.state.value.relays.getValue(0x3F)
+            assertEquals(2, relay.packets)
+            assertEquals(answer(2, 0x43F), relay.server)
+        }
+
+    @Test
+    fun `SigSleuth's answer survives arriving before its relay is published`() = runTest(UnconfinedTestDispatcher()) {
+        val committed = CompletableDeferred<Long>()
+        val publish = CompletableDeferred<Unit>()
+        val delayedDao =
+            object : SurveyDao by dao {
+                override suspend fun insertMeasurement(measurement: SurveyMeasurement): Long {
+                    val seq = dao.insertMeasurement(measurement)
+                    committed.complete(seq)
+                    publish.await()
+                    return seq
+                }
+            }
+        val recorder = recorder(delayedDao)
+        recorder.start()
+        hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+        val seq = committed.await()
+        val session = dao.sessions.single().id
+        val answer = ServerAnswer(seq, 1_000_000, 0x3F, 0x43F, "survey_link", "Hill")
+
+        answers.listener?.invoke(session, listOf(answer))
+        answers.listener?.invoke(session, listOf(answer.copy(seq = seq - 1, nodeId = null)))
+        answers.listener?.invoke("other", listOf(answer.copy(seq = seq + 1, nodeId = null)))
+        assertTrue(recorder.state.value.relays.isEmpty())
+        publish.complete(Unit)
+
+        val relay = recorder.state.value.relays.getValue(0x3F)
+        assertEquals(1, relay.packets)
+        assertEquals(answer, relay.server)
+    }
 
     @Test
     fun `an earlier session with the same radio and settings seeds the guesses`() =

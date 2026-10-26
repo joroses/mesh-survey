@@ -89,6 +89,11 @@ class SurveyUploaderTest {
     /** Runs as each batch arrives, before the server answers. */
     private var onBatch: () -> Unit = {}
 
+    /** More fields for every answer, such as the heard nodes; none, as from an older server, by default. */
+    private var replyFields = ""
+
+    private val answers = SurveyAnswers()
+
     private fun TestScope.uploader(): SurveyUploader {
         val engine = MockEngine { request ->
             authorization = request.headers[HttpHeaders.Authorization]
@@ -101,7 +106,7 @@ class SurveyUploaderTest {
             val skipped = skipPerBatch.entries.joinToString { (reason, count) -> "\"$reason\": $count" }
             respond(
                 """{"saved": ${rows.size - skipPerBatch.values.sum()}, "already_saved": 0, """ +
-                    """"skipped": {$skipped}, "last_seq": $lastSeq}""",
+                    """"skipped": {$skipped}, "last_seq": $lastSeq$replyFields}""",
                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
             )
         }
@@ -116,6 +121,7 @@ class SurveyUploaderTest {
                     retries++
                 }
             },
+            answers,
         )
     }
 
@@ -175,6 +181,23 @@ class SurveyUploaderTest {
         )
         assertEquals(listOf(501L, 503L), dao.sessions.map { it.uploadedSeq })
         assertEquals("Basic dTpw", authorization)
+    }
+
+    @Test
+    fun `SigSleuth's answers for the packets heard relayed go to the recorder`() = runTest {
+        record("a", 1)
+        // Heard straight from its sender, 0x1a: the phone needs no answer for it.
+        dao.insertMeasurement(dao.measurements.single().copy(senderNodeId = 0x1a, hopLimit = 3))
+        replyFields =
+            """, "heard": [{"seq": 1, "node_id": 26, "how": "survey_link"}, """ +
+            """{"seq": 2, "node_id": 26, "how": "direct"}], """ +
+            """"nodes": [{"node_id": 26, "long_name": "Hill", "short_name": " "}]"""
+        val seen = mutableListOf<Pair<String, List<ServerAnswer>>>()
+        answers.listener = { session, list -> seen += session to list }
+
+        uploader().upload()
+
+        assertEquals(listOf("a" to listOf(ServerAnswer(1, 1, 0x1a, 26, "survey_link", "Hill"))), seen)
     }
 
     @Test

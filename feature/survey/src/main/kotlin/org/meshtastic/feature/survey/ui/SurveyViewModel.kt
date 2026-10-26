@@ -84,21 +84,35 @@ class SurveyViewModel(
             .stateInWhileSubscribed(null)
 
     /**
-     * Short names of the nodes in this session's relay guesses, candidates and ruled-out nodes. The node database is
-     * the connected radio's, which is the survey radio; a node missing from it has no entry here.
+     * Short names of the nodes in this session's relay guesses, candidates, ruled-out nodes and SigSleuth's answers.
+     * The node database is the connected radio's, which is the survey radio; SigSleuth names the nodes missing from it.
      */
     val relayNames: StateFlow<Map<Long, String>> =
         combine(
             state
                 .map { current ->
-                    current.relays.values.flatMapTo(mutableSetOf()) { relay ->
-                        relay.guess.nodeIds + relay.candidates.map { it.nodeId } + relay.ruledOut.map { it.nodeId }
-                    }
+                    val sigSleuth = mutableMapOf<Long, String>()
+                    val ids =
+                        current.relays.values.flatMapTo(mutableSetOf()) { relay ->
+                            relay.server?.let { answer ->
+                                answer.nodeId?.let { id -> answer.shortName?.let { sigSleuth[id] = it } }
+                            }
+                            relay.guess.nodeIds +
+                                relay.candidates.map { it.nodeId } +
+                                relay.ruledOut.map { it.nodeId } +
+                                listOfNotNull(relay.server?.nodeId)
+                        }
+                    ids.forEach { id -> current.mapped?.names?.get(id)?.let { sigSleuth.putIfAbsent(id, it) } }
+                    ids to sigSleuth.toMap()
                 }
                 .distinctUntilChanged(),
             nodes.nodeDBbyNum,
-        ) { ids, db ->
-            ids.mapNotNull { id -> db[id.toInt()]?.user?.short_name?.takeIf { it.isNotBlank() }?.let { id to it } }
+        ) { (ids, sigSleuth), db ->
+            ids.mapNotNull { id ->
+                (db[id.toInt()]?.user?.short_name?.takeIf { it.isNotBlank() } ?: sigSleuth[id])?.let {
+                    id to it
+                }
+            }
                 .toMap()
         }
             .stateInWhileSubscribed(emptyMap())
