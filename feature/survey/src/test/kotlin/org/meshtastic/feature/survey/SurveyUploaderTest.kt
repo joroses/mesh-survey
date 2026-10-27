@@ -201,6 +201,39 @@ class SurveyUploaderTest {
     }
 
     @Test
+    fun `an unknown relay keeps the server's ordered candidate hints`() = runTest {
+        record("a", 1)
+        replyFields =
+            """, "heard": [{"seq": 1, "node_id": null, "how": "unknown", "candidates": [""" +
+            """{"node_id": 282, "long_name": "Hill", "short_name": " ", "km": 1.2}, """ +
+            """{"node_id": 538, "long_name": "Tower", "short_name": "TW", "km": 3.4}, """ +
+            """{"node_id": 794, "long_name": null, "short_name": null, "km": 5.6}]}]"""
+        val seen = mutableListOf<ServerAnswer>()
+        answers.listener = { _, list -> seen += list }
+
+        uploader().upload()
+
+        assertEquals(
+            listOf(
+                ServerAnswer(
+                    1,
+                    1,
+                    0x1a,
+                    null,
+                    "unknown",
+                    null,
+                    listOf(
+                        ServerCandidate(282, "Hill", 1.2),
+                        ServerCandidate(538, "TW", 3.4),
+                        ServerCandidate(794, null, 5.6),
+                    ),
+                ),
+            ),
+            seen,
+        )
+    }
+
+    @Test
     fun `a private session stays on the phone until its Upload button sends it`() = runTest {
         record("private", 2, upload = false)
         record("shared", 1)

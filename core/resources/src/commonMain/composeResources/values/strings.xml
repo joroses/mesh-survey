@@ -1842,6 +1842,8 @@
     <string name="supported">Supported</string>
     <string name="supported_by_community">Supported by Meshtastic Community</string>
     <string name="supported_by_maker">Independent maker hardware</string>
+    <string name="survey_relay_server_candidate">%1$s (%2$s)</string>
+    <string name="survey_relay_server_candidates">SigSleuth: unknown · maybe %1$s · %2$s</string>
     <string name="swipe_action_delete">Delete</string>
     <string name="swipe_action_mute">Mute</string>
     <string name="swipe_action_unmute">Unmute</string>

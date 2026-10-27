@@ -258,7 +258,21 @@ internal fun serverAnswers(rows: List<SurveyMeasurement>, response: UploadRespon
         val relayByte = row.relayByte?.takeUnless { row.isDirect() }
         val answer = heard[row.seq]
         if (relayByte == null || answer == null) return@mapNotNull null
-        ServerAnswer(row.seq, row.heardAtMs, relayByte, answer.nodeId, answer.how, answer.nodeId?.let(names::get))
+        ServerAnswer(
+            row.seq,
+            row.heardAtMs,
+            relayByte,
+            answer.nodeId,
+            answer.how,
+            answer.nodeId?.let(names::get),
+            answer.candidates.map { candidate ->
+                ServerCandidate(
+                    candidate.nodeId,
+                    candidate.shortName?.takeIf(String::isNotBlank) ?: candidate.longName?.takeIf(String::isNotBlank),
+                    candidate.km,
+                )
+            },
+        )
     }
 }
 
@@ -298,8 +312,8 @@ internal data class UploadMeasurement(
 
 /**
  * SigSleuth's answer: [lastSeq] is the batch's highest seq, saved or not; [skipped] counts unusable rows by reason.
- * [heard] has the node each usable row heard, as SigSleuth's map shows it, and [nodes] the names of those named; older
- * servers send neither.
+ * [heard] has the node each usable row heard, or possible relays when unknown, and [nodes] the names of those named;
+ * older servers send neither.
  */
 @Serializable
 internal data class UploadResponse(
@@ -312,7 +326,20 @@ internal data class UploadResponse(
 )
 
 @Serializable
-internal data class UploadHeard(val seq: Long, @SerialName("node_id") val nodeId: Long? = null, val how: String)
+internal data class UploadHeard(
+    val seq: Long,
+    @SerialName("node_id") val nodeId: Long? = null,
+    val how: String,
+    val candidates: List<UploadCandidate> = emptyList(),
+)
+
+@Serializable
+internal data class UploadCandidate(
+    @SerialName("node_id") val nodeId: Long,
+    @SerialName("long_name") val longName: String? = null,
+    @SerialName("short_name") val shortName: String? = null,
+    val km: Double,
+)
 
 @Serializable
 internal data class UploadNode(

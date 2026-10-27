@@ -1782,6 +1782,8 @@ super_deep_sleep_duration_seconds
 supported
 supported_by_community
 supported_by_maker
+survey_relay_server_candidate
+survey_relay_server_candidates
 swipe_action_delete
 swipe_action_mute
 swipe_action_unmute

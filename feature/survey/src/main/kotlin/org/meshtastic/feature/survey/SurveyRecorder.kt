@@ -411,6 +411,7 @@ class SurveyRecorder(
                 val known = stats?.server ?: current.pendingServerAnswers[answer.relayByte]
                 when {
                     known != null && known.seq > answer.seq -> current
+
                     stats == null ->
                         current.copy(pendingServerAnswers = current.pendingServerAnswers + (answer.relayByte to answer))
 

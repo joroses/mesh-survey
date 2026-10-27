@@ -104,6 +104,9 @@ import org.meshtastic.core.common.util.DateFormatter
 import org.meshtastic.core.common.util.NumberFormatter
 import org.meshtastic.core.common.util.latLongToMeter
 import org.meshtastic.core.common.util.nowMillis
+import org.meshtastic.core.resources.Res
+import org.meshtastic.core.resources.survey_relay_server_candidate
+import org.meshtastic.core.resources.survey_relay_server_candidates
 import org.meshtastic.core.ui.component.EmptyState
 import org.meshtastic.core.ui.icon.ArrowBack
 import org.meshtastic.core.ui.icon.CheckCircle
@@ -144,6 +147,7 @@ import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.isUploadUrl
 import java.util.Locale
 import kotlin.math.roundToInt
+import org.jetbrains.compose.resources.stringResource as sharedStringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -793,7 +797,23 @@ private fun placedText(candidate: RelayCandidate.Placed, fix: SurveyFix?): Strin
 @Composable
 private fun serverText(answer: ServerAnswer, names: Map<Long, String>): String {
     val time = DateFormatter.formatRelativeTime(answer.heardAtMs)
-    val node = answer.nodeId ?: return stringResource(R.string.survey_relay_server_unknown, time)
+    val node = answer.nodeId
+    if (node == null) {
+        return if (answer.candidates.isEmpty()) {
+            stringResource(R.string.survey_relay_server_unknown, time)
+        } else {
+            val candidates =
+                answer.candidates.map { candidate ->
+                    val name = names[candidate.nodeId] ?: candidate.name ?: nodeName(candidate.nodeId, names)
+                    sharedStringResource(
+                        Res.string.survey_relay_server_candidate,
+                        name,
+                        distanceText(candidate.km * METERS_PER_KM),
+                    )
+                }
+            sharedStringResource(Res.string.survey_relay_server_candidates, candidates.joinToString(", "), time)
+        }
+    }
     val how =
         when (answer.how) {
             "direct" -> stringResource(R.string.survey_server_direct)

@@ -218,7 +218,7 @@ class MappedNodes(val fetchedAtMs: Long, nodes: List<MappedNode>) {
 /**
  * SigSleuth's answer for one uploaded packet this phone thought relayed: the node it heard, or null when it could not
  * tell, and [how] it decided, in its own words (`survey_link`, `gateway_link`, `sender_link`, `reported`,
- * `only_candidate`, `direct`, `unknown`).
+ * `only_candidate`, `direct`, `unknown`). Unknown relays may have [candidates], which remain possibilities.
  */
 data class ServerAnswer(
     val seq: Long,
@@ -227,7 +227,11 @@ data class ServerAnswer(
     val nodeId: Long?,
     val how: String,
     val shortName: String?,
+    val candidates: List<ServerCandidate> = emptyList(),
 )
+
+/** A possible relay suggested by SigSleuth, at [km] from the uploaded packet's fix. */
+data class ServerCandidate(val nodeId: Long, val name: String?, val km: Double)
 
 private const val MILLIS_PER_SECOND = 1_000L
 
