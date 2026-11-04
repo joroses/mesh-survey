@@ -116,6 +116,113 @@ class SurveyDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `version 4 rows migrate with their cell, new to you, and counted`() = runTest {
+        createDatabase(version = 4) {
+            execSQL(
+                "INSERT INTO survey_session (id, started_at, status, receiver_node_id, receiver_name, " +
+                    "spreading_factor, bandwidth_khz, app_version, uploaded_seq, server_kept, server_skipped, " +
+                    "upload) VALUES ('s', 1000, 'STOPPED', 1, 'Survey node', 11, 250.0, 'test', 0, 0, 0, 1)",
+            )
+            insertMeasurement()
+        }
+
+        withCurrentDatabase { dao ->
+            val row = dao.measurementsAfter("s", afterSeq = 0, limit = 1).single()
+            assertEquals(SurveyCell.of(1.5, 2.5), row.cell())
+            assertNull(row.serverNew)
+            assertEquals(SurveyNews.NEW_CELL or SurveyNews.NEW_NODE, row.localNew)
+            assertEquals(
+                SurveyNews(cells = 1, nodes = 1, direct = 0, localNewCells = 1, localNewNodes = 1),
+                dao.sessions().first().single().session.news,
+            )
+            assertOldMeasurement(dao)
+        }
+    }
+
+    @Test
+    fun `version 4 rows learn what is new to you from sessions that started earlier on their settings`() = runTest {
+        createDatabase(version = 4) {
+            // Started first, though its ID sorts last.
+            insertSession("z-early", startedAt = 1000)
+            insertSession("other network", startedAt = 1500, spreadingFactor = 12)
+            insertSession("other channel", startedAt = 1600, frequencyMhz = 869.9)
+            insertSession("a-late", startedAt = 2000)
+            insertRow(1, "z-early", relayByte = 0x1A)
+            insertRow(2, "other network", relayByte = 0x1B)
+            insertRow(8, "other channel", relayByte = 0x1B)
+            insertRow(3, "a-late", relayByte = 0x1A)
+            insertRow(4, "a-late", relayByte = 0x1B)
+            // Sender 2 heard directly in a known cell.
+            insertRow(5, "a-late", relayByte = 0x02, hopLimit = 3)
+            // A fix too poor for a cell.
+            insertRow(7, "a-late", relayByte = 0x1A, accuracyM = 500.0)
+        }
+
+        withCurrentDatabase { dao ->
+            val cell = SurveyNews.NEW_CELL
+            val node = SurveyNews.NEW_NODE
+            suspend fun flags(sessionId: String) =
+                dao.measurementsAfter(sessionId, afterSeq = 0, limit = 10).map { it.localNew }
+            assertEquals(listOf(cell or node), flags("z-early"))
+            assertEquals(listOf(cell or node), flags("other network"))
+            assertEquals(listOf(cell or node), flags("other channel"))
+            assertEquals(listOf(0, node, node or SurveyNews.NEW_DIRECT, null), flags("a-late"))
+            assertEquals(
+                SurveyNews(1, 3, 1, localNewCells = 0, localNewNodes = 2, localNewDirect = 1),
+                dao.sessions().first().single { it.session.id == "a-late" }.session.news,
+            )
+        }
+    }
+
+    @Test
+    fun `the fill compares a session with each earlier one on its own, as recording does`() = runTest {
+        createDatabase(version = 4) {
+            // At 62.5 kHz, 869.4 and 869.6 MHz are two channels; a session without a frequency matches both.
+            insertSession("unknown", startedAt = 1000, bandwidthKhz = 62.5, frequencyMhz = null)
+            insertSession("lower", startedAt = 2000, bandwidthKhz = 62.5, frequencyMhz = 869.4)
+            insertSession("upper", startedAt = 3000, bandwidthKhz = 62.5, frequencyMhz = 869.6)
+            insertRow(1, "unknown", relayByte = 0x1A)
+            insertRow(2, "lower", relayByte = 0x1B)
+            insertRow(3, "upper", relayByte = 0x1B)
+        }
+
+        withCurrentDatabase { dao ->
+            val upper = dao.sessions().first().single { it.session.id == "upper" }.session
+            val recorded = CellHistory(dao.cellKeys(upper, SurveyCell.of(1.5, 2.5))).newBits(CellKey(0x1B, null))
+            // The cell is known from "unknown"; byte 1B only from "lower", another channel.
+            assertEquals(SurveyNews.NEW_NODE, recorded)
+            assertEquals(listOf(recorded), dao.measurementsAfter("upper", afterSeq = 0, limit = 10).map { it.localNew })
+        }
+    }
+
+    private fun androidx.sqlite.SQLiteConnection.insertSession(
+        id: String,
+        startedAt: Long,
+        spreadingFactor: Int = 11,
+        bandwidthKhz: Double = 250.0,
+        frequencyMhz: Double? = 869.525,
+    ) = execSQL(
+        "INSERT INTO survey_session (id, started_at, status, receiver_node_id, receiver_name, spreading_factor, " +
+            "bandwidth_khz, frequency_mhz, app_version, uploaded_seq, server_kept, server_skipped, upload) " +
+            "VALUES ('$id', $startedAt, 'STOPPED', 1, 'Survey node', $spreadingFactor, $bandwidthKhz, " +
+            "${frequencyMhz ?: "NULL"}, 'test', 0, 0, 0, 0)",
+    )
+
+    /** A version 4 row from sender 2 at 1.5, 2.5. */
+    private fun androidx.sqlite.SQLiteConnection.insertRow(
+        seq: Long,
+        sessionId: String,
+        relayByte: Int,
+        hopLimit: Int = 2,
+        accuracyM: Double = 4.0,
+    ) = execSQL(
+        "INSERT INTO survey_measurement (seq, session_id, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, " +
+            "sender_node_id, recipient_node_id, packet_id, hop_start, hop_limit, relay_byte) " +
+            "VALUES ($seq, '$sessionId', 1500, 1.5, 2.5, $accuracyM, 300, 2, 4294967295, $seq, 3, $hopLimit, " +
+            "$relayByte)",
+    )
+
     private fun androidx.sqlite.SQLiteConnection.insertMeasurement() = execSQL(
         "INSERT INTO survey_measurement (seq, session_id, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, " +
             "sender_node_id, recipient_node_id, packet_id, rx_snr, rx_rssi, hop_start, hop_limit, relay_byte) " +

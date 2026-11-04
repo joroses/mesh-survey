@@ -27,12 +27,14 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.content.TextContent
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -52,7 +54,8 @@ import kotlin.time.Duration.Companion.seconds
  * A run stops at the first failure and saves its error; the next run tries again. With automatic uploads on, a failed
  * run also queues [SurveyUploadRetry], which tries again once the phone is online. Two runs never overlap.
  *
- * Each reply names the node SigSleuth decided every saved row heard; those of relayed packets go to [answers].
+ * Each reply names the node SigSleuth decided every saved row heard; those of relayed packets go to [answers]. It also
+ * says what each row adds to SigSleuth's map, which is saved on the row and counted on its session ([SurveyNews]).
  */
 @Single
 class SurveyUploader(
@@ -76,7 +79,7 @@ class SurveyUploader(
     fun uploadNow(sessionId: String) {
         scope.launch {
             // A session that cannot be marked is not sent; the run still sends the sessions already allowed.
-            safeCatching { dao.setUpload(sessionId, true) }
+            safeCatching { dao.setUpload(sessionId, true) }.onSuccess { answers.consent?.invoke(sessionId, true) }
             upload()
         }
     }
@@ -96,7 +99,9 @@ class SurveyUploader(
      */
     suspend fun setAutomatic(automatic: Boolean, recordingSessionId: () -> String?) = consent.withLock {
         settings.setAutomatic(automatic)
-        recordingSessionId()?.let { safeCatching { dao.setUpload(it, automatic) } }
+        recordingSessionId()?.let { id ->
+            safeCatching { dao.setUpload(id, automatic) }.onSuccess { answers.consent?.invoke(id, automatic) }
+        }
     }
 
     /**
@@ -106,7 +111,10 @@ class SurveyUploader(
     suspend fun saveServer(url: String, user: String, password: String) {
         if (!settings.saveServer(url, user, password)) return
         // After any run in flight: it still posts to the old server and would save its progress over the reset.
-        runs.withLock { safeCatching { dao.resetUploads() } }
+        runs.withLock {
+            safeCatching { dao.resetUploads() }
+            answers.serverChanged?.invoke()
+        }
     }
 
     /**
@@ -152,9 +160,39 @@ class SurveyUploader(
         }
     }
 
-    /** Returns false at the first failure, after saving its error on the session. */
-    @Suppress("ReturnCount")
+    /**
+     * Returns false at the first failure, after saving its error on the session. Tells the recorder how the run went,
+     * with the session's [SurveyNews] counted once at its end rather than per batch: a count reads the whole session
+     * and holds the write lock the recorder waits on.
+     */
     private suspend fun uploadSession(session: SurveySession, target: SurveyUploadSettings): Boolean {
+        var progress = SurveyUploadProgress(session.serverKept + session.serverSkipped, news = null, failed = true)
+        var saved = false
+        try {
+            val sent =
+                sendBatches(session, target) { acknowledged ->
+                    saved = true
+                    progress = progress.copy(acknowledged = acknowledged)
+                    answers.progress?.invoke(session.id, progress.copy(failed = false))
+                }
+            progress = progress.copy(failed = !sent)
+            return sent
+        } finally {
+            // Also when recording stops and cancels the run, so the batches it saved are counted.
+            withContext(NonCancellable) {
+                val news = if (saved) safeCatching { dao.recountNews(session.id) }.getOrNull() else null
+                answers.progress?.invoke(session.id, progress.copy(news = news))
+            }
+        }
+    }
+
+    /** Sends [session]'s batches; [onSaved] gets how many measurements SigSleuth has answered for after each. */
+    @Suppress("ReturnCount")
+    private suspend fun sendBatches(
+        session: SurveySession,
+        target: SurveyUploadSettings,
+        onSaved: (acknowledged: Long) -> Unit,
+    ): Boolean {
         var afterSeq = session.uploadedSeq
         var kept = session.serverKept
         var skipped = session.serverSkipped
@@ -180,15 +218,17 @@ class SurveyUploader(
                 skipReasons[reason] = skipReasons.getOrElse(reason) { 0 } + count
             }
             val lastSeq = response.lastSeq
-            dao.uploaded(
+            dao.batchUploaded(
                 session.id,
                 lastSeq,
                 clock.wallTimeMs(),
                 kept,
                 skipped,
                 skipReasons.takeIf { it.isNotEmpty() }?.let { json.encodeToString(it) },
+                serverNew(response),
             )
             answers.listener?.invoke(session.id, serverAnswers(rows, response))
+            onSaved(kept + skipped)
             // A server that acknowledges less than it was sent would otherwise get the same batch forever.
             if (lastSeq < rows.last().seq) {
                 dao.uploadFailed(session.id, "Server kept $lastSeq of ${rows.last().seq}")
@@ -233,7 +273,36 @@ class SurveyUploader(
 @Single
 class SurveyAnswers {
     @Volatile var listener: ((sessionId: String, answers: List<ServerAnswer>) -> Unit)? = null
+
+    @Volatile var progress: ((sessionId: String, progress: SurveyUploadProgress) -> Unit)? = null
+
+    /** Automatic uploads were turned on or off, and the recording session [sessionId] with them. */
+    @Volatile var consent: ((sessionId: String, upload: Boolean) -> Unit)? = null
+
+    /** Every session's upload starts over for a new server; what the old one said no longer holds. */
+    @Volatile var serverChanged: (() -> Unit)? = null
 }
+
+/**
+ * Where a session's upload stands after a batch or at the end of a run: how many of its measurements SigSleuth has
+ * answered for, and what they measured and added ([news], counted only at the end of a run that saved a batch).
+ */
+data class SurveyUploadProgress(val acknowledged: Long, val news: SurveyNews?, val failed: Boolean)
+
+/** What the reply says each row adds to the map, as [SurveyNews] bits by seq; empty from servers that do not say. */
+internal fun serverNew(response: UploadResponse): Map<Long, Int> = response.heard
+    .mapNotNull { heard ->
+        val cell = heard.newCell ?: return@mapNotNull null
+        val node = heard.newByte ?: return@mapNotNull null
+        val direct = heard.newDirect ?: return@mapNotNull null
+        heard.seq to
+            (
+                (if (cell) SurveyNews.NEW_CELL else 0) or
+                    (if (node) SurveyNews.NEW_NODE else 0) or
+                    (if (direct) SurveyNews.NEW_DIRECT else 0)
+                )
+    }
+    .toMap()
 
 /** The upload password as HTTP Basic. SigSleuth ignores the user name, so a password alone must still be sent. */
 internal fun HttpRequestBuilder.authorize(target: SurveyUploadSettings) {
@@ -331,6 +400,13 @@ internal data class UploadHeard(
     @SerialName("node_id") val nodeId: Long? = null,
     val how: String,
     val candidates: List<UploadCandidate> = emptyList(),
+    /**
+     * Whether the row adds a cell, its relay byte in the cell, or its sender heard directly there; older servers send
+     * none.
+     */
+    @SerialName("new_cell") val newCell: Boolean? = null,
+    @SerialName("new_byte") val newByte: Boolean? = null,
+    @SerialName("new_direct") val newDirect: Boolean? = null,
 )
 
 @Serializable

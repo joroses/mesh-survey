@@ -90,6 +90,32 @@ class SurveyCaptureTest {
     }
 
     @Test
+    fun `cells match SigSleuth's map cells`() {
+        // SigSleuth's coverage.fine_cell for the same positions.
+        assertEquals(SurveyCell(73186, 43158), SurveyCell.of(52.2297, 21.0122))
+        assertEquals(SurveyCell(66107, 48695), SurveyCell.of(41.91974, 1.569995))
+        assertEquals(SurveyCell(120589, 78655), SurveyCell.of(-33.8688, 151.2093))
+        assertEquals(SurveyCell(0, 0), SurveyCell.of(89.0, -180.0))
+    }
+
+    @Test
+    fun `a measurement gets its cell only when SigSleuth would keep it`() {
+        val kept = assertNotNull(capture(packet()))
+        assertEquals(
+            SurveyCell.of(fix.latitude, fix.longitude),
+            SurveyCell(assertNotNull(kept.cellX), assertNotNull(kept.cellY)),
+        )
+        val stale = fix.copy(elapsedRealtimeMs = elapsed - SIGSLEUTH_MAX_FIX_AGE_S * 1_000L - 1)
+        val rough = fix.copy(accuracyM = SIGSLEUTH_MAX_ACCURACY_M + 1f)
+        val nowhere = fix.copy(latitude = 0.0, longitude = 0.0)
+        for (poor in listOf(stale, rough, nowhere, null)) {
+            val row = assertNotNull(capture(packet(), withFix = poor))
+            assertNull(row.cellX)
+            assertNull(row.cellY)
+        }
+    }
+
+    @Test
     fun `an encrypted packet leaves both consent fields unknown`() {
         val row = assertNotNull(capture(packet { channel = 0 }))
         assertNull(row.okToMqtt)

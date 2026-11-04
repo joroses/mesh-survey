@@ -68,6 +68,19 @@ data class SurveyState(
     val session: SurveySession? = null,
     val waitingForRadio: Boolean = false,
     val measurementCount: Int = 0,
+    /** This session's measurements heard straight from their sender ([isDirect]). */
+    val directCount: Int = 0,
+    /** How many of this session's measurements SigSleuth has answered for. */
+    val acknowledged: Long = 0,
+    /**
+     * Whether this session waits behind a failed upload, its own or an older session's, until an upload of it works.
+     * Never while it stays on the phone.
+     */
+    val uploadFailing: Boolean = false,
+    /** What this session measured and added to SigSleuth's map, as of its last upload. */
+    val news: SurveyNews? = null,
+    /** What this session measured so far and what is new to this phone, live; no server counts. */
+    val newToYou: SurveyNews? = null,
     val fix: SurveyFix? = null,
     val lastMeasurement: SurveyMeasurement? = null,
     /**
@@ -187,6 +200,8 @@ class SurveyRecorder(
         @Volatile var defaultKeyChannels: Set<Int>,
         /** SigSleuth's relay node list, replaced when a fresher one arrives. */
         @Volatile var mapped: MappedNodes?,
+        /** Only the writer touches it. */
+        val newToYou: NewToYou,
     ) {
         /**
          * The transport session whose node and LoRa settings the watcher has checked against this session; only its
@@ -209,10 +224,15 @@ class SurveyRecorder(
     private var refresher: Job? = null
 
     // A session left recording belongs to a process that died; mark it before any new session starts.
-    private val recovery = scope.launch { safeCatching { dao.interruptRecording() } }
+    private val recovery = scope.launch { safeCatching { dao.recoverRecording() } }
 
     init {
         answers.listener = ::onServerAnswers
+        answers.progress = ::onUploadProgress
+        answers.consent = ::onUploadConsent
+        answers.serverChanged = {
+            mutableState.update { it.copy(acknowledged = 0, uploadFailing = false, news = null) }
+        }
         // "Connect a radio first" is out of date as soon as one connects.
         scope.launch {
             service.connectionState.collect { connection ->
@@ -254,7 +274,10 @@ class SurveyRecorder(
             dao.directPlaces(session, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
         }
             .getOrDefault(emptyList())
-        val mapped = safeCatching { relayNodes.saved(lora.spreadingFactor, lora.bandwidthKhz) }.getOrNull()
+        val mapped = safeCatching {
+            relayNodes.saved(session.spreadingFactor, session.bandwidthKhz, session.frequencyMhz)
+        }
+            .getOrNull()
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)
         val current =
             Active(
@@ -265,6 +288,7 @@ class SurveyRecorder(
                 DirectNeighbours(history.map { it.toDirectSender() }),
                 defaultKeyChannels(radioConfig.channelSetFlow.first()),
                 mapped,
+                NewToYou { cell -> dao.cellKeys(session, cell) },
             )
         mutableState.value = SurveyState(session = session, neighbours = current.neighbours.all, mapped = mapped)
         writer = scope.launch { write(current) }
@@ -290,6 +314,8 @@ class SurveyRecorder(
         current.rows.close()
         writer?.join() // Saves the rows already queued.
         safeCatching { dao.endSession(current.session.id, status, clock.wallTimeMs()) }
+        // A session that never uploads gets its counts here; one that does, after each upload too.
+        safeCatching { dao.recountNews(current.session.id) }
         // A problem met while recording belonged to this session; the idle card shows only how it ended.
         mutableState.update {
             it.copy(session = null, waitingForRadio = false, fix = null, problem = null, lastEnd = status)
@@ -338,12 +364,17 @@ class SurveyRecorder(
     }
 
     private suspend fun write(current: Active) {
-        for (row in current.rows) {
-            val seq = safeCatching { dao.insertMeasurement(row) }.getOrNull()
-            if (seq == null) {
+        for (unsaved in current.rows) {
+            val row = safeCatching {
+                val flagged = unsaved.copy(localNew = current.newToYou.bits(unsaved))
+                flagged.copy(seq = dao.insertMeasurement(flagged))
+            }
+                .getOrNull()
+            if (row == null) {
                 mutableState.update { it.copy(problem = SurveyProblem.STORAGE) }
                 continue
             }
+            current.newToYou.count(row)
             val relayByte = row.relayByte
             val evidence = relayByte?.let { byte ->
                 if (row.isDirect()) {
@@ -375,7 +406,9 @@ class SurveyRecorder(
             mutableState.update {
                 it.copy(
                     measurementCount = it.measurementCount + 1,
-                    lastMeasurement = row.copy(seq = seq),
+                    directCount = it.directCount + if (row.isDirect()) 1 else 0,
+                    lastMeasurement = row,
+                    newToYou = current.newToYou.news,
                     relays =
                     if (relayByte == null || evidence == null) {
                         it.relays
@@ -421,6 +454,36 @@ class SurveyRecorder(
         }
     }
 
+    private fun onUploadProgress(sessionId: String, progress: SurveyUploadProgress) {
+        mutableState.update { state ->
+            val session = state.session
+            when {
+                session == null -> state
+
+                // A batch's progress has no news; keep the last.
+                session.id == sessionId ->
+                    state.copy(
+                        acknowledged = progress.acknowledged,
+                        uploadFailing = progress.failed && session.upload,
+                        news = progress.news ?: state.news,
+                    )
+
+                // A failed run stops before the newer sessions, so the recording one waits whichever failed.
+                progress.failed && session.upload -> state.copy(uploadFailing = true)
+
+                else -> state
+            }
+        }
+    }
+
+    /** A session kept on the phone waits for no upload. */
+    private fun onUploadConsent(sessionId: String, upload: Boolean) {
+        mutableState.update { state ->
+            val session = state.session?.takeIf { it.id == sessionId } ?: return@update state
+            state.copy(session = session.copy(upload = upload), uploadFailing = state.uploadFailing && upload)
+        }
+    }
+
     /**
      * Fetches SigSleuth's relay node list once the saved one is stale, trying again every [RELAY_NODES_RETRY]: a survey
      * often starts where the phone has no signal.
@@ -428,7 +491,9 @@ class SurveyRecorder(
     private suspend fun refreshRelayNodes(current: Active) {
         var warned = false
         while (true) {
-            safeCatching { relayNodes.refresh(current.session.spreadingFactor, current.session.bandwidthKhz) }
+            safeCatching {
+                with(current.session) { relayNodes.refresh(spreadingFactor, bandwidthKhz, frequencyMhz) }
+            }
                 .onFailure {
                     if (!warned) Logger.w { "Signal survey relay node list not fetched: ${it::class.simpleName}" }
                     warned = true

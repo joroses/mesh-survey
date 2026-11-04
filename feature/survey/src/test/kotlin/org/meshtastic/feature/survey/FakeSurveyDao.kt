@@ -71,13 +71,12 @@ internal class FakeSurveyDao : SurveyDao {
         frequencyMhz: Float?,
         sinceMs: Long,
     ): List<DirectPlace> {
+        val network = SurveyNetwork(spreadingFactor, bandwidthKhz, frequencyMhz)
         val sessionIds =
             sessions
                 .filter {
                     it.receiverNodeId == receiverNodeId &&
-                        it.spreadingFactor == spreadingFactor &&
-                        it.bandwidthKhz == bandwidthKhz &&
-                        it.frequencyMhz == frequencyMhz
+                        SurveyNetwork(it.spreadingFactor, it.bandwidthKhz, it.frequencyMhz).same(network)
                 }
                 .map { it.id }
                 .toSet()
@@ -98,10 +97,39 @@ internal class FakeSurveyDao : SurveyDao {
             }
     }
 
+    override suspend fun cellKeys(
+        cellX: Int,
+        cellY: Int,
+        startedAt: Long,
+        spreadingFactor: Int,
+        bandwidthKhz: Float,
+        frequencyMhz: Float?,
+    ): List<CellKey> {
+        val network = SurveyNetwork(spreadingFactor, bandwidthKhz, frequencyMhz)
+        val earlier =
+            sessions
+                .filter {
+                    it.startedAt < startedAt &&
+                        SurveyNetwork(it.spreadingFactor, it.bandwidthKhz, it.frequencyMhz).same(network)
+                }
+                .map { it.id }
+                .toSet()
+        return measurements
+            .filter { it.sessionId in earlier && it.cellX == cellX && it.cellY == cellY }
+            .map { it.cellKey() }
+            .distinct()
+    }
+
     override suspend fun endSession(sessionId: String, status: SurveyStatus, endedAt: Long) =
         updateSession(sessionId) { it.copy(status = status, endedAt = endedAt) }
 
-    override suspend fun interruptRecording() = Unit
+    override suspend fun interruptRecording() = sessions.replaceAll { session ->
+        if (session.status != SurveyStatus.RECORDING) return@replaceAll session
+        val last = measurements.filter { it.sessionId == session.id }.maxOfOrNull { it.heardAtMs }
+        session.copy(status = SurveyStatus.INTERRUPTED, endedAt = last ?: session.startedAt)
+    }
+
+    override suspend fun recordingSessionIds() = sessions.filter { it.status == SurveyStatus.RECORDING }.map { it.id }
 
     override suspend fun uploaded(
         sessionId: String,
@@ -121,7 +149,7 @@ internal class FakeSurveyDao : SurveyDao {
         )
     }
 
-    override suspend fun resetUploads() = sessions.replaceAll {
+    override suspend fun resetSessionUploads() = sessions.replaceAll {
         it.copy(
             uploadedSeq = 0,
             lastUploadAt = null,
@@ -129,6 +157,70 @@ internal class FakeSurveyDao : SurveyDao {
             serverKept = 0,
             serverSkipped = 0,
             serverSkipReasons = null,
+            news = it.news?.copy(newCells = null, newNodes = null, newDirect = null),
+        )
+    }
+
+    override suspend fun clearServerNew() = measurements.replaceAll { it.copy(serverNew = null) }
+
+    override suspend fun setServerNew(sessionId: String, seq: Long, flags: Int) = measurements.replaceAll {
+        if (it.sessionId == sessionId && it.seq == seq) it.copy(serverNew = flags) else it
+    }
+
+    /** How many times a session's news was counted and saved. */
+    var recounts = 0
+
+    override suspend fun recountNews(sessionId: String): SurveyNews = super.recountNews(sessionId).also { recounts++ }
+
+    override suspend fun countNews(sessionId: String): SurveyNews {
+        val rows = measurements.filter { it.sessionId == sessionId && it.cellX != null }
+        val answered = rows.any { it.serverNew != null }
+        fun cellOf(row: SurveyMeasurement) = row.cellX to row.cellY
+        fun count(rows: List<SurveyMeasurement>, key: (SurveyMeasurement) -> Any) = rows.map(key).distinct().size
+        fun new(bit: Int, key: (SurveyMeasurement) -> Any) =
+            if (answered) count(rows.filter { ((it.serverNew ?: 0) and bit) != 0 }, key) else null
+        fun local(bit: Int, key: (SurveyMeasurement) -> Any) =
+            count(rows.filter { ((it.localNew ?: 0) and bit) != 0 }, key)
+        val node = { row: SurveyMeasurement -> cellOf(row) to row.relayByte }
+        val direct = { row: SurveyMeasurement -> cellOf(row) to row.senderNodeId }
+        return SurveyNews(
+            cells = count(rows, ::cellOf),
+            nodes = count(rows.filter { it.relayByte != null }, node),
+            direct = count(rows.filter { it.isDirect() }, direct),
+            newCells = new(SurveyNews.NEW_CELL, ::cellOf),
+            newNodes = new(SurveyNews.NEW_NODE, node),
+            newDirect = new(SurveyNews.NEW_DIRECT, direct),
+            localNewCells = local(SurveyNews.NEW_CELL, ::cellOf),
+            localNewNodes = local(SurveyNews.NEW_NODE, node),
+            localNewDirect = local(SurveyNews.NEW_DIRECT, direct),
+        )
+    }
+
+    override suspend fun saveNews(
+        sessionId: String,
+        cells: Int,
+        nodes: Int,
+        direct: Int,
+        newCells: Int?,
+        newNodes: Int?,
+        newDirect: Int?,
+        localNewCells: Int,
+        localNewNodes: Int,
+        localNewDirect: Int,
+    ) = updateSession(sessionId) {
+        it.copy(
+            news =
+            SurveyNews(
+                cells,
+                nodes,
+                direct,
+                newCells,
+                newNodes,
+                newDirect,
+                localNewCells,
+                localNewNodes,
+                localNewDirect,
+            ),
         )
     }
 
@@ -141,5 +233,58 @@ internal class FakeSurveyDao : SurveyDao {
 
     override suspend fun deleteSessionRow(sessionId: String) {
         sessions.removeAll { it.id == sessionId }
+    }
+
+    override suspend fun session(sessionId: String) = sessions.firstOrNull { it.id == sessionId }
+
+    override suspend fun sessionCells(sessionId: String) =
+        measurements.filter { it.sessionId == sessionId }.mapNotNull { it.cell() }.distinct()
+
+    override suspend fun cellRows(cellX: Int, cellY: Int): List<CellRow> {
+        val byId = sessions.associateBy { it.id }
+        return measurements
+            .filter { it.cellX == cellX && it.cellY == cellY }
+            .mapNotNull { row ->
+                byId[row.sessionId]?.let {
+                    val network = SurveyNetwork(it.spreadingFactor, it.bandwidthKhz, it.frequencyMhz)
+                    CellRow(
+                        row.seq,
+                        it.id,
+                        it.startedAt,
+                        network,
+                        SurveyCell(cellX, cellY),
+                        row.cellKey(),
+                        row.localNew,
+                    )
+                }
+            }
+            .sortedWith(compareBy({ it.startedAt }, { it.sessionId }, { it.seq }))
+    }
+
+    override suspend fun setLocalNew(seq: Long, bits: Int) = measurements.replaceAll {
+        if (it.seq == seq) it.copy(localNew = bits) else it
+    }
+
+    val deleted = MutableStateFlow<SurveyDeleted?>(null)
+
+    override fun deleted() = deleted
+
+    override suspend fun createDeleted() {
+        if (deleted.value == null) deleted.value = SurveyDeleted()
+    }
+
+    override suspend fun addDeleted(cells: Int, nodes: Int, direct: Int) {
+        deleted.value =
+            deleted.value?.let {
+                it.copy(
+                    newCells = it.newCells + cells,
+                    newNodes = it.newNodes + nodes,
+                    newDirect = it.newDirect + direct,
+                )
+            }
+    }
+
+    override suspend fun clearDeleted() {
+        deleted.value = null
     }
 }

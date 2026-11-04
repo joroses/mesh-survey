@@ -84,37 +84,41 @@ class SurveyRelayNodesTest {
 
     @Test
     fun `a fetched list is saved for its server and radio settings, and fetched again once stale`() = runTest {
-        assertNull(relayNodes.saved(11, 250f))
-        assertEquals(listOf(0x13FL), relayNodes.refresh(11, 250f)?.byByte?.get(0x3F)?.map { it.nodeId })
+        assertNull(relayNodes.saved(11, 250f, null))
+        assertEquals(listOf(0x13FL), relayNodes.refresh(11, 250f, null)?.byByte?.get(0x3F)?.map { it.nodeId })
         assertEquals("spreading_factor=11&bandwidth_khz=250.0", requests.single().url.encodedQuery)
         assertEquals("Basic dTpw", requests.single().headers[HttpHeaders.Authorization])
         assertEquals(
             MappedNode(0x13F, "Hill", 41.9, 1.57, estimated = true, reachMeters = 91_500.0),
-            relayNodes.saved(11, 250f)?.byByte?.get(0x3F)?.single(),
+            relayNodes.saved(11, 250f, null)?.byByte?.get(0x3F)?.single(),
         )
-        assertNull(relayNodes.saved(12, 250f))
+        assertNull(relayNodes.saved(12, 250f, null))
 
         // Fresh, it is not fetched again; stale, a failed fetch keeps it.
-        assertNull(relayNodes.refresh(11, 250f))
+        assertNull(relayNodes.refresh(11, 250f, null))
         now += RELAY_NODES_STALE.inWholeMilliseconds + 1
         fail = true
-        assertFailsWith<IOException> { relayNodes.refresh(11, 250f) }
+        assertFailsWith<IOException> { relayNodes.refresh(11, 250f, null) }
         assertEquals(2, requests.size)
-        assertNotNull(relayNodes.saved(11, 250f))
+        assertNotNull(relayNodes.saved(11, 250f, null))
 
         // Another server's list, or one older than the relay history, is not used.
         settings.settings.value = settings.settings.value.copy(url = "https://other.example/")
-        assertNull(relayNodes.saved(11, 250f))
+        assertNull(relayNodes.saved(11, 250f, null))
         settings.settings.value = settings.settings.value.copy(url = "https://maps.example/")
         now += DIRECT_HISTORY.inWholeMilliseconds
-        assertNull(relayNodes.saved(11, 250f))
+        assertNull(relayNodes.saved(11, 250f, null))
     }
 
     @Test
-    fun `presets on one spreading factor keep their own lists`() = runTest {
-        assertNotNull(relayNodes.refresh(7, 250f))
-        assertNull(relayNodes.saved(7, 62.5f))
-        assertNotNull(relayNodes.refresh(7, 62.5f))
+    fun `presets on one spreading factor and channels on one preset keep their own lists`() = runTest {
+        assertNotNull(relayNodes.refresh(7, 250f, null))
+        assertNull(relayNodes.saved(7, 62.5f, null))
+        assertNotNull(relayNodes.refresh(7, 62.5f, null))
         assertEquals("spreading_factor=7&bandwidth_khz=62.5", requests.last().url.encodedQuery)
+        assertNull(relayNodes.saved(7, 62.5f, 869.618f))
+        assertNotNull(relayNodes.refresh(7, 62.5f, 869.618f))
+        assertEquals("spreading_factor=7&bandwidth_khz=62.5&frequency_mhz=869.618", requests.last().url.encodedQuery)
+        assertNull(relayNodes.saved(7, 62.5f, 869.4312f))
     }
 }

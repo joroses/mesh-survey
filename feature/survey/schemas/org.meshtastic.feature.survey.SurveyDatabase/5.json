@@ -1,0 +1,358 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "2765a7d61b13e51d8ff7250a74be0f0a",
+    "entities": [
+      {
+        "tableName": "survey_session",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `started_at` INTEGER NOT NULL, `ended_at` INTEGER, `status` TEXT NOT NULL, `receiver_node_id` INTEGER NOT NULL, `receiver_name` TEXT NOT NULL, `modem_preset` TEXT, `spreading_factor` INTEGER NOT NULL, `bandwidth_khz` REAL NOT NULL, `frequency_mhz` REAL, `app_version` TEXT NOT NULL, `uploaded_seq` INTEGER NOT NULL, `last_upload_at` INTEGER, `last_upload_error` TEXT, `server_kept` INTEGER NOT NULL DEFAULT 0, `server_skipped` INTEGER NOT NULL DEFAULT 0, `server_skip_reasons` TEXT, `upload` INTEGER NOT NULL DEFAULT 0, `news_cells` INTEGER, `news_nodes` INTEGER, `news_direct` INTEGER, `news_new_cells` INTEGER, `news_new_nodes` INTEGER, `news_new_direct` INTEGER, `news_local_new_cells` INTEGER, `news_local_new_nodes` INTEGER, `news_local_new_direct` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "started_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "ended_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receiverNodeId",
+            "columnName": "receiver_node_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receiverName",
+            "columnName": "receiver_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modemPreset",
+            "columnName": "modem_preset",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "spreadingFactor",
+            "columnName": "spreading_factor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bandwidthKhz",
+            "columnName": "bandwidth_khz",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frequencyMhz",
+            "columnName": "frequency_mhz",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "appVersion",
+            "columnName": "app_version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uploadedSeq",
+            "columnName": "uploaded_seq",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUploadAt",
+            "columnName": "last_upload_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastUploadError",
+            "columnName": "last_upload_error",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "serverKept",
+            "columnName": "server_kept",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "serverSkipped",
+            "columnName": "server_skipped",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "serverSkipReasons",
+            "columnName": "server_skip_reasons",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "upload",
+            "columnName": "upload",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "news.cells",
+            "columnName": "news_cells",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.nodes",
+            "columnName": "news_nodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.direct",
+            "columnName": "news_direct",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.newCells",
+            "columnName": "news_new_cells",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.newNodes",
+            "columnName": "news_new_nodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.newDirect",
+            "columnName": "news_new_direct",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.localNewCells",
+            "columnName": "news_local_new_cells",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.localNewNodes",
+            "columnName": "news_local_new_nodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "news.localNewDirect",
+            "columnName": "news_local_new_direct",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "survey_measurement",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`seq` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `session_id` TEXT NOT NULL, `heard_at_ms` INTEGER NOT NULL, `latitude` REAL, `longitude` REAL, `accuracy_m` REAL, `fix_age_ms` INTEGER, `sender_node_id` INTEGER NOT NULL, `recipient_node_id` INTEGER NOT NULL, `packet_id` INTEGER NOT NULL, `rx_snr` REAL, `rx_rssi` INTEGER, `hop_start` INTEGER NOT NULL, `hop_limit` INTEGER NOT NULL, `relay_byte` INTEGER, `ok_to_mqtt` INTEGER, `default_key` INTEGER, `cell_x` INTEGER, `cell_y` INTEGER, `server_new` INTEGER, `local_new` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "seq",
+            "columnName": "seq",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "heardAtMs",
+            "columnName": "heard_at_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "accuracyM",
+            "columnName": "accuracy_m",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "fixAgeMs",
+            "columnName": "fix_age_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "senderNodeId",
+            "columnName": "sender_node_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recipientNodeId",
+            "columnName": "recipient_node_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packetId",
+            "columnName": "packet_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rxSnr",
+            "columnName": "rx_snr",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rxRssi",
+            "columnName": "rx_rssi",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "hopStart",
+            "columnName": "hop_start",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hopLimit",
+            "columnName": "hop_limit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relayByte",
+            "columnName": "relay_byte",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "okToMqtt",
+            "columnName": "ok_to_mqtt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "defaultKey",
+            "columnName": "default_key",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cellX",
+            "columnName": "cell_x",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cellY",
+            "columnName": "cell_y",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "serverNew",
+            "columnName": "server_new",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "localNew",
+            "columnName": "local_new",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "seq"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_survey_measurement_session_id_seq",
+            "unique": false,
+            "columnNames": [
+              "session_id",
+              "seq"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_survey_measurement_session_id_seq` ON `${TABLE_NAME}` (`session_id`, `seq`)"
+          },
+          {
+            "name": "index_survey_measurement_cell_x_cell_y",
+            "unique": false,
+            "columnNames": [
+              "cell_x",
+              "cell_y"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_survey_measurement_cell_x_cell_y` ON `${TABLE_NAME}` (`cell_x`, `cell_y`)"
+          }
+        ]
+      },
+      {
+        "tableName": "survey_deleted",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `new_cells` INTEGER NOT NULL, `new_nodes` INTEGER NOT NULL, `new_direct` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newCells",
+            "columnName": "new_cells",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newNodes",
+            "columnName": "new_nodes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newDirect",
+            "columnName": "new_direct",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2765a7d61b13e51d8ff7250a74be0f0a')"
+    ]
+  }
+}

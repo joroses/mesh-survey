@@ -35,6 +35,7 @@ import org.meshtastic.core.ui.viewmodel.stateInWhileSubscribed
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.SurveyCsv
 import org.meshtastic.feature.survey.SurveyDao
+import org.meshtastic.feature.survey.SurveyDeleted
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveyRecorder
 import org.meshtastic.feature.survey.SurveyService
@@ -73,6 +74,9 @@ class SurveyViewModel(
             .stateInWhileSubscribed(emptyList())
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
     val keepScreenOn: StateFlow<Boolean> = settings.keepScreenOn.stateInWhileSubscribed(false)
+
+    /** What deleted sessions had added to SigSleuth's map, for the Sessions card's total. */
+    val deleted: StateFlow<SurveyDeleted?> = dao.deleted().stateInWhileSubscribed(null)
 
     /** The connected radio's name, which Start would survey with; null while no radio is connected. */
     val radioName: StateFlow<String?> =
@@ -143,7 +147,8 @@ class SurveyViewModel(
     fun upload(sessionId: String) = uploader.uploadNow(sessionId)
 
     fun delete(sessionId: String) {
-        if (state.value.session?.id == sessionId) return
+        // A delete recounts later sessions, and the recording one keeps earlier sessions' keys from its start.
+        if (state.value.session != null) return
         appScope.launch {
             val result = safeCatching { dao.deleteSession(sessionId) }
             snackbars.showSnackbar(

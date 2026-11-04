@@ -117,9 +117,11 @@ import org.meshtastic.core.ui.icon.History
 import org.meshtastic.core.ui.icon.Info
 import org.meshtastic.core.ui.icon.LinkOff
 import org.meshtastic.core.ui.icon.LocationDisabled
+import org.meshtastic.core.ui.icon.Map
 import org.meshtastic.core.ui.icon.MeshRadio
 import org.meshtastic.core.ui.icon.MeshtasticIcons
 import org.meshtastic.core.ui.icon.MyLocation
+import org.meshtastic.core.ui.icon.PhoneAndroid
 import org.meshtastic.core.ui.icon.PlayArrow
 import org.meshtastic.core.ui.icon.Route
 import org.meshtastic.core.ui.icon.Snr
@@ -134,17 +136,22 @@ import org.meshtastic.feature.survey.FAR
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayCandidate
 import org.meshtastic.feature.survey.RelayGuess
+import org.meshtastic.feature.survey.SIGSLEUTH_MAX_ACCURACY_M
+import org.meshtastic.feature.survey.SIGSLEUTH_MAX_FIX_AGE_S
 import org.meshtastic.feature.survey.ServerAnswer
 import org.meshtastic.feature.survey.SurveyFix
+import org.meshtastic.feature.survey.SurveyNews
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveyRecorder
 import org.meshtastic.feature.survey.SurveySession
 import org.meshtastic.feature.survey.SurveySessionSummary
 import org.meshtastic.feature.survey.SurveyState
 import org.meshtastic.feature.survey.SurveyStatus
+import org.meshtastic.feature.survey.SurveyTotals
 import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.isUploadUrl
+import org.meshtastic.feature.survey.surveyTotals
 import java.util.Locale
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource as sharedStringResource
@@ -163,6 +170,8 @@ fun SurveyScreen(
     val uploadSettings by viewModel.uploadSettings.collectAsStateWithLifecycle()
     val uploading by viewModel.uploading.collectAsStateWithLifecycle()
     val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
+    val deleted by viewModel.deleted.collectAsStateWithLifecycle()
+    val totals = remember(sessions, deleted) { surveyTotals(sessions.map { it.session }, deleted) }
     // Only while this screen is in front: Android drops the flag once the app is in the background.
     KeepScreenOn(keepScreenOn && state.session != null)
 
@@ -237,6 +246,7 @@ fun SurveyScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
+            totals?.let { item(key = "totals") { TotalsCard(it) } }
             if (sessions.isEmpty()) {
                 item(key = "no_sessions") {
                     EmptyState(
@@ -251,6 +261,7 @@ fun SurveyScreen(
                 SessionCard(
                     summary = summary,
                     recording = summary.session.id == state.session?.id,
+                    deletable = state.session == null,
                     uploadsOn = uploadsOn,
                     uploading = uploading,
                     onUpload = { viewModel.upload(summary.session.id) },
@@ -272,10 +283,6 @@ private const val SHORT_ID_LENGTH = 8
 private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
 private const val SECONDS_PER_HOUR = 3_600L
-
-// SigSleuth skips a measurement whose fix is older or less accurate than this (its MAX_FIX_AGE_MS and MAX_ACCURACY_M).
-private const val SIGSLEUTH_MAX_FIX_AGE_S = 10
-private const val SIGSLEUTH_MAX_ACCURACY_M = 100
 
 @Composable
 private fun RecordingCard(
@@ -416,6 +423,20 @@ private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNa
                 label = stringResource(R.string.survey_stat_since_last),
                 modifier = Modifier.weight(1f),
             )
+        }
+        state.newToYou
+            ?.takeIf { it.cells > 0 }
+            ?.let {
+                InfoRow(
+                    MeshtasticIcons.PhoneAndroid,
+                    stringResource(
+                        R.string.survey_new_to_you,
+                        newsText(it.localNewCells, it.localNewNodes, it.localNewDirect),
+                    ),
+                )
+            }
+        state.news?.newCells?.let {
+            InfoRow(MeshtasticIcons.Map, pluralStringResource(R.plurals.survey_cells_added, it, it))
         }
         // While the radio is away GPS is off on purpose; the header and the line above say so.
         if (!state.waitingForRadio) GpsStatus(state.fix)
@@ -1093,6 +1114,7 @@ private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSett
 private fun SessionCard(
     summary: SurveySessionSummary,
     recording: Boolean,
+    deletable: Boolean,
     uploadsOn: Boolean,
     uploading: Boolean,
     onUpload: () -> Unit,
@@ -1126,6 +1148,22 @@ private fun SessionCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            session.news?.let { news ->
+                if (news.cells > 0) {
+                    Text(
+                        sessionNewsText(news),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                news.newCells?.let {
+                    Text(
+                        pluralStringResource(R.plurals.survey_cells_added, it, it),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             UploadProgress(summary, uploadsOn)
             serverText(session)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1137,14 +1175,17 @@ private fun SessionCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            // A session still recording can be neither exported whole nor deleted, so it offers neither.
+            // A session still recording can be neither exported whole nor deleted, so it offers neither. No session is
+            // deleted while one records ([SurveyViewModel.delete]).
             if (!recording) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(
-                        onClick = { confirmDelete = true },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) {
-                        Text(stringResource(R.string.survey_delete))
+                    if (deletable) {
+                        TextButton(
+                            onClick = { confirmDelete = true },
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        ) {
+                            Text(stringResource(R.string.survey_delete))
+                        }
                     }
                     TextButton(onClick = onExport) { Text(stringResource(R.string.survey_export)) }
                     // Disabled, not spinning, during a run: the run may be another session's.
@@ -1165,6 +1206,48 @@ private fun SessionCard(
                 },
                 onDismiss = { confirmDelete = false },
             )
+        }
+    }
+}
+
+/** "5 cells · 18 relays · 3 direct"; the notification has the same. */
+@Composable
+@ReadOnlyComposable
+private fun newsText(cells: Int, nodes: Int, direct: Int): String = listOf(
+    pluralStringResource(R.plurals.survey_cells, cells, cells),
+    pluralStringResource(R.plurals.survey_nodes, nodes, nodes),
+    stringResource(R.string.survey_direct_count, direct),
+)
+    .joinToString(" · ")
+
+/** What a session was first on this phone to have, out of what it measured. */
+@Composable
+@ReadOnlyComposable
+private fun sessionNewsText(news: SurveyNews): String {
+    val parts =
+        listOf(
+            pluralStringResource(R.plurals.survey_cells_of, news.cells, news.localNewCells, news.cells),
+            pluralStringResource(R.plurals.survey_nodes_of, news.nodes, news.localNewNodes, news.nodes),
+            stringResource(R.string.survey_direct_of, news.localNewDirect, news.direct),
+        )
+            .joinToString(" · ")
+    return stringResource(R.string.survey_new_to_you, parts)
+}
+
+/** What every session on this phone was first to have, and the cells they added to SigSleuth's map. */
+@Composable
+private fun TotalsCard(totals: SurveyTotals) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.survey_totals), style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Stat(totals.cells.toString(), stringResource(R.string.survey_totals_cells), Modifier.weight(1f))
+                Stat(totals.nodes.toString(), stringResource(R.string.survey_totals_relays), Modifier.weight(1f))
+                Stat(totals.direct.toString(), stringResource(R.string.survey_totals_direct), Modifier.weight(1f))
+            }
+            totals.mapCells?.let {
+                InfoRow(MeshtasticIcons.Map, pluralStringResource(R.plurals.survey_cells_added, it, it))
+            }
         }
     }
 }

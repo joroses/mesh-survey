@@ -136,16 +136,43 @@ class SurveyService : Service() {
             if (state.waitingForRadio) {
                 getString(R.string.survey_waiting_for_radio)
             } else {
-                resources.getQuantityString(
-                    R.plurals.survey_measurements,
-                    state.measurementCount,
-                    state.measurementCount,
+                getString(
+                    R.string.survey_measurements_direct,
+                    resources.getQuantityString(
+                        R.plurals.survey_measurements,
+                        state.measurementCount,
+                        state.measurementCount,
+                    ),
+                    state.directCount,
                 )
             }
+        // What is new to the phone, and the cells the map gained once SigSleuth has said; what is not uploaded, while
+        // uploads fail.
+        val waiting = (state.measurementCount - state.acknowledged).coerceAtLeast(0).toInt()
+        val details =
+            listOfNotNull(
+                state.newToYou
+                    ?.takeIf { it.cells > 0 }
+                    ?.let {
+                        getString(
+                            R.string.survey_new_to_you,
+                            newsText(it.localNewCells, it.localNewNodes, it.localNewDirect),
+                        )
+                    },
+                state.news?.newCells?.let { resources.getQuantityString(R.plurals.survey_cells_added, it, it) },
+                resources.getQuantityString(R.plurals.survey_upload_pending, waiting, waiting).takeIf {
+                    state.uploadFailing && waiting > 0
+                },
+            )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.survey_ic_notification)
             .setContentTitle(getString(R.string.survey_title))
             .setContentText(text)
+            .apply {
+                if (details.isNotEmpty()) {
+                    setStyle(NotificationCompat.BigTextStyle().bigText((listOf(text) + details).joinToString("\n")))
+                }
+            }
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(0, getString(R.string.survey_stop), stop)
@@ -163,6 +190,14 @@ class SurveyService : Service() {
         if (recorder.state.value.session != null) scope.launch { recorder.stop(SurveyStatus.INTERRUPTED) }
         super.onDestroy()
     }
+
+    /** "5 cells · 18 relays · 3 direct", as the screen's `newsText`. */
+    private fun newsText(cells: Int, nodes: Int, direct: Int): String = listOf(
+        resources.getQuantityString(R.plurals.survey_cells, cells, cells),
+        resources.getQuantityString(R.plurals.survey_nodes, nodes, nodes),
+        getString(R.string.survey_direct_count, direct),
+    )
+        .joinToString(" · ")
 
     companion object {
         private const val ACTION_STOP = "org.meshtastic.feature.survey.STOP"

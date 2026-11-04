@@ -1,68 +1,93 @@
-# `:feature:survey`
+# Signal survey (`:feature:survey`)
 
-Signal survey, a fork-only feature (not in upstream Meshtastic-Android). While a survey runs, the phone records every LoRa packet its connected node hears, with where the phone was at that moment, in its own database. It uploads the records to SigSleuth (`POST /api/v1/coverage/uploads`) and can export a session as CSV. It lives in Settings → Advanced → Signal Survey. Android only: it needs the phone's GPS.
+Mesh Survey's own feature; upstream Meshtastic-Android doesn't have it. While a survey runs, the phone saves every LoRa packet its connected node hears, with the phone's GPS position at that moment. Sessions can be exported as CSV or uploaded to a [SigSleuth](https://github.com/joroses/sigsleuth) server, which turns them into a coverage map. It lives in Settings → Advanced → Signal Survey. Android only, since it needs the phone's GPS.
 
-## How it works
+What a survey records, from a privacy point of view, and how to install the app: see the [top-level README](../../README.md#privacy).
 
-- **Hook.** `MeshMessageProcessorImpl.handleReceivedMeshPacket` hands every raw packet to `SurveyPacketTap.Shared` (core:repository; Koin binds the interface to `SurveyPacketTapImpl` in core:data, which forwards to it) before decoding, so packets the node could not decrypt are recorded too. Upstream's Discovery hook comes after decoding, which drops them (30% of the first version's rows). The listener only builds the row and `trySend`s it to a bounded channel; one coroutine does the inserts.
-- **What is recorded** (`measurementOf`): LoRa packets only (on firmware before 2.7.5, which marks every packet internal, those with an RSSI), not relayed by MQTT, not from the survey node itself or node 0. A packet whose `rx_time` trails the phone's clock by more than 60 s is a replay from the node's history and is dropped. Each row gets the newest GPS fix and its age; mock fixes count as none. Missing SNR, RSSI, position or relay byte is null; SNR 0 is a real reading. A packet the survey node decoded also records the sender's OK to MQTT bit (`Data.bitfield` bit 0; a missing bitfield is not OK, as the firmware reads it) and whether its channel's key is the default `AQ==`, the only one SigSleuth decrypts (`defaultKeyChannels`); both are null for a packet it could not decode.
-- **Sessions** (`SurveyRecorder`) record the radio settings in use, so SigSleuth can tell networks apart and measure each SNR from its spreading factor's floor: the preset name, spreading factor, bandwidth in kHz (62.5, not the config's code 62) and the frequency the app's LoRa settings show (the primary channel's `radioFreq`). They end on Stop, when the survey node or its LoRa settings change (Local Mesh Discovery changes the preset while it scans; renaming the primary channel or changing the frequency offset moves the frequency too), when the radio stays away for 30 minutes (timed on a clock that runs while the phone sleeps, so a radio back after a longer sleep still ends it; a disconnect by hand counts as away, so reconnecting the same radio resumes the session), or when the service dies (the next start marks them interrupted). While the radio is away GPS is off, so a forgotten survey does not drain the battery, and nothing is recorded: after a reconnect, capture resumes only once the handshake has finished and the node and settings still match, so packets heard during the handshake never land in a session whose settings they may not share.
-- **Service** (`SurveyService`): a foreground service of type `location`, because MeshService does not always hold that type. Its notification has a Stop action and its own channel.
-- **GPS** (`SurveyLocation`): its own 1 s GPS request, because the app's location source asks every 30 s and drops each fix's age.
-- **Storage**: `signal_survey.db` (Room, version 4; auto-migrations: 1→2 adds the server counts, 2→3 each measurement's OK to MQTT bit and default key, 3→4 each session's upload flag; `SurveyDatabaseMigrationTest` checks old rows survive), apart from the per-device app database. Sessions are deleted by hand. The session list follows the session table only, so a measurement does not recount every stored row; the recording session's count comes from the recorder.
-- **Upload** (`SurveyUploader`): only sessions the user lets go (`survey_session.upload`) are ever sent. A session gets the flag when it starts with "Upload automatically" on, or when the user taps Upload on it (the upload card's "Upload now" for the recording session, a session card's Upload for an ended one). Turning "Upload automatically" off while recording clears the recording session's flag, so the rest of it stays on the phone; the uploader checks the flag before every batch, so a run already sending stops at the next one. Sessions from before database version 4 start private. Batches of 500 rows after each session's `uploaded_seq`, oldest session first; the server's `last_seq` becomes the new `uploaded_seq`, and it ignores rows it already holds. It stops at the first failure and saves the error. The URL must be absolute (`https://host`): the app's shared HttpClient resolves anything else against api.meshtastic.org, so Save refuses it and the uploader sends nothing. Plain `http://` passes only for `localhost` and `127.0.0.1`, the only hosts cleartext may reach (below). Each reply also names the node each saved row heard (see SigSleuth's answers below). Each session keeps what SigSleuth's replies say it kept and skipped, by reason (`no_position`, `too_old`, …), and its card shows them, since "Uploaded N of N" only means the server answered. That progress and those counts belong to one server, so saving a different URL resets them for every session (not the upload flags) and the new server gets every allowed session's rows (otherwise a switch from a local test instance to the real one would send nothing). Hop counts are uploaded raw, as in the CSV: a `hop_start` of 0 is either firmware older than hop counts or a zero-hop packet such as Range Test's, and SigSleuth tells them apart (`known_hop_start`: 0/0 with the sender's own relay byte is direct, any other 0 is unknown). It runs every minute while recording and once when a session ends (if "Upload automatically" is on), and from the Upload buttons. Surveys go where no gateway listens, often with no mobile data either, so when a run fails with "Upload automatically" on, `SurveyUploadWorker` (WorkManager unique work `signal_survey_upload`, KEEP) runs it again once the phone has a network connection, backing off exponentially from one minute while it keeps failing; it survives the app closing and a reboot. An invalid URL is not retried. The URL, user and password live in this module's DataStore (`signal_survey_ds`); the password is sent as `Authorization: Basic`, never in the URL, whenever a user or a password is set (SigSleuth checks only the password: its `SIGSLEUTH_UPLOAD_PASSWORD`).
-- **Screen** (`SurveyScreen`): the server settings fold to one line once saved. The recording card shows the GPS line in the error colour while SigSleuth would skip the packets heard now (a fix older than 10 s or worse than 100 m: its `MAX_FIX_AGE_MS` and `MAX_ACCURACY_M`), and the session cards word its skip reasons with the same limits, so change both with the server. CSV export and delete report through the app's snackbar.
-- **Cleartext HTTP** is blocked except to `localhost`, so a deployed SigSleuth needs HTTPS. Over USB, `adb reverse tcp:8001 tcp:8001` reaches a local instance as `http://localhost:8001`.
+## Recording
+
+- **Which packets.** Every LoRa packet the node hears, including those it can't decrypt: the hook runs before the app decodes them. Left out: packets relayed over MQTT, packets from the survey node itself, and old packets the node replays on connect (more than 60 s late).
+- **Each row** holds the time, the phone's newest GPS fix with its accuracy and age, SNR, RSSI, hop counts, relay byte, sender, recipient and packet ID. For a packet the node decoded, also the sender's OK to MQTT bit and whether its channel uses the default key, the only one SigSleuth can read.
+- **GPS** has its own one-second request; the app's location updates come every 30 s. Mock locations are ignored.
+- **A session** saves the radio settings (preset, spreading factor, bandwidth, frequency) so SigSleuth can tell networks apart. It ends on Stop, when the node or its LoRa settings change, or when the radio is away for 30 minutes; reconnecting sooner resumes it. While the radio is away, GPS is off and nothing is recorded.
+- Sessions stay in their own database, `signal_survey.db`, until you delete them.
+
+## Uploading
+
+- Only sessions you allow are sent: those started with **Upload automatically** on, and those you upload by hand. Turning the switch off during a session keeps the rest of it on the phone.
+- While recording, the app uploads every minute, in batches of 500 rows. A failed automatic upload is tried again once the phone is online, even after a reboot.
+- The server address must start with `https://`; plain `http://` works only for `localhost`. The password goes in an HTTP Basic header.
+- Each session card shows what SigSleuth kept and skipped (no position, fix too old, …). Saving a different server address resets these counts, and the new server gets every allowed session from the start.
+
+## What a session adds
+
+A session counts the map cells it covered, the relay bytes heard in each cell and the nodes heard directly in each cell. **New to you** is what no earlier session on this phone, on the same network, had. **Added to the map** is what SigSleuth's replies call new on its map. The **Surveyed so far** card adds both up over every session. Deleting a session passes its "new to you" on to later sessions that had the same things; what it added to the map still counts.
 
 ## Relay guesses
 
-A packet carries only the last byte of the node that relayed it (`relay_byte`), and the firmware sends a node number ending in `00` as `FF` (`getLastByteOfNodeNum` in `NodeDB.h`), so many nodes can share a byte. The recording card's "Relay" line names the likely relay anyway, marked as a guess (`SurveyRelays.kt`):
+A packet carries only the last byte of the node that relayed it, so several nodes can share a byte. The recording card names the likely relay anyway, marked as a guess:
 
-| Situation | Relay text |
+| Situation | Shown as |
 | :--- | :--- |
-| The packet came straight from its sender | `ABCD (direct)` |
-| One neighbour with that byte heard directly within 1 km of the packet's fix in the last 30 days | `3f ≈ ABCD` |
-| None near that fix, and one candidate left: heard directly elsewhere within 30 km in the last 30 days, or placed within 30 km or its reach | `3f ≈ ABCD?` |
-| Several in the first nonempty tier (near, then elsewhere) | `3f: ABCD or EFGH` (distance, then node number; at most three) |
+| Came straight from its sender | `ABCD (direct)` |
+| One node with that byte heard directly within 1 km of here in the last 30 days | `3f ≈ ABCD` |
+| None that near, and one possible node within 30 km | `3f ≈ ABCD?` |
+| Several near, or none near and several possible | `3f: ABCD or EFGH` (nearest first, at most three) |
 | None | `3f` |
 
-- **Direct** means `hop_start == hop_limit` and the relay byte is the sender's own (`isDirect`).
-- **Candidates** are mainly senders this survey radio has heard directly: in this session, and in earlier sessions from the last 30 days with the same `receiver_node_id`, spreading factor, bandwidth and frequency, as SigSleuth's survey links match, so a second network surveyed with the same radio adds no candidates (`SurveyDao.directPlaces`, loaded when a session starts). Direct receptions are grouped into 0.002° cells (`round(latitude * 500)`, `round(longitude * 500)`), keeping each cell's latest time and the node's last direct time, including fixless receptions. The sender itself is never a candidate, and a packet is never evidence for its own guess. Nodes whose role in the survey radio's node database is `CLIENT_MUTE` are excluded because they never rebroadcast; an unknown role keeps the candidate.
-- **Positions.** A packet with a fix also gets, as candidates, nodes with that byte known by a position (`placedWith`): those in the survey radio's node database with a position, last heard in the last 30 days (`reportedWith`), and those on SigSleuth's map (below) that the node database lacks. The survey radio itself is left out. They only ever join the possible tier: a position is a claim, possibly stale, not a reception. A node already a candidate by its direct receptions is listed once, by those, and a node in both the node database and SigSleuth's list keeps the radio's copy of its position.
-- **SigSleuth's map.** With a server set, a recording session uses that server's list of the nodes that could relay on its spreading factor (`GET /api/v1/coverage/relay-nodes?spreading_factor=N`, with the upload password; `SurveyRelayNodes`): each node's names, the position SigSleuth's map draws it at (its own report, or estimated from its neighbours, shown with `~`) and its reach, the longest link SigSleuth trusts it to have sent, when over 50 km. SigSleuth leaves out nodes that cannot relay there (unplaced, `CLIENT_MUTE`, on another spreading factor, firmware without relay bytes) and nodes that turned OK to MQTT off. The list is saved per spreading factor in the app's files (`survey/relay-nodes-sfN.json`), with the server it came from, and is fetched when a session starts if it is more than a day old, then retried every 10 minutes while recording, since surveys often start without signal. It works offline from then on; a list from another server, or older than 30 days, is not used. The request sends only the spreading factor and the password, never the phone's position, and the list is never written to the radio's node database.
-- **Far.** Every candidate must be within 30 km of the packet's fix (`FAR`): heard directly within 30 km of it, or placed that close. A placed node whose reach on SigSleuth's map is longer may be as far as its reach: a hilltop router 100 km away that has sent 190 km links can be a possible relay, one with no known reach cannot. Reach widens only positions, never the distance from where this phone heard a node. A neighbour heard only 200 km away on a road trip is dropped, though if it is placed nearby it comes back by that. A candidate without cells has no distance and stays.
-- **Near** means within 1 km of the closest cell centre heard in those 30 days, using the packet's own GPS fix whatever its age. A candidate without cells counts as near only if heard directly in the last hour. One near candidate is likely; several stay ambiguous, ordered by distance then node number. With none near, the neighbours heard elsewhere and the reported positions are merged by distance, with those without cells last, and are possible or ambiguous. Sorting the two kinds together is rough, since one distance is to where the phone heard the node and the other to where the node says it is. Without a packet fix, guesses keep the time tiers: last hour first, then the rest of the 30-day history, newest first, and reported positions are not used.
-- **Too strong.** A relay sends its copy at its own power over its own path, so the copy cannot arrive much stronger than that node's own packets heard from the same place. A packet's signal is `rx_rssi + min(rx_snr, 0)` (below the noise floor RSSI stops falling and the negative SNR carries the rest; RSSI 0 is unset). A neighbour is ruled out for a packet when the packet's signal is more than 30 dB (`TOO_STRONG_DB`) above the strongest signal of its own direct receptions in cells within 1 km of the packet's fix in the last 30 days; it then leaves every tier, reported positions included. The check is one-sided because arriving weaker is normal (pocket, indoors, fading). On SigSleuth's loranet.pl gateways (2026-09-27 to 10-12, 279k relayed traceroute receptions with a known last relay) a 30 dB margin wrongly ruled out 0.035% of true relays and removed 15% of wrong directly heard candidates; gateways don't move, so the margin is wide until phone data calibrates it. Packets without a fix or RSSI, candidates heard only farther away, and reported positions are not checked.
-- **SigSleuth's answers.** Each upload reply names the node SigSleuth decided each saved row heard, as its map shows it: survey links from any phone's uploads first, then its MQTT gateway evidence, and unknown for a node that turned OK to MQTT off. When unknown, it can suggest up to three possible relays, nearest first, with names and distances from the uploaded packet's fix; the app shows them as “maybe” while keeping the answer unknown. A resent batch reads the saved packet and current candidate hints. The recorder keeps, for each relay byte of the recording session, the answer for its newest uploaded relayed packet (`RelayStats.server`). Uploads run about a minute behind, so that is often an earlier packet than the one the guess is about: the relay list shows it on its own line with that packet's time, and it never replaces the phone's own guess. Only sessions allowed to upload get answers.
-- **The relay list.** Tapping the recording card's "Relay bytes" count lists this session's relay bytes, most packets first: each byte's guess, packet count and when its last packet arrived, SigSleuth's answer if any, and every candidate of that byte's last packet, not only the guessed tier: the guessed tier first, then the rest by distance, so a likely guess still shows the other nodes it could have been. Each line says how the node is known, under a one-line legend; nodes that packet ruled out follow, marked ✕ with their strongest signal here and the packet's. 📡 (heard directly) gives the distance from the phone's current fix to the node's nearest direct reception in the last 30 days and that reception's time, or without a fix the last direct time; that distance runs from where this phone heard the node, not from the node, and a later direct reception elsewhere is not shown. 📍 (reports a position) gives the distance from the phone's current fix to where the node says it is, and 🗺 the distance to where SigSleuth's map puts it; either adds the node's reach when that let it in from beyond 30 km. Under the legend, a line says how many nodes SigSleuth's list holds and when it was fetched. Reception places rank the guesses, so a router heard along a route can remain a candidate even far from the router's own position.
-- **Names** come from the node database of the connected radio, which is the survey radio; for a node missing from it, from SigSleuth's answers or list; otherwise it shows as `!xxxxxxxx`.
-- **Not stored or exported.** Guesses and SigSleuth's answers stay in memory: the database, the CSV and the SigSleuth upload keep only the raw fields, so SigSleuth can make its own.
+- **Heard directly.** The main evidence is where this radio heard each node directly: in this session, and in the last 30 days on the same network. A node heard within 1 km of the packet is a likely relay; up to 30 km, a possible one. `CLIENT_MUTE` nodes never relay and are left out.
+- **Known positions.** Nodes whose position is known, from the radio's node database or SigSleuth's map, can only be *possible* relays: a position is a claim, not a reception. They must be within 30 km, or within the longest link SigSleuth has seen them make.
+- **Too strong.** A relay's copy can't arrive much stronger than its own packets heard from the same place. A node is ruled out when the packet is more than 30 dB stronger than its strongest direct signal within 1 km.
+- **SigSleuth's map.** With a server set, a recording session downloads the server's list of nodes that could relay on its radio settings, so guesses work offline. It fetches the list at most once a day, retrying every 10 minutes while offline, and sends only the radio settings and the password, never the phone's position.
+- **SigSleuth's answers.** Each upload reply names the node each relayed packet came through, from every phone's uploads and SigSleuth's MQTT gateways. The relay list shows the answer beside the guess; it never replaces it.
 
-Limits: the signal only rules candidates out, never in, and a node never heard directly within 1 km of the packet isn't checked, so a far node heard weakly only elsewhere can still be guessed. A relay the survey radio has never heard directly is named only as possible, and only if it is placed within 30 km or, on SigSleuth's map, within its reach; the server's answer can name it after the upload, by evidence the phone does not have; two neighbours sharing a byte and reception area stay ambiguous regardless of which spoke last. A mobile node heard just once at a place can remain a candidate there for 30 days; the guess deliberately errs towards ambiguity. Earlier receptions count immediately when returning to a place, and expire after 30 days. Upstream named relays by matching the whole node database and dropped it because it named stale or wrong nodes ([#4292](https://github.com/meshtastic/Meshtastic-Android/issues/4292), [design#33](https://github.com/meshtastic/design/issues/33), [#3773](https://github.com/meshtastic/Meshtastic-Android/pull/3773)), which is why the node database here only adds possible candidates, within 30 km and heard in the last 30 days; relying on direct neighbours follows the firmware's own relay attribution in [firmware#12090](https://github.com/meshtastic/firmware/pull/12090).
+Tap the card's **Relay bytes** count for the full list: each byte's guess, every candidate with how it is known (📡 heard directly, 📍 reported position, 🗺 SigSleuth's map), and the nodes ruled out (✕). Guesses and answers stay in memory: the database, the CSV and the upload keep only the raw relay byte, so SigSleuth makes its own.
 
-## CSV export compared with "Export all packets"
+**Limits.** The guess errs towards ambiguity: two nodes sharing a byte in the same area stay ambiguous, and a mobile node heard once in a place stays a candidate there for 30 days. Upstream once named relays by matching the whole node database and dropped it because it named stale or wrong nodes ([#4292](https://github.com/meshtastic/Meshtastic-Android/issues/4292), [design#33](https://github.com/meshtastic/design/issues/33), [#3773](https://github.com/meshtastic/Meshtastic-Android/pull/3773)). That's why the node database only adds possible candidates here. Relying on direct neighbours follows the firmware's own relay attribution in [firmware#12090](https://github.com/meshtastic/firmware/pull/12090).
 
-Settings' "Export all packets" (`ExportDataUseCase`; "Export rangetest packets" is the same export filtered to the range-test port) writes `date, time, from, sender name, sender lat, sender long, rx lat, rx long, rx elevation, rx snr, distance(m), hop limit, hop start, relay node, payload`. The survey's CSV (`SurveyCsv`, one session per file) writes `session_id, seq, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, sender_node_id, recipient_node_id, packet_id, rx_snr, rx_rssi, hop_start, hop_limit, relay_byte, ok_to_mqtt, default_key`.
+## CSV export
 
-| | Export all packets | Survey CSV |
-| :--- | :--- | :--- |
-| Time | `date` and `time`, local, whole seconds | `heard_at_ms`: epoch milliseconds, the phone's clock when the packet arrived |
-| Receiver position | `rx lat/long/elevation`: the connected node's last position in the log, which can be minutes old, of unknown accuracy | `latitude/longitude`: the phone's newest GPS fix (1 s request), with `accuracy_m` and `fix_age_ms`; no altitude; mock fixes left out |
-| Sender | `sender name`, `sender lat/long`, `distance(m)` | `sender_node_id` only |
-| Only in the survey | | `rx_rssi`, `recipient_node_id`, `packet_id`, `seq`, `session_id` |
-| Payload | `payload`: text of text and range-test messages, `<PORTNUM>` or "N encrypted bytes" | none |
-| Relay | `relay node` as a hex byte (`d4`) | `relay_byte` as a decimal number (0–255) |
-| Hop order | `hop limit, hop start` | `hop_start, hop_limit` (raw, as uploaded) |
-| SNR | rows without one are dropped | rows kept with an empty `rx_snr` |
-| Which rows | everything in the app's mesh log, from any time, decoded packets only, no transport filter; replays get the time the app received them | packets heard live over LoRa while recording: no MQTT, not the survey node, not node 0, no replays more than 60 s late; includes packets the node could not decrypt |
-| Radio settings | none | not in the CSV either: preset, spreading factor, bandwidth and frequency are in `survey_session`, linked by `session_id` |
-| Format | every field quoted; only quotes in the payload escaped | unquoted, numbers only; a missing value is an empty cell |
+One session per file, with the columns `session_id, seq, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, sender_node_id, recipient_node_id, packet_id, rx_snr, rx_rssi, hop_start, hop_limit, relay_byte, ok_to_mqtt, default_key`. A missing value is an empty cell. The radio settings are in the database's `survey_session` table, not in the CSV.
 
-Both write the sender as an unsigned decimal node number and use `snrOrNull()`, so a 0 dB SNR is a real reading in both.
+Compared with Settings → "Export all packets", it has the phone's own GPS fix with its accuracy and age instead of the node's last known position, times to the millisecond, RSSI, packet IDs, and packets the node couldn't decrypt. It has no payloads or sender names and positions, writes the relay byte as a decimal number, and keeps rows without an SNR.
+
+## Code map
+
+| File | What it does |
+| :--- | :--- |
+| `core/repository/.../SurveyPacketTap.kt` | The hook: `MeshMessageProcessorImpl` hands it every raw packet before decoding |
+| `SurveyCapture.kt` | Which packets become rows, and each row's map cell |
+| `SurveyRecorder.kt` | Sessions: start, stop, radio away, settings changes |
+| `SurveyService.kt` | The foreground service (type `location`) and its notification |
+| `SurveyLocation.kt` | The one-second GPS request |
+| `SurveyDatabase.kt` | Room database `signal_survey.db` and its migrations |
+| `SurveyNewToYou.kt` | "New to you", and recounting it after a delete |
+| `SurveyUploader.kt`, `SurveyUploadWorker.kt` | Uploads, and the retry once online |
+| `SurveyRelays.kt`, `SurveyRelayNodes.kt` | Relay guesses, and SigSleuth's list of relay nodes |
+| `SurveyCsv.kt` | CSV export |
+| `SurveySettings.kt` | Server address, password and switches |
+| `ui/SurveyScreen.kt`, `ui/SurveyViewModel.kt` | The screen |
+
+Some rules copy SigSleuth's and must change with it: the fix limits behind the GPS warning (10 s, 100 m), the map cells (zoom 17 tiles) and when two sessions are on the same network (same spreading factor and bandwidth, frequencies within half a bandwidth).
+
+## Build and try
+
+```bash
+./gradlew :feature:survey:testDebugUnitTest
+./gradlew :androidApp:installFdroidDebug
+# Reach a SigSleuth running on your computer as http://localhost:8001
+adb reverse tcp:8001 tcp:8001
+# The database uses WAL: copy all three files to read it elsewhere.
+for f in signal_survey.db signal_survey.db-wal signal_survey.db-shm; do
+  adb exec-out run-as com.geeksville.mesh.fdroid.debug cat databases/$f > $f
+done
+```
+
+`APPLICATION_ID` (`io.github.joroses.meshsurvey`) applies to release builds only. Debug builds use `com.geeksville.mesh.<flavor>.debug`, so the fork's debug build replaces an upstream debug build on the same phone. A `google` release also needs an `io.github.joroses.meshsurvey` client in `google-services.json`.
 
 ## Upstream files the fork touches
 
-Keep these edits small; they are what a rebase onto upstream has to carry.
+Keep these edits small; a rebase onto upstream has to carry them.
 
 | File | Change |
 | :--- | :--- |
@@ -85,7 +110,7 @@ The fork's own name and identity, kept out of the Meshtastic trademark (see `CON
 
 | File | Change |
 | :--- | :--- |
-| `README.md` | the fork notice at the top, in place of upstream's logo and badges |
+| `README.md` | replaced by the fork's own; it links upstream's. Upstream edits its README often: on a rebase, keep this one |
 | `config.properties` | `APPLICATION_ID=io.github.joroses.meshsurvey`; `VERSION_NAME_BASE` gets a `-survey.N` suffix |
 | `androidApp/src/main/res/values/strings.xml` | `app_name` and `nfc_tag_emulation_service` say Mesh Survey |
 | `androidApp/src/main/res/drawable-anydpi/ic_launcher_*.xml`, `ic_splash.xml` | placeholder signal icon on blue |
@@ -94,18 +119,3 @@ The fork's own name and identity, kept out of the Meshtastic trademark (see `CON
 | `feature/settings/.../AboutScreen.kt` | `GITHUB_REPO_URL` points at this fork; `copyright_notice` stays |
 
 Everything else, including the service's manifest entry and all other strings (English only, prefix `survey_`), is in this module, so upstream's frequent `strings.xml` and manifest changes never conflict.
-
-## Build and try
-
-See the top-level README for [what a survey records and where it goes](../../README.md#privacy) and [how to install a release APK](../../README.md#install).
-
-```bash
-./gradlew :feature:survey:testDebugUnitTest
-./gradlew :androidApp:installFdroidDebug
-# The database uses WAL: copy all three files to read it elsewhere.
-for f in signal_survey.db signal_survey.db-wal signal_survey.db-shm; do
-  adb exec-out run-as com.geeksville.mesh.fdroid.debug cat databases/$f > $f
-done
-```
-
-`APPLICATION_ID` (`io.github.joroses.meshsurvey`) applies to release builds only: `androidApp/build.gradle.kts` sets every debug build to `com.geeksville.mesh.<flavor>.debug`, so the fork's debug build replaces an upstream debug build on the same phone. A `google` release also needs an `io.github.joroses.meshsurvey` client in `google-services.json`.

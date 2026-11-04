@@ -90,11 +90,12 @@ class SurveyRecorderTest {
     private var fetchedMapped: MappedNodes? = null
     private val relayNodes =
         object : SurveyRelayNodes {
-            override suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float) = savedMapped
+            override suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?) = savedMapped
 
-            override suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float) = fetchedMapped.also {
-                fetchedMapped = null
-            }
+            override suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?) =
+                fetchedMapped.also {
+                    fetchedMapped = null
+                }
         }
     private val answers = SurveyAnswers()
 
@@ -560,6 +561,164 @@ class SurveyRecorderTest {
         }
 
     @Test
+    fun `the recording session counts direct packets, follows its uploads and is counted when it ends`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val recorder = recorder()
+            recorder.start(upload = true)
+            location.send(SurveyFix(5_000, 41.9, 1.57, 10f))
+            hear(from = 0x542, hopsUsed = 0, relay = 0x42)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            assertEquals(1, recorder.state.value.directCount)
+            val session = dao.sessions.single().id
+            val news = SurveyNews(cells = 1, nodes = 2, direct = 1, newCells = 1, newNodes = 1, newDirect = 0)
+
+            answers.progress?.invoke(session, SurveyUploadProgress(acknowledged = 2, news, failed = false))
+            assertEquals(news, recorder.state.value.news)
+            assertEquals(2L, recorder.state.value.acknowledged)
+            // An older session's failure holds this one back too, without its counts.
+            answers.progress?.invoke("other", SurveyUploadProgress(acknowledged = 9, news = null, failed = true))
+            assertTrue(recorder.state.value.uploadFailing)
+            assertEquals(news, recorder.state.value.news)
+            assertEquals(2L, recorder.state.value.acknowledged)
+            // A batch's progress clears the failure and keeps what SigSleuth said last.
+            answers.progress?.invoke(session, SurveyUploadProgress(acknowledged = 2, news = null, failed = false))
+            assertFalse(recorder.state.value.uploadFailing)
+            assertEquals(news, recorder.state.value.news)
+            answers.progress?.invoke(session, SurveyUploadProgress(acknowledged = 2, news = null, failed = true))
+            assertTrue(recorder.state.value.uploadFailing)
+            assertEquals(news, recorder.state.value.news)
+
+            // Kept on the phone, the session waits for no upload.
+            answers.consent?.invoke(session, false)
+            assertFalse(recorder.state.value.uploadFailing)
+            answers.progress?.invoke("other", SurveyUploadProgress(acknowledged = 9, news = null, failed = true))
+            assertFalse(recorder.state.value.uploadFailing)
+            answers.consent?.invoke(session, true)
+            answers.progress?.invoke(session, SurveyUploadProgress(acknowledged = 2, news = null, failed = true))
+            assertTrue(recorder.state.value.uploadFailing)
+
+            // A new server: nothing the old one said still holds.
+            answers.serverChanged?.invoke()
+            assertEquals(0L, recorder.state.value.acknowledged)
+            assertFalse(recorder.state.value.uploadFailing)
+            assertNull(recorder.state.value.news)
+
+            recorder.stop()
+            // The phone had nothing before it, so all of it is new to you.
+            assertEquals(
+                SurveyNews(1, 2, 1, localNewCells = 1, localNewNodes = 2, localNewDirect = 1),
+                dao.sessions.single().news,
+            )
+        }
+
+    @Test
+    fun `a recording counts what no earlier session on its settings had`() = runTest(UnconfinedTestDispatcher()) {
+        val here = SurveyCell.of(41.9, 1.57)
+        // Byte 3F was heard here before on these settings; byte 50 only on another network.
+        for ((earlier, spreadingFactor, relay) in listOf(Triple("earlier", 11, 0x3F), Triple("other", 12, 0x50))) {
+            dao.insertSession(
+                SurveySession(
+                    id = earlier,
+                    startedAt = 0,
+                    status = SurveyStatus.STOPPED,
+                    receiverNodeId = 1,
+                    receiverName = "",
+                    modemPreset = null,
+                    spreadingFactor = spreadingFactor,
+                    bandwidthKhz = 250f,
+                    frequencyMhz = 869.525f,
+                    appVersion = "test",
+                ),
+            )
+            dao.insertMeasurement(
+                SurveyMeasurement(
+                    sessionId = earlier,
+                    heardAtMs = 10,
+                    latitude = 41.9,
+                    longitude = 1.57,
+                    accuracyM = 10f,
+                    fixAgeMs = 0,
+                    senderNodeId = 0x600,
+                    recipientNodeId = 0xFFFFFFFF,
+                    packetId = 1,
+                    rxSnr = null,
+                    rxRssi = null,
+                    hopStart = HOP_START,
+                    hopLimit = HOP_START - 1,
+                    relayByte = relay,
+                    cellX = here.x,
+                    cellY = here.y,
+                ),
+            )
+        }
+        val recorder = recorder()
+        recorder.start(upload = false)
+        location.send(SurveyFix(5_000, 41.9, 1.57, 10f))
+
+        hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+        hear(from = 0x500, hopsUsed = 1, relay = 0x50)
+        hear(from = 0x542, hopsUsed = 0, relay = 0x42)
+        hear(from = 0x500, hopsUsed = 1, relay = 0x50)
+        location.send(SurveyFix(5_000, 42.5, 1.57, 10f))
+        hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+
+        val session = recorder.state.value.session!!.id
+        val node = SurveyNews.NEW_NODE
+        assertEquals(
+            listOf(0, node, node or SurveyNews.NEW_DIRECT, node, SurveyNews.NEW_CELL or node),
+            dao.measurements.filter { it.sessionId == session }.map { it.localNew },
+        )
+        val news = SurveyNews(2, 4, 1, localNewCells = 1, localNewNodes = 3, localNewDirect = 1)
+        assertEquals(news, recorder.state.value.newToYou)
+        recorder.stop()
+        assertEquals(news, dao.sessions.single { it.id == session }.news)
+    }
+
+    @Test
+    fun `a session a dead process left recording is ended and counted before the next starts`() =
+        runTest(UnconfinedTestDispatcher()) {
+            dao.insertSession(
+                SurveySession(
+                    id = "killed",
+                    startedAt = 0,
+                    receiverNodeId = 1,
+                    receiverName = "",
+                    modemPreset = "LONG_FAST",
+                    spreadingFactor = 11,
+                    bandwidthKhz = 250f,
+                    frequencyMhz = 869.525f,
+                    appVersion = "test",
+                ),
+            )
+            dao.insertMeasurement(
+                SurveyMeasurement(
+                    sessionId = "killed",
+                    heardAtMs = 10,
+                    latitude = 41.9,
+                    longitude = 1.57,
+                    accuracyM = 10f,
+                    fixAgeMs = 0,
+                    senderNodeId = 0x500,
+                    recipientNodeId = 0xFFFFFFFF,
+                    packetId = 1,
+                    rxSnr = null,
+                    rxRssi = null,
+                    hopStart = HOP_START,
+                    hopLimit = HOP_START - 1,
+                    relayByte = 0x3F,
+                    cellX = 1,
+                    cellY = 1,
+                ),
+            )
+            val recorder = recorder()
+            recorder.start()
+
+            val killed = dao.sessions.single { it.id == "killed" }
+            assertEquals(SurveyStatus.INTERRUPTED, killed.status)
+            assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), killed.news)
+        }
+
+    @Test
     fun `SigSleuth's answer survives arriving before its relay is published`() = runTest(UnconfinedTestDispatcher()) {
         val committed = CompletableDeferred<Long>()
         val publish = CompletableDeferred<Unit>()
@@ -596,7 +755,7 @@ class SurveyRecorderTest {
             // Another network surveyed with the same radio, here on another frequency, adds no candidates.
             for (
             (earlier, frequency, sender) in
-            listOf(Triple("earlier", 869.525f, 0x13FL), Triple("other", 869.4625f, 0x23FL))
+            listOf(Triple("earlier", 869.525f, 0x13FL), Triple("other", 869.275f, 0x23FL))
             ) {
                 dao.insertSession(
                     SurveySession(

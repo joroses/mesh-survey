@@ -19,7 +19,7 @@
 <resources>
     <string name="survey_title">Signal Survey</string>
     <string name="survey_back">Back</string>
-    <string name="survey_intro">Map where your mesh reaches. While recording, each packet your radio hears is saved with your location and its signal strength. Upload sessions to a SigSleuth server or export them as CSV. Keep the radio connected and location on.</string>
+    <string name="survey_intro">Record where your radio hears the mesh, then upload to SigSleuth or export as CSV.</string>
     <string name="survey_not_recording">Not recording</string>
     <string name="survey_recording">Recording</string>
     <!-- The notification's text while the radio is away; the screen uses the two strings after it. -->
@@ -38,6 +38,39 @@
         <item quantity="one">%1$d measurement</item>
         <item quantity="other">%1$d measurements</item>
     </plurals>
+    <!-- The notification's text: %1$s is the measurement count ("12 measurements"), %2$d how many were heard directly. -->
+    <string name="survey_measurements_direct">%1$s · %2$d direct</string>
+    <!-- What a session added that no earlier session on this phone had, on the same LoRa settings: %1$s lists cells, relays and direct ("5 cells · 18 relays · 3 direct"). Each relay is a relay byte heard in a cell. -->
+    <string name="survey_new_to_you">New to you: %1$s</string>
+    <!-- Cells SigSleuth's map gained from these uploads, as its replies said. -->
+    <plurals name="survey_cells_added">
+        <item quantity="one">%1$d cell added to the map</item>
+        <item quantity="other">%1$d cells added to the map</item>
+    </plurals>
+    <!-- The card under Sessions: every session on this phone together, each cell, relay and direct sender counted once per cell and LoRa settings. -->
+    <string name="survey_totals">Surveyed so far</string>
+    <string name="survey_totals_cells">Cells</string>
+    <string name="survey_totals_relays">Relays</string>
+    <string name="survey_totals_direct">Direct</string>
+    <plurals name="survey_cells">
+        <item quantity="one">%1$d cell</item>
+        <item quantity="other">%1$d cells</item>
+    </plurals>
+    <plurals name="survey_nodes">
+        <item quantity="one">%1$d relay</item>
+        <item quantity="other">%1$d relays</item>
+    </plurals>
+    <string name="survey_direct_count">%1$d direct</string>
+    <!-- A session's new counts out of what it measured: %1$d new of %2$d. -->
+    <plurals name="survey_cells_of">
+        <item quantity="one">%1$d of %2$d cell</item>
+        <item quantity="other">%1$d of %2$d cells</item>
+    </plurals>
+    <plurals name="survey_nodes_of">
+        <item quantity="one">%1$d of %2$d relay</item>
+        <item quantity="other">%1$d of %2$d relays</item>
+    </plurals>
+    <string name="survey_direct_of">%1$d of %2$d direct</string>
     <string name="survey_stat_measurements">Measurements</string>
     <string name="survey_stat_relays">Relay bytes</string>
     <string name="survey_stat_since_last">Since last packet</string>

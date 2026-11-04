@@ -24,6 +24,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SurveyDaoTest {
@@ -102,6 +103,91 @@ class SurveyDaoTest {
     }
 
     @Test
+    fun `news count each key once and forget SigSleuth's word with its server`() = runTest {
+        dao.insertSession(session("s", startedAt = 1))
+        dao.insertSession(session("other", startedAt = 2))
+
+        fun row(heardAt: Long, cell: Int?, relayByte: Int, hopLimit: Int = 2, localNew: Int? = null) =
+            measurement("s", heardAt, hopLimit = hopLimit, relayByte = relayByte)
+                .copy(cellX = cell, cellY = cell, localNew = localNew)
+        val seqs =
+            listOf(
+                // New to this phone too: cell 1, and byte 1A there.
+                row(1, cell = 1, relayByte = 0x1A, localNew = SurveyNews.NEW_CELL or SurveyNews.NEW_NODE),
+                row(2, cell = 1, relayByte = 0x1A),
+                // Sender 2 heard directly: its own byte, no hop used.
+                row(3, cell = 1, relayByte = 0x02, hopLimit = 3),
+                row(4, cell = 2, relayByte = 0x1A),
+                // No cell: SigSleuth would not keep it.
+                row(5, cell = null, relayByte = 0x1B),
+            )
+                .map { dao.insertMeasurement(it) }
+        dao.insertMeasurement(measurement("other", 6, relayByte = 0x1C).copy(cellX = 1, cellY = 1))
+        val counted = SurveyNews(cells = 2, nodes = 3, direct = 1, localNewCells = 1, localNewNodes = 1)
+        assertEquals(counted, dao.recountNews("s"))
+
+        // Two batches called cell 1 and byte 1A there new; each counts once.
+        val cell = SurveyNews.NEW_CELL
+        val node = SurveyNews.NEW_NODE
+        dao.markNew("s", mapOf(seqs[0] to (cell or node), seqs[3] to 0))
+        // The progress and the flags of a batch are saved together.
+        val flags = mapOf(seqs[1] to (cell or node), seqs[2] to (node or SurveyNews.NEW_DIRECT))
+        dao.batchUploaded("s", seqs[2], at = 100, kept = 3, skipped = 0, skipReasons = null, flags = flags)
+        assertEquals(seqs[2], dao.sessions().first().single { it.session.id == "s" }.session.uploadedSeq)
+        val news = counted.copy(newCells = 1, newNodes = 2, newDirect = 1)
+        assertEquals(news, dao.recountNews("s"))
+        assertEquals(news, dao.sessions().first().single { it.session.id == "s" }.session.news)
+
+        // What is new to this phone stays.
+        dao.resetUploads()
+        assertEquals(counted, dao.countNews("s"))
+        assertEquals(counted, dao.sessions().first().single { it.session.id == "s" }.session.news)
+    }
+
+    @Test
+    fun `cell keys come from earlier sessions on the same network, and news count what is new to you`() = runTest {
+        // Private, it still counts.
+        dao.insertSession(session("old", startedAt = 1, upload = false))
+        dao.insertSession(session("other network", startedAt = 1, spreadingFactor = 12))
+        // Another channel on the same preset; a frequency the app rounded, or none, is the same network.
+        dao.insertSession(session("other channel", startedAt = 1, frequencyMhz = 869.9f))
+        dao.insertSession(session("rounded", startedAt = 1, frequencyMhz = 869.5251f))
+        dao.insertSession(session("no frequency", startedAt = 1, frequencyMhz = null))
+        val now = session("now", startedAt = 2, upload = false)
+        dao.insertSession(now)
+        dao.insertSession(session("later", startedAt = 3))
+
+        fun row(sessionId: String, relayByte: Int, cell: Int = 1, hopLimit: Int = 2, localNew: Int? = null) =
+            measurement(sessionId, heardAt = 1, hopLimit = hopLimit, relayByte = relayByte)
+                .copy(cellX = cell, cellY = cell, localNew = localNew)
+        dao.insertMeasurement(row("old", 0x1A))
+        dao.insertMeasurement(row("old", 0x1A))
+        // Sender 2 heard directly: its own byte, no hop used.
+        dao.insertMeasurement(row("old", 0x02, hopLimit = 3))
+        dao.insertMeasurement(row("old", 0x1D, cell = 2))
+        dao.insertMeasurement(row("other network", 0x1B))
+        dao.insertMeasurement(row("other channel", 0x1B))
+        dao.insertMeasurement(row("rounded", 0x1E))
+        dao.insertMeasurement(row("no frequency", 0x1F))
+        dao.insertMeasurement(row("later", 0x1C))
+
+        assertEquals(
+            setOf(CellKey(0x1A, null), CellKey(0x02, 2), CellKey(0x1E, null), CellKey(0x1F, null)),
+            dao.cellKeys(now, SurveyCell(1, 1)).toSet(),
+        )
+        assertEquals(emptyList(), dao.cellKeys(now, SurveyCell(3, 3)))
+
+        val node = SurveyNews.NEW_NODE
+        dao.insertMeasurement(row("now", 0x1A, localNew = 0))
+        dao.insertMeasurement(row("now", 0x1B, localNew = node))
+        dao.insertMeasurement(row("now", 0x1B, localNew = node))
+        dao.insertMeasurement(row("now", 0x1A, cell = 3, localNew = SurveyNews.NEW_CELL or node))
+        val news = SurveyNews(cells = 2, nodes = 3, direct = 0, localNewCells = 1, localNewNodes = 2)
+        assertEquals(news, dao.recountNews("now"))
+        assertEquals(news, dao.sessions().first().single { it.session.id == "now" }.session.news)
+    }
+
+    @Test
     fun `a private session is never pending until it is allowed`() = runTest {
         dao.insertSession(session("private", startedAt = 1, upload = false))
         dao.insertSession(session("shared", startedAt = 2))
@@ -159,20 +245,24 @@ class SurveyDaoTest {
     }
 
     @Test
-    fun `a session a dead process left recording ends at its last measurement`() = runTest {
+    fun `a session a dead process left recording ends at its last measurement and is counted`() = runTest {
         dao.insertSession(session("s", startedAt = 1))
-        dao.insertMeasurement(measurement("s", 42))
+        dao.insertMeasurement(measurement("s", 42, relayByte = 0x1A).copy(cellX = 1, cellY = 1))
+        dao.insertSession(session("stopped", startedAt = 2).copy(status = SurveyStatus.STOPPED))
 
-        dao.interruptRecording()
+        dao.recoverRecording()
 
-        val summary = dao.sessions().first().single()
+        val summaries = dao.sessions().first()
+        val summary = summaries.single { it.session.id == "s" }
         assertEquals(SurveyStatus.INTERRUPTED, summary.session.status)
         assertEquals(42L, summary.session.endedAt)
         assertEquals(1, summary.measurementCount)
+        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), summary.session.news)
+        assertNull(summaries.single { it.session.id == "stopped" }.session.news)
     }
 
     @Test
-    fun `direct places group cells and fixless rows and keep only this radio's direct history on these settings`() =
+    fun `direct places group cells and fixless rows and keep only this radio's direct history on this network`() =
         runTest {
             // Exercise the real SQL and the recorder's fake against the same evidence.
             for (subject in listOf(dao, FakeSurveyDao())) {
@@ -192,21 +282,27 @@ class SurveyDaoTest {
                 subject.insertMeasurement(measurement("new", 64, sender = 0x105)) // No relay byte.
                 subject.insertMeasurement(measurement("old", 9, sender = 0x106, relayByte = 0x06)) // Before the cutoff.
                 subject.insertMeasurement(measurement("other radio", 70, sender = 0x107, relayByte = 0x07))
-                // The same radio on another network: each setting that differs keeps its senders out.
+                // The same radio on another network: each setting that differs keeps its senders out. The
+                // frequency differs by a whole slot; one within half a bandwidth, or none, is the same network.
                 subject.insertSession(session("other factor", startedAt = 1, spreadingFactor = 9))
                 subject.insertSession(session("other bandwidth", startedAt = 1, bandwidthKhz = 125f))
-                subject.insertSession(session("other frequency", startedAt = 1, frequencyMhz = 869.4625f))
+                subject.insertSession(session("other frequency", startedAt = 1, frequencyMhz = 869.275f))
+                subject.insertSession(session("rounded frequency", startedAt = 1, frequencyMhz = 869.52f))
                 subject.insertSession(session("no frequency", startedAt = 1, frequencyMhz = null))
                 subject.insertMeasurement(measurement("other factor", 71, sender = 0x108, relayByte = 0x08))
                 subject.insertMeasurement(measurement("other bandwidth", 72, sender = 0x109, relayByte = 0x09))
                 subject.insertMeasurement(measurement("other frequency", 73, sender = 0x10A, relayByte = 0x0A))
                 subject.insertMeasurement(measurement("no frequency", 74, sender = 0x10B, relayByte = 0x0B))
+                subject.insertMeasurement(measurement("rounded frequency", 75, sender = 0x10C, relayByte = 0x0C))
 
                 val places = subject.directPlaces(session("new", startedAt = 50), sinceMs = 10)
-                // A session without a frequency matches only others without one.
+                // A session without a frequency matches every frequency on its settings.
                 assertEquals(
-                    listOf(DirectPlace(0x10B, 74, null, null)),
-                    subject.directPlaces(session("no frequency", startedAt = 1, frequencyMhz = null), sinceMs = 10),
+                    setOf(0x102L, 0x200L, 0x10AL, 0x10BL, 0x10CL),
+                    subject
+                        .directPlaces(session("no frequency", startedAt = 1, frequencyMhz = null), sinceMs = 10)
+                        .map { it.nodeId }
+                        .toSet(),
                 )
 
                 assertEquals(
@@ -215,10 +311,12 @@ class SurveyDaoTest {
                         DirectPlace(0x102, 54, -1, 1000),
                         DirectPlace(0x102, 60, null, null),
                         DirectPlace(0x200, 61, null, null),
+                        DirectPlace(0x10B, 74, null, null),
+                        DirectPlace(0x10C, 75, null, null),
                     ),
                     places.toSet(),
                 )
-                assertEquals(4, places.size)
+                assertEquals(6, places.size)
                 val neighbours = DirectNeighbours(places.map { it.toDirectSender() })
                 assertEquals(
                     DirectSender(0x102, 60, mapOf(DirectCell(500, 1000) to 55L, DirectCell(-1, 1000) to 54L)),
@@ -276,5 +374,75 @@ class SurveyDaoTest {
 
         assertEquals(emptyList(), dao.sessions().first())
         assertEquals(emptyList(), dao.measurementsAfter("s", 0, limit = 10))
+    }
+
+    @Test
+    fun `deleting a session passes what it was first to have to the next session on its network`() = runTest {
+        dao.insertSession(session("first", startedAt = 1))
+        dao.insertSession(session("other network", startedAt = 2, spreadingFactor = 12))
+        dao.insertSession(session("second", startedAt = 3))
+        dao.insertSession(session("third", startedAt = 4))
+        val cell = SurveyNews.NEW_CELL
+        val node = SurveyNews.NEW_NODE
+        fun row(sessionId: String, heardAt: Long, relayByte: Int, localNew: Int) =
+            measurement(sessionId, heardAt, relayByte = relayByte).copy(cellX = 1, cellY = 1, localNew = localNew)
+        dao.insertMeasurement(row("first", 1, 0x1A, cell or node))
+        // Wrong on purpose: a recount that reached another network would set it.
+        dao.insertMeasurement(row("other network", 2, 0x1A, 0))
+        dao.insertMeasurement(row("second", 3, 0x1A, 0))
+        dao.insertMeasurement(row("second", 4, 0x1B, node))
+        dao.insertMeasurement(row("third", 5, 0x1A, 0))
+        listOf("first", "other network", "second", "third").forEach { dao.recountNews(it) }
+
+        dao.deleteSession("first")
+
+        suspend fun flags(sessionId: String) = dao.measurementsAfter(sessionId, 0, limit = 10).map { it.localNew }
+        // Every row in a cell no earlier session had carries the cell bit, as when recording.
+        assertEquals(listOf(cell or node, cell or node), flags("second"))
+        // Second still had it first.
+        assertEquals(listOf(0), flags("third"))
+        assertEquals(listOf(0), flags("other network"))
+        val news = dao.sessions().first().associate { it.session.id to it.session.news }
+        assertEquals(SurveyNews(1, 2, 0, localNewCells = 1, localNewNodes = 2), news.getValue("second"))
+        assertEquals(0, news.getValue("third")?.localNewNodes)
+    }
+
+    @Test
+    fun `deleting a session recounts a later one against channels the deleted one does not match`() = runTest {
+        // At 62.5 kHz, 869.4 and 869.6 MHz are two channels; a session without a frequency matches both.
+        dao.insertSession(session("lower", startedAt = 1, bandwidthKhz = 62.5f, frequencyMhz = 869.4f))
+        dao.insertSession(session("upper", startedAt = 2, bandwidthKhz = 62.5f, frequencyMhz = 869.6f))
+        dao.insertSession(session("unknown", startedAt = 3, bandwidthKhz = 62.5f, frequencyMhz = null))
+        val cell = SurveyNews.NEW_CELL
+        val node = SurveyNews.NEW_NODE
+        fun row(sessionId: String, heardAt: Long, relayByte: Int, localNew: Int) =
+            measurement(sessionId, heardAt, relayByte = relayByte).copy(cellX = 1, cellY = 1, localNew = localNew)
+        dao.insertMeasurement(row("lower", 1, 0x1A, cell or node))
+        dao.insertMeasurement(row("lower", 2, 0x1B, cell or node))
+        dao.insertMeasurement(row("upper", 3, 0x1A, cell or node))
+        dao.insertMeasurement(row("unknown", 4, 0x1A, 0))
+        dao.insertMeasurement(row("unknown", 5, 0x1B, 0))
+
+        dao.deleteSession("lower")
+
+        // The cell and byte 1A are still known from "upper"; only "lower" had 1B.
+        assertEquals(listOf(0, node), dao.measurementsAfter("unknown", 0, limit = 10).map { it.localNew })
+    }
+
+    @Test
+    fun `a deleted session's map counts stay in the phone's total until uploads reset`() = runTest {
+        dao.insertSession(session("answered", startedAt = 1))
+        dao.insertSession(session("unanswered", startedAt = 2))
+        val seq = dao.insertMeasurement(measurement("answered", 1, relayByte = 0x1A).copy(cellX = 1, cellY = 1))
+        dao.insertMeasurement(measurement("unanswered", 2, relayByte = 0x1A).copy(cellX = 2, cellY = 2))
+        dao.markNew("answered", mapOf(seq to (SurveyNews.NEW_CELL or SurveyNews.NEW_NODE)))
+
+        dao.deleteSession("unanswered")
+        assertNull(dao.deleted().first())
+        dao.deleteSession("answered")
+        assertEquals(SurveyDeleted(newCells = 1, newNodes = 1, newDirect = 0), dao.deleted().first())
+
+        dao.resetUploads()
+        assertNull(dao.deleted().first())
     }
 }

@@ -25,7 +25,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -434,6 +436,107 @@ class SurveyUploaderTest {
         assertFalse(isUploadUrl("http://192.168.1.10:8000"))
         assertFalse(isUploadUrl("http://sigsleuth.example.org"))
         assertFalse(isUploadUrl("ftp://sigsleuth.example.org"))
+    }
+
+    @Test
+    fun `what SigSleuth says each row adds is saved and counted, and reaches the recorder`() = runTest {
+        record("a", 2)
+        dao.measurements.replaceAll { it.copy(cellX = 5, cellY = 5) }
+        val progress = mutableListOf<SurveyUploadProgress>()
+        answers.progress = { _, it -> progress += it }
+        replyFields =
+            """, "heard": [""" +
+            """{"seq": 1, "how": "unknown", "new_cell": true, "new_byte": true, "new_direct": false}, """ +
+            """{"seq": 2, "how": "unknown", "new_cell": false, "new_byte": false, "new_direct": false}]"""
+        val uploader = uploader()
+
+        uploader.upload()
+
+        val cell = SurveyNews.NEW_CELL or SurveyNews.NEW_NODE
+        assertEquals(listOf(cell, 0), dao.measurements.map { it.serverNew })
+        val news = SurveyNews(cells = 1, nodes = 1, direct = 0, newCells = 1, newNodes = 1, newDirect = 0)
+        assertEquals(news, dao.sessions.single().news)
+        assertEquals(
+            listOf(
+                SurveyUploadProgress(acknowledged = 2, news = null, failed = false),
+                SurveyUploadProgress(acknowledged = 2, news, failed = false),
+            ),
+            progress,
+        )
+
+        // An older server says nothing new: the counts stay, with nothing called new.
+        record("b", 1)
+        dao.measurements.replaceAll { if (it.sessionId == "b") it.copy(cellX = 6, cellY = 6) else it }
+        replyFields = ""
+        uploader.upload()
+        assertNull(dao.measurements.last().serverNew)
+        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), dao.sessions.last().news)
+
+        record("b", 1)
+        fail = true
+        uploader.upload()
+        assertEquals(SurveyUploadProgress(acknowledged = 1, news = null, failed = true), progress.last())
+    }
+
+    @Test
+    fun `a session is counted once per run, after its last batch, even when a failure ends the run`() = runTest {
+        record("a", SurveyUploader.BATCH_SIZE * 2 + 1)
+        dao.measurements.replaceAll { it.copy(cellX = 5, cellY = 5) }
+        val progress = mutableListOf<SurveyUploadProgress>()
+        answers.progress = { _, it -> progress += it }
+        val uploader = uploader()
+
+        uploader.upload()
+
+        assertEquals(1, dao.recounts)
+        assertEquals(listOf(500L, 1_000L, 1_001L, 1_001L), progress.map { it.acknowledged })
+        assertEquals(listOf(null, null, null), progress.dropLast(1).map { it.news })
+        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), progress.last().news)
+
+        // The first batch works, the second fails.
+        record("a", SurveyUploader.BATCH_SIZE + 1)
+        onBatch = { fail = true }
+        uploader.upload()
+        assertEquals(2, dao.recounts)
+        assertEquals(SurveyUploadProgress(1_501, SurveyNews(1, 1, 0), failed = true), progress.last())
+    }
+
+    @Test
+    fun `a run cut short when recording stops still counts the batches it saved`() = runTest {
+        record("a", SurveyUploader.BATCH_SIZE + 1)
+        dao.measurements.replaceAll { it.copy(cellX = 5, cellY = 5) }
+        val uploader = uploader()
+        lateinit var run: Job
+        var batches = 0
+        onBatch = { if (++batches > 1) run.cancel() }
+
+        run = launch { uploader.upload() }
+        run.join()
+
+        assertTrue(run.isCancelled)
+        assertEquals(SurveyUploader.BATCH_SIZE.toLong(), dao.sessions.single().uploadedSeq)
+        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), dao.sessions.single().news)
+    }
+
+    @Test
+    fun `the recorder hears when the server or the recording session's consent changes`() = runTest {
+        var serverChanges = 0
+        val consent = mutableListOf<Pair<String, Boolean>>()
+        answers.serverChanged = { serverChanges++ }
+        answers.consent = { id, upload -> consent += id to upload }
+        record("a", 1)
+        val uploader = uploader()
+
+        uploader.saveServer("https://maps.example/", "u", "new password")
+        assertEquals(0, serverChanges)
+        uploader.saveServer("https://other.example", "u", "p")
+        assertEquals(1, serverChanges)
+
+        uploader.setAutomatic(false) { "a" }
+        uploader.setAutomatic(true) { null }
+        uploader.uploadNow("a")
+        testScheduler.runCurrent()
+        assertEquals(listOf("a" to false, "a" to true), consent)
     }
 
     @Test

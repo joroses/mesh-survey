@@ -35,40 +35,40 @@ import kotlin.time.Duration.Companion.days
 val RELAY_NODES_STALE = 1.days
 
 /**
- * SigSleuth's list of the nodes that could relay on a spreading factor and bandwidth, kept on the phone so relay
- * guesses can use it offline. Both count: ShortFast and NarrowFast share SF7. Only the list from the server set now
- * counts.
+ * SigSleuth's list of the nodes that could relay on a spreading factor, bandwidth and frequency, kept on the phone so
+ * relay guesses can use it offline. All count: ShortFast and NarrowFast share SF7, and channels on one preset differ by
+ * frequency. Only the list from the server set now counts.
  */
 interface SurveyRelayNodes {
     /** The list saved for these radio settings, unless it is older than [DIRECT_HISTORY]. */
-    suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes?
+    suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?): MappedNodes?
 
     /**
      * Fetches and saves the list for these radio settings unless the saved one is newer than [RELAY_NODES_STALE].
      * Returns the new list, or null when it fetched none; throws when the fetch fails.
      */
-    suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes?
+    suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?): MappedNodes?
 }
 
-/** Saves each spreading factor and bandwidth's list in [directory] as JSON, with the server it came from and when. */
+/** Saves each radio settings' list in [directory] as JSON, with the server it came from and when. */
 class FileSurveyRelayNodes(
     private val directory: File,
     private val settings: SurveySettings,
     private val http: HttpClient,
     private val clock: SurveyClock,
 ) : SurveyRelayNodes {
-    override suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes? {
+    override suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?): MappedNodes? {
         val url = settings.current().url
         val oldest = clock.wallTimeMs() - DIRECT_HISTORY.inWholeMilliseconds
-        return read(file(spreadingFactor, bandwidthKhz))
+        return read(file(spreadingFactor, bandwidthKhz, frequencyMhz))
             ?.takeIf { it.server == url && it.fetchedAtMs >= oldest }
             ?.toMappedNodes()
     }
 
-    override suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes? {
+    override suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?): MappedNodes? {
         val target = settings.current()
         val now = clock.wallTimeMs()
-        val file = file(spreadingFactor, bandwidthKhz)
+        val file = file(spreadingFactor, bandwidthKhz, frequencyMhz)
         val saved = read(file)
         val fresh = saved?.server == target.url && saved.fetchedAtMs > now - RELAY_NODES_STALE.inWholeMilliseconds
         if (fresh || !isUploadUrl(target.url)) return null
@@ -76,6 +76,7 @@ class FileSurveyRelayNodes(
             http.get(target.url.trimEnd('/') + PATH) {
                 parameter("spreading_factor", spreadingFactor)
                 parameter("bandwidth_khz", bandwidthKhz)
+                parameter("frequency_mhz", frequencyMhz)
                 authorize(target)
             }
         if (!response.status.isSuccess()) throw IOException("HTTP ${response.status.value}")
@@ -98,8 +99,8 @@ class FileSurveyRelayNodes(
         if (!temporary.renameTo(target)) throw IOException("Could not save the relay node list")
     }
 
-    private fun file(spreadingFactor: Int, bandwidthKhz: Float) =
-        File(directory, "relay-nodes-sf$spreadingFactor-bw$bandwidthKhz.json")
+    private fun file(spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?) =
+        File(directory, "relay-nodes-sf$spreadingFactor-bw$bandwidthKhz${frequencyMhz?.let { "-f$it" }.orEmpty()}.json")
 
     companion object {
         const val PATH = "/api/v1/coverage/relay-nodes"
