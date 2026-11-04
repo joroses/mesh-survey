@@ -254,7 +254,7 @@ class SurveyRecorder(
             dao.directPlaces(session, session.startedAt - DIRECT_HISTORY.inWholeMilliseconds)
         }
             .getOrDefault(emptyList())
-        val mapped = safeCatching { relayNodes.saved(lora.spreadingFactor) }.getOrNull()
+        val mapped = safeCatching { relayNodes.saved(lora.spreadingFactor, lora.bandwidthKhz) }.getOrNull()
         val rows = Channel<SurveyMeasurement>(capacity = QUEUE_CAPACITY)
         val current =
             Active(
@@ -428,7 +428,7 @@ class SurveyRecorder(
     private suspend fun refreshRelayNodes(current: Active) {
         var warned = false
         while (true) {
-            safeCatching { relayNodes.refresh(current.session.spreadingFactor) }
+            safeCatching { relayNodes.refresh(current.session.spreadingFactor, current.session.bandwidthKhz) }
                 .onFailure {
                     if (!warned) Logger.w { "Signal survey relay node list not fetched: ${it::class.simpleName}" }
                     warned = true

@@ -90,9 +90,11 @@ class SurveyRecorderTest {
     private var fetchedMapped: MappedNodes? = null
     private val relayNodes =
         object : SurveyRelayNodes {
-            override suspend fun saved(spreadingFactor: Int) = savedMapped
+            override suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float) = savedMapped
 
-            override suspend fun refresh(spreadingFactor: Int) = fetchedMapped.also { fetchedMapped = null }
+            override suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float) = fetchedMapped.also {
+                fetchedMapped = null
+            }
         }
     private val answers = SurveyAnswers()
 

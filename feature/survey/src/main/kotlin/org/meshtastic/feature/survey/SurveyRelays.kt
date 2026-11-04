@@ -198,7 +198,7 @@ sealed interface RelayCandidate {
     ) : Placed
 }
 
-/** A node SigSleuth says could relay on the survey's spreading factor ([SurveyRelayNodes]). */
+/** A node SigSleuth says could relay on the survey's spreading factor and bandwidth ([SurveyRelayNodes]). */
 data class MappedNode(
     val nodeId: Long,
     val shortName: String?,

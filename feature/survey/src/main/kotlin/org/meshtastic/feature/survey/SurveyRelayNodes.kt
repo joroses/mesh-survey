@@ -35,66 +35,71 @@ import kotlin.time.Duration.Companion.days
 val RELAY_NODES_STALE = 1.days
 
 /**
- * SigSleuth's list of the nodes that could relay on a spreading factor, kept on the phone so relay guesses can use it
- * offline. Only the list from the server set now counts.
+ * SigSleuth's list of the nodes that could relay on a spreading factor and bandwidth, kept on the phone so relay
+ * guesses can use it offline. Both count: ShortFast and NarrowFast share SF7. Only the list from the server set now
+ * counts.
  */
 interface SurveyRelayNodes {
-    /** The list saved for [spreadingFactor], unless it is older than [DIRECT_HISTORY]. */
-    suspend fun saved(spreadingFactor: Int): MappedNodes?
+    /** The list saved for these radio settings, unless it is older than [DIRECT_HISTORY]. */
+    suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes?
 
     /**
-     * Fetches and saves the list for [spreadingFactor] unless the saved one is newer than [RELAY_NODES_STALE]. Returns
-     * the new list, or null when it fetched none; throws when the fetch fails.
+     * Fetches and saves the list for these radio settings unless the saved one is newer than [RELAY_NODES_STALE].
+     * Returns the new list, or null when it fetched none; throws when the fetch fails.
      */
-    suspend fun refresh(spreadingFactor: Int): MappedNodes?
+    suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes?
 }
 
-/** Saves each spreading factor's list in [directory] as JSON, with the server it came from and when. */
+/** Saves each spreading factor and bandwidth's list in [directory] as JSON, with the server it came from and when. */
 class FileSurveyRelayNodes(
     private val directory: File,
     private val settings: SurveySettings,
     private val http: HttpClient,
     private val clock: SurveyClock,
 ) : SurveyRelayNodes {
-    override suspend fun saved(spreadingFactor: Int): MappedNodes? {
+    override suspend fun saved(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes? {
         val url = settings.current().url
         val oldest = clock.wallTimeMs() - DIRECT_HISTORY.inWholeMilliseconds
-        return read(spreadingFactor)?.takeIf { it.server == url && it.fetchedAtMs >= oldest }?.toMappedNodes()
+        return read(file(spreadingFactor, bandwidthKhz))
+            ?.takeIf { it.server == url && it.fetchedAtMs >= oldest }
+            ?.toMappedNodes()
     }
 
-    override suspend fun refresh(spreadingFactor: Int): MappedNodes? {
+    override suspend fun refresh(spreadingFactor: Int, bandwidthKhz: Float): MappedNodes? {
         val target = settings.current()
         val now = clock.wallTimeMs()
-        val saved = read(spreadingFactor)
+        val file = file(spreadingFactor, bandwidthKhz)
+        val saved = read(file)
         val fresh = saved?.server == target.url && saved.fetchedAtMs > now - RELAY_NODES_STALE.inWholeMilliseconds
         if (fresh || !isUploadUrl(target.url)) return null
         val response =
             http.get(target.url.trimEnd('/') + PATH) {
                 parameter("spreading_factor", spreadingFactor)
+                parameter("bandwidth_khz", bandwidthKhz)
                 authorize(target)
             }
         if (!response.status.isSuccess()) throw IOException("HTTP ${response.status.value}")
         val fetched =
             SavedRelayNodes(target.url, now, json.decodeFromString<RelayNodeList>(response.bodyAsText()).nodes)
-        write(spreadingFactor, fetched)
+        write(file, fetched)
         return fetched.toMappedNodes()
     }
 
     /** Null when missing or unreadable: the next refresh replaces it. */
-    private suspend fun read(spreadingFactor: Int): SavedRelayNodes? = withContext(ioDispatcher) {
-        safeCatching { json.decodeFromString<SavedRelayNodes>(file(spreadingFactor).readText()) }.getOrNull()
+    private suspend fun read(file: File): SavedRelayNodes? = withContext(ioDispatcher) {
+        safeCatching { json.decodeFromString<SavedRelayNodes>(file.readText()) }.getOrNull()
     }
 
-    private suspend fun write(spreadingFactor: Int, nodes: SavedRelayNodes) = withContext(ioDispatcher) {
+    private suspend fun write(target: File, nodes: SavedRelayNodes) = withContext(ioDispatcher) {
         directory.mkdirs()
-        val target = file(spreadingFactor)
         val temporary = File(directory, "${target.name}.tmp")
         temporary.writeText(json.encodeToString(nodes))
         // Replaced whole, so a crash never leaves half a list.
         if (!temporary.renameTo(target)) throw IOException("Could not save the relay node list")
     }
 
-    private fun file(spreadingFactor: Int) = File(directory, "relay-nodes-sf$spreadingFactor.json")
+    private fun file(spreadingFactor: Int, bandwidthKhz: Float) =
+        File(directory, "relay-nodes-sf$spreadingFactor-bw$bandwidthKhz.json")
 
     companion object {
         const val PATH = "/api/v1/coverage/relay-nodes"
