@@ -218,7 +218,8 @@ class MappedNodes(val fetchedAtMs: Long, nodes: List<MappedNode>) {
 /**
  * SigSleuth's answer for one uploaded packet this phone thought relayed: the node it heard, or null when it could not
  * tell, and [how] it decided, in its own words (`survey_link`, `gateway_link`, `sender_link`, `reported`,
- * `only_candidate`, `direct`, `unknown`). Unknown relays may have [candidates], which remain possibilities.
+ * `only_candidate`, `direct`, `unknown`). Unknown relays may have [candidates], which remain possibilities. A survey
+ * link may have its [evidence]; older servers send none.
  */
 data class ServerAnswer(
     val seq: Long,
@@ -228,7 +229,15 @@ data class ServerAnswer(
     val how: String,
     val shortName: String?,
     val candidates: List<ServerCandidate> = emptyList(),
+    val evidence: LinkEvidence? = null,
 )
+
+/**
+ * The direct reception behind a survey link that is closest in time to the packet: [km] from the packet's fix, its time
+ * minus the packet's ([offsetMs], negative before), and whether this survey radio heard it ([mine]) rather than another
+ * survey's.
+ */
+data class LinkEvidence(val km: Double, val offsetMs: Long, val mine: Boolean)
 
 /** A possible relay suggested by SigSleuth, at [km] from the uploaded packet's fix. */
 data class ServerCandidate(val nodeId: Long, val name: String?, val km: Double)

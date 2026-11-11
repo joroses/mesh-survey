@@ -236,6 +236,21 @@ class SurveyUploaderTest {
     }
 
     @Test
+    fun `a survey link keeps where and when its relay was heard directly`() = runTest {
+        record("a", 2)
+        // Seq 2's link has no evidence, as an older server answers.
+        replyFields =
+            """, "heard": [{"seq": 1, "node_id": 26, "how": "survey_link", "link_km": 2.3, """ +
+            """"link_offset_ms": -2400000, "link_mine": true}, {"seq": 2, "node_id": 26, "how": "survey_link"}]"""
+        val seen = mutableListOf<ServerAnswer>()
+        answers.listener = { _, list -> seen += list }
+
+        uploader().upload()
+
+        assertEquals(listOf(LinkEvidence(2.3, -2_400_000, true), null), seen.map { it.evidence })
+    }
+
+    @Test
     fun `a private session stays on the phone until its Upload button sends it`() = runTest {
         record("private", 2, upload = false)
         record("shared", 1)

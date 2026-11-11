@@ -341,8 +341,14 @@ internal fun serverAnswers(rows: List<SurveyMeasurement>, response: UploadRespon
                     candidate.km,
                 )
             },
+            answer.evidence(),
         )
     }
+}
+
+private fun UploadHeard.evidence(): LinkEvidence? = when {
+    linkKm == null || linkOffsetMs == null || linkMine == null -> null
+    else -> LinkEvidence(linkKm, linkOffsetMs, linkMine)
 }
 
 @Serializable internal data class UploadRequest(val session: UploadSession, val measurements: List<UploadMeasurement>)
@@ -400,6 +406,10 @@ internal data class UploadHeard(
     @SerialName("node_id") val nodeId: Long? = null,
     val how: String,
     val candidates: List<UploadCandidate> = emptyList(),
+    /** A survey link's evidence (see [LinkEvidence]); null for other answers, and older servers send none. */
+    @SerialName("link_km") val linkKm: Double? = null,
+    @SerialName("link_offset_ms") val linkOffsetMs: Long? = null,
+    @SerialName("link_mine") val linkMine: Boolean? = null,
     /**
      * Whether the row adds a cell, its relay byte in the cell, or its sender heard directly there; older servers send
      * none.

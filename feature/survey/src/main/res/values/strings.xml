@@ -107,6 +107,27 @@
     <string name="survey_server_sender_link">linked to the sender</string>
     <string name="survey_server_reported">says it relayed it</string>
     <string name="survey_server_only_candidate">the only one that could</string>
+    <!-- SigSleuth's answer with the evidence behind it, in place of the packet's time: %1$s the node's short name, %2$s where and when the node was heard directly ("heard directly by you 2.3 km away, 40 min before"). -->
+    <string name="survey_relay_server_evidence">SigSleuth: %1$s, %2$s</string>
+    <!-- This survey radio heard the relay directly: %1$s how far from the packet ("2.3 km"), %2$s when, relative to the packet ("40 min before"). -->
+    <string name="survey_server_survey_link_mine">heard directly by you %1$s away, %2$s</string>
+    <!-- Another survey radio heard the relay directly: %1$s how far from the packet ("12 km"), %2$s when, relative to the packet ("3 days after"). -->
+    <string name="survey_server_survey_link_other">heard directly by another survey %1$s away, %2$s</string>
+    <!-- Heard directly that long before the packet: %1$s a duration ("40 min"). -->
+    <string name="survey_offset_before">%1$s before</string>
+    <!-- Heard directly that long after the packet: %1$s a duration ("3 days"). -->
+    <string name="survey_offset_after">%1$s after</string>
+    <!-- Heard directly within a minute of the packet. -->
+    <string name="survey_offset_same_time">at the same time</string>
+    <!-- A duration in minutes, %1$d at least 1. -->
+    <string name="survey_duration_minutes">%1$d min</string>
+    <!-- A duration in hours, %1$d at least 1. -->
+    <string name="survey_duration_hours">%1$d h</string>
+    <!-- A duration in days, %1$d at least 1. -->
+    <plurals name="survey_duration_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <!-- %1$d is a packet count, %2$s a relative time ("3 min. ago"). -->
     <string name="survey_relay_packets">%1$d × · %2$s</string>
     <!-- %1$s is a relative time ("3 min. ago"). -->

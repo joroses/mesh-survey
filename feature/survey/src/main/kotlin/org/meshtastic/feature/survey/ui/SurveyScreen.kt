@@ -133,6 +133,7 @@ import org.meshtastic.core.ui.util.KeepScreenOn
 import org.meshtastic.feature.survey.DIRECT_HISTORY
 import org.meshtastic.feature.survey.DirectSender
 import org.meshtastic.feature.survey.FAR
+import org.meshtastic.feature.survey.LinkEvidence
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayCandidate
 import org.meshtastic.feature.survey.RelayGuess
@@ -153,7 +154,13 @@ import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.isUploadUrl
 import org.meshtastic.feature.survey.surveyTotals
 import java.util.Locale
+import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.DurationUnit
 import org.jetbrains.compose.resources.stringResource as sharedStringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -814,7 +821,10 @@ private fun placedText(candidate: RelayCandidate.Placed, fix: SurveyFix?): Strin
     return if (reach == null) line else stringResource(R.string.survey_relay_candidate_reach, line, distanceText(reach))
 }
 
-/** SigSleuth's answer for one of this byte's uploaded packets, which may be older than the guess above it. */
+/**
+ * SigSleuth's answer for one of this byte's uploaded packets, which may be older than the guess above it. A survey
+ * link's evidence takes the place of the packet's time.
+ */
 @Composable
 private fun serverText(answer: ServerAnswer, names: Map<Long, String>): String {
     val time = DateFormatter.formatRelativeTime(answer.heardAtMs)
@@ -835,17 +845,51 @@ private fun serverText(answer: ServerAnswer, names: Map<Long, String>): String {
             sharedStringResource(Res.string.survey_relay_server_candidates, candidates.joinToString(", "), time)
         }
     }
-    val how =
-        when (answer.how) {
-            "direct" -> stringResource(R.string.survey_server_direct)
-            "survey_link" -> stringResource(R.string.survey_server_survey_link)
-            "gateway_link" -> stringResource(R.string.survey_server_gateway_link)
-            "sender_link" -> stringResource(R.string.survey_server_sender_link)
-            "reported" -> stringResource(R.string.survey_server_reported)
-            "only_candidate" -> stringResource(R.string.survey_server_only_candidate)
-            else -> answer.how
+    val evidence = answer.evidence
+    return if (evidence == null) {
+        stringResource(R.string.survey_relay_server, nodeName(node, names), howText(answer.how), time)
+    } else {
+        stringResource(R.string.survey_relay_server_evidence, nodeName(node, names), evidenceText(evidence))
+    }
+}
+
+/** How SigSleuth knows the relay, from [ServerAnswer.how]. */
+@Composable
+@ReadOnlyComposable
+private fun howText(how: String): String = when (how) {
+    "direct" -> stringResource(R.string.survey_server_direct)
+    "survey_link" -> stringResource(R.string.survey_server_survey_link)
+    "gateway_link" -> stringResource(R.string.survey_server_gateway_link)
+    "sender_link" -> stringResource(R.string.survey_server_sender_link)
+    "reported" -> stringResource(R.string.survey_server_reported)
+    "only_candidate" -> stringResource(R.string.survey_server_only_candidate)
+    else -> how
+}
+
+/** A survey link's relay heard directly: "heard directly by you 2.3 km away, 40 min before". */
+@Composable
+@ReadOnlyComposable
+private fun evidenceText(evidence: LinkEvidence): String {
+    val text = if (evidence.mine) R.string.survey_server_survey_link_mine else R.string.survey_server_survey_link_other
+    return stringResource(text, distanceText(evidence.km * METERS_PER_KM), offsetText(evidence.offsetMs))
+}
+
+/** When a survey link's evidence was heard relative to the packet, in one rounded unit: "40 min before". */
+@Composable
+@ReadOnlyComposable
+private fun offsetText(offsetMs: Long): String {
+    val span = offsetMs.absoluteValue.milliseconds
+    if (span < 1.minutes) return stringResource(R.string.survey_offset_same_time)
+    val minutes = span.toDouble(DurationUnit.MINUTES).roundToInt()
+    val hours = span.toDouble(DurationUnit.HOURS).roundToInt()
+    val days = span.toDouble(DurationUnit.DAYS).roundToInt()
+    val duration =
+        when {
+            minutes < 1.hours.inWholeMinutes -> stringResource(R.string.survey_duration_minutes, minutes)
+            hours < 1.days.inWholeHours -> stringResource(R.string.survey_duration_hours, hours)
+            else -> pluralStringResource(R.plurals.survey_duration_days, days, days)
         }
-    return stringResource(R.string.survey_relay_server, nodeName(node, names), how, time)
+    return stringResource(if (offsetMs < 0) R.string.survey_offset_before else R.string.survey_offset_after, duration)
 }
 
 @Composable
