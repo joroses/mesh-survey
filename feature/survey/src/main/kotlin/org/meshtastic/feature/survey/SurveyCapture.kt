@@ -30,8 +30,8 @@ import kotlin.math.tan
 
 /**
  * On connect the node replays packets from its history, hours old and without RSSI. A packet whose radio time trails
- * the phone's clock by more than this is such a replay. Live packets trail by up to about 21 s, because the node's
- * clock is a few seconds off, so a tighter limit would drop them.
+ * the phone's clock by more than this is such a replay, as is any packet without an RSSI. Live packets trail by up to
+ * about 21 s, because the node's clock is a few seconds off, so a tighter limit would drop them.
  */
 const val LATE_PACKET_MS = 60_000L
 
@@ -131,9 +131,10 @@ fun measurementOf(
 }
 
 /**
- * Firmware before 2.7.5 leaves every packet at TRANSPORT_INTERNAL, so [isLora] alone would record nothing on it. There
- * an RSSI marks a packet the radio received; newer firmware gives packets from MQTT, UDP or the API their own
- * transport.
+ * Only a packet the radio received carries an RSSI. The packets a node replays from its history on connect are still
+ * marked LoRa but carry none, so this drops them even when their radio time is recent or missing. Firmware before 2.7.5
+ * leaves every packet at TRANSPORT_INTERNAL, so [isLora] alone would record nothing on it; newer firmware gives packets
+ * from MQTT, UDP or the API their own transport.
  */
 private fun MeshPacket.heardOverLora(): Boolean =
-    isLora() || (transport_mechanism == TransportMechanism.TRANSPORT_INTERNAL && (rx_rssi ?: 0) != 0)
+    (rx_rssi ?: 0) != 0 && (isLora() || transport_mechanism == TransportMechanism.TRANSPORT_INTERNAL)

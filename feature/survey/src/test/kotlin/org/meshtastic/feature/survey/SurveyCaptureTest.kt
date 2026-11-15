@@ -198,20 +198,32 @@ class SurveyCaptureTest {
     }
 
     @Test
-    fun `missing readings stay null and a zero SNR stays a reading`() {
+    fun `a LoRa packet without an RSSI is a replay, even when its radio time is recent or missing`() {
+        assertNull(capture(packet { rx_rssi = null }))
+        assertNull(capture(packet { rx_rssi = 0 }))
+        assertNull(
+            capture(
+                packet {
+                    rx_rssi = null
+                    rx_time = null
+                },
+            ),
+        )
+    }
+
+    @Test
+    fun `a missing relay byte stays null and a zero SNR stays a reading`() {
         val row =
             assertNotNull(
                 capture(
                     packet {
                         rx_snr = 0f
-                        rx_rssi = null
                         relay_node = 0
                     },
                 ),
             )
 
         assertEquals(0f, row.rxSnr)
-        assertNull(row.rxRssi)
         assertNull(row.relayByte)
     }
 

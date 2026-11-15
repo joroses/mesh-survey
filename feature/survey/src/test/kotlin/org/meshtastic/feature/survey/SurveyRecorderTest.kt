@@ -156,6 +156,7 @@ class SurveyRecorderTest {
                 hop_limit = HOP_START - hopsUsed
                 relay_node = relay
                 id = 7
+                rx_rssi = -90
                 transport_mechanism = MeshPacket.TransportMechanism.TRANSPORT_LORA
             }
             .build(),
