@@ -74,7 +74,7 @@ fun signalOf(rssi: Int?, snr: Float?): Double? = rssi?.takeIf { it != 0 }?.let {
 /** This packet's [signalOf]. */
 fun SurveyMeasurement.signal(): Double? = signalOf(rxRssi, rxSnr)
 
-/** Which neighbour most likely relayed a packet. It is a guess, and the screen labels it as one. */
+/** Which neighbour most likely relayed a packet. It is a guess: the relays list shows the evidence under it. */
 sealed interface RelayGuess {
     val nodeIds: List<Long>
 
@@ -210,7 +210,6 @@ data class MappedNode(
 
 /** SigSleuth's relay node list, fetched at [fetchedAtMs], by relay byte, with the short names it knows. */
 class MappedNodes(val fetchedAtMs: Long, nodes: List<MappedNode>) {
-    val count = nodes.size
     val byByte: Map<Int, List<MappedNode>> = nodes.groupBy { relayByteOf(it.nodeId) }
     val names: Map<Long, String> = nodes.mapNotNull { node -> node.shortName?.let { node.nodeId to it } }.toMap()
 }

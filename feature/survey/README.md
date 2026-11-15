@@ -25,13 +25,14 @@ A session counts the map cells it covered, the relay bytes heard in each cell an
 
 ## Relay guesses
 
-A packet carries only the last byte of the node that relayed it, so several nodes can share a byte. The recording card names the likely relay anyway, marked as a guess:
+A packet carries only the last byte of the node that relayed it, so several nodes can share a byte. The recording card names the likely relay anyway:
 
 | Situation | Shown as |
 | :--- | :--- |
 | Came straight from its sender | `ABCD (direct)` |
-| One node with that byte heard directly within 1 km of here in the last 30 days | `3f ≈ ABCD` |
-| None that near, and one possible node within 30 km | `3f ≈ ABCD?` |
+| SigSleuth's upload reply named the relay | `3f: ABCD` |
+| One node with that byte heard directly within 1 km of here in the last 30 days | `3f: ABCD` |
+| None that near, and one possible node within 30 km | `3f: ABCD` |
 | Several near, or none near and several possible | `3f: ABCD or EFGH` (nearest first, at most three) |
 | None | `3f` |
 
@@ -39,9 +40,9 @@ A packet carries only the last byte of the node that relayed it, so several node
 - **Known positions.** Nodes whose position is known, from the radio's node database or SigSleuth's map, can only be *possible* relays: a position is a claim, not a reception. They must be within 30 km, or within the longest link SigSleuth has seen them make.
 - **Too strong.** A relay's copy can't arrive much stronger than its own packets heard from the same place. A node is ruled out when the packet is more than 30 dB stronger than its strongest direct signal within 1 km.
 - **SigSleuth's map.** With a server set, a recording session downloads the server's list of nodes that could relay on its radio settings, so guesses work offline. It fetches the list at most once a day, retrying every 10 minutes while offline, and sends only the radio settings and the password, never the phone's position.
-- **SigSleuth's answers.** Each upload reply names the node each relayed packet came through, from every phone's uploads and SigSleuth's MQTT gateways. The relay list shows the answer beside the guess; it never replaces it.
+- **SigSleuth's answers.** Each upload reply names the node each relayed packet came through, from every phone's uploads and SigSleuth's MQTT gateways. When a reply names the relay, the card and the relay list show that name in place of the guess; the list still shows every candidate under it.
 
-Tap the card's **Relay bytes** count for the full list: each byte's guess, every candidate with how it is known (📡 heard directly, 📍 reported position, 🗺 SigSleuth's map), and the nodes ruled out (✕). Guesses and answers stay in memory: the database, the CSV and the upload keep only the raw relay byte, so SigSleuth makes its own.
+Tap the card's **Relay bytes** count for the full list: each byte's guess, every candidate with how it is known ("heard directly 400 m from here", "6.2 km away", "~3 km away on SigSleuth's map"), and the nodes ruled out as too strong. Guesses and answers stay in memory: the database, the CSV and the upload keep only the raw relay byte, so SigSleuth makes its own.
 
 **Limits.** The guess errs towards ambiguity: two nodes sharing a byte in the same area stay ambiguous, and a mobile node heard once in a place stays a candidate there for 30 days. Upstream once named relays by matching the whole node database and dropped it because it named stale or wrong nodes ([#4292](https://github.com/meshtastic/Meshtastic-Android/issues/4292), [design#33](https://github.com/meshtastic/design/issues/33), [#3773](https://github.com/meshtastic/Meshtastic-Android/pull/3773)). That's why the node database only adds possible candidates here. Relying on direct neighbours follows the firmware's own relay attribution in [firmware#12090](https://github.com/meshtastic/firmware/pull/12090).
 

@@ -140,6 +140,7 @@ import org.meshtastic.feature.survey.LinkEvidence
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayCandidate
 import org.meshtastic.feature.survey.RelayGuess
+import org.meshtastic.feature.survey.RelayStats
 import org.meshtastic.feature.survey.SIGSLEUTH_MAX_ACCURACY_M
 import org.meshtastic.feature.survey.SIGSLEUTH_MAX_FIX_AGE_S
 import org.meshtastic.feature.survey.ServerAnswer
@@ -158,13 +159,7 @@ import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.isUploadUrl
 import org.meshtastic.feature.survey.surveyTotals
 import java.util.Locale
-import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.DurationUnit
 import org.jetbrains.compose.resources.stringResource as sharedStringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -455,7 +450,7 @@ private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNa
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 InfoRow(MeshtasticIcons.Snr, lastSignalText(measurement, session.spreadingFactor))
                 measurement.relayByte?.let { byte ->
-                    val relay = relayText(byte, state.relays[byte]?.guess, relayNames)
+                    val relay = relayText(byte, state.relays[byte], relayNames)
                     InfoRow(MeshtasticIcons.Route, stringResource(R.string.survey_last_relay, relay))
                 }
             }
@@ -666,23 +661,29 @@ private fun radioText(session: SurveySession): String {
 private fun presetName(preset: String): String =
     preset.split('_').joinToString("") { word -> word.lowercase().replaceFirstChar { it.uppercase() } }
 
-/** The relay byte with who most likely sent it on, worded as the guess it is. */
+/**
+ * The relay byte with who sent it on: SigSleuth's answer when it named a node, else this phone's guess. The lines under
+ * it in the relays list show the evidence, so the headline carries no confidence mark.
+ */
 @Composable
-private fun relayText(relayByte: Int, guess: RelayGuess?, names: Map<Long, String>): String {
+private fun relayText(relayByte: Int, relay: RelayStats?, names: Map<Long, String>): String {
     val byte = "%02x".format(Locale.ROOT, relayByte)
     fun name(id: Long) = nodeName(id, names)
+    val guess = relay?.guess
+    val named = relay?.server?.nodeId?.takeIf { guess !is RelayGuess.Direct }
+    if (named != null) return stringResource(R.string.survey_relay_named, byte, name(named))
     return when (guess) {
         is RelayGuess.Direct -> stringResource(R.string.survey_relay_direct, name(guess.senderId))
 
-        is RelayGuess.Likely -> stringResource(R.string.survey_relay_likely, byte, name(guess.nodeId))
-
-        is RelayGuess.Possible -> stringResource(R.string.survey_relay_possible, byte, name(guess.nodeId))
+        is RelayGuess.Likely,
+        is RelayGuess.Possible,
+        -> stringResource(R.string.survey_relay_named, byte, name(guess.nodeIds.single()))
 
         is RelayGuess.Ambiguous -> {
             val shown = guess.nodeIds.take(MAX_RELAY_NAMES).map(::name)
             val more = if (guess.nodeIds.size > MAX_RELAY_NAMES) "…" else ""
             stringResource(
-                R.string.survey_relay_ambiguous,
+                R.string.survey_relay_named,
                 byte,
                 shown.reduce { joined, next -> stringResource(R.string.survey_relay_or, joined, next) } + more,
             )
@@ -708,23 +709,6 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
         title = { Text(stringResource(R.string.survey_relays_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    stringResource(R.string.survey_relays_explained),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                state.mapped?.let { mapped ->
-                    Text(
-                        pluralStringResource(
-                            R.plurals.survey_relays_map,
-                            mapped.count,
-                            mapped.count,
-                            DateFormatter.formatRelativeTime(mapped.fetchedAtMs),
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
                 state.relays.entries
                     .sortedByDescending { it.value.packets }
                     .forEach { (byte, relay) ->
@@ -732,7 +716,7 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    relayText(byte, relay.guess, names),
+                                    relayText(byte, relay, names),
                                     Modifier.weight(1f),
                                     style = MaterialTheme.typography.titleSmall,
                                 )
@@ -770,8 +754,8 @@ private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss
                                     nodeName(node.nodeId, names),
                                     stringResource(
                                         R.string.survey_relay_ruled_out,
-                                        node.strongestHere.roundToInt(),
                                         node.packetSignal.roundToInt(),
+                                        node.strongestHere.roundToInt(),
                                     ),
                                 )
                             }
@@ -871,7 +855,11 @@ private fun serverText(answer: ServerAnswer, names: Map<Long, String>): String {
     return if (evidence == null) {
         stringResource(R.string.survey_relay_server, nodeName(node, names), howText(answer.how), time)
     } else {
-        stringResource(R.string.survey_relay_server_evidence, nodeName(node, names), evidenceText(evidence))
+        stringResource(
+            R.string.survey_relay_server_evidence,
+            nodeName(node, names),
+            evidenceText(evidence, answer.heardAtMs),
+        )
     }
 }
 
@@ -888,30 +876,18 @@ private fun howText(how: String): String = when (how) {
     else -> how
 }
 
-/** A survey link's relay heard directly: "heard directly by you 2.3 km away, 40 min before". */
+/**
+ * A survey link's relay heard directly, timed from now like the rest of the list: "heard directly by you 2.3 km away,
+ * 29 days ago". [packetMs] is the uploaded packet's time, which the evidence's offset is measured from.
+ */
 @Composable
-@ReadOnlyComposable
-private fun evidenceText(evidence: LinkEvidence): String {
+private fun evidenceText(evidence: LinkEvidence, packetMs: Long): String {
     val text = if (evidence.mine) R.string.survey_server_survey_link_mine else R.string.survey_server_survey_link_other
-    return stringResource(text, distanceText(evidence.km * METERS_PER_KM), offsetText(evidence.offsetMs))
-}
-
-/** When a survey link's evidence was heard relative to the packet, in one rounded unit: "40 min before". */
-@Composable
-@ReadOnlyComposable
-private fun offsetText(offsetMs: Long): String {
-    val span = offsetMs.absoluteValue.milliseconds
-    if (span < 1.minutes) return stringResource(R.string.survey_offset_same_time)
-    val minutes = span.toDouble(DurationUnit.MINUTES).roundToInt()
-    val hours = span.toDouble(DurationUnit.HOURS).roundToInt()
-    val days = span.toDouble(DurationUnit.DAYS).roundToInt()
-    val duration =
-        when {
-            minutes < 1.hours.inWholeMinutes -> stringResource(R.string.survey_duration_minutes, minutes)
-            hours < 1.days.inWholeHours -> stringResource(R.string.survey_duration_hours, hours)
-            else -> pluralStringResource(R.plurals.survey_duration_days, days, days)
-        }
-    return stringResource(if (offsetMs < 0) R.string.survey_offset_before else R.string.survey_offset_after, duration)
+    return stringResource(
+        text,
+        distanceText(evidence.km * METERS_PER_KM),
+        DateFormatter.formatRelativeTime(packetMs + evidence.offsetMs),
+    )
 }
 
 @Composable
