@@ -241,13 +241,14 @@ class SurveyUploaderTest {
         // Seq 2's link has no evidence, as an older server answers.
         replyFields =
             """, "heard": [{"seq": 1, "node_id": 26, "how": "survey_link", "link_km": 2.3, """ +
-            """"link_offset_ms": -2400000, "link_mine": true}, {"seq": 2, "node_id": 26, "how": "survey_link"}]"""
+            """"link_offset_ms": -2400000, "link_mine": true, "link_rssi": -97}, """ +
+            """{"seq": 2, "node_id": 26, "how": "survey_link"}]"""
         val seen = mutableListOf<ServerAnswer>()
         answers.listener = { _, list -> seen += list }
 
         uploader().upload()
 
-        assertEquals(listOf(LinkEvidence(2.3, -2_400_000, true), null), seen.map { it.evidence })
+        assertEquals(listOf(LinkEvidence(2.3, -2_400_000, true, -97), null), seen.map { it.evidence })
     }
 
     @Test

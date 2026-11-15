@@ -877,17 +877,22 @@ private fun howText(how: String): String = when (how) {
 }
 
 /**
- * A survey link's relay heard directly, timed from now like the rest of the list: "heard directly by you 2.3 km away,
- * 29 days ago". [packetMs] is the uploaded packet's time, which the evidence's offset is measured from.
+ * A survey link's relay heard directly, timed from now like the rest of the list: "heard directly by you 2.3 km away at
+ * -97 dBm, 29 days ago", without the RSSI when SigSleuth sent none. [packetMs] is the uploaded packet's time, which the
+ * evidence's offset is measured from.
  */
 @Composable
+@ReadOnlyComposable
 private fun evidenceText(evidence: LinkEvidence, packetMs: Long): String {
-    val text = if (evidence.mine) R.string.survey_server_survey_link_mine else R.string.survey_server_survey_link_other
-    return stringResource(
-        text,
-        distanceText(evidence.km * METERS_PER_KM),
-        DateFormatter.formatRelativeTime(packetMs + evidence.offsetMs),
-    )
+    val distance = distanceText(evidence.km * METERS_PER_KM)
+    val time = DateFormatter.formatRelativeTime(packetMs + evidence.offsetMs)
+    val rssi = evidence.rssi
+    return when {
+        rssi == null && evidence.mine -> stringResource(R.string.survey_server_survey_link_mine, distance, time)
+        rssi == null -> stringResource(R.string.survey_server_survey_link_other, distance, time)
+        evidence.mine -> stringResource(R.string.survey_server_survey_link_mine_rssi, distance, rssi, time)
+        else -> stringResource(R.string.survey_server_survey_link_other_rssi, distance, rssi, time)
+    }
 }
 
 @Composable

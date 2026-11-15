@@ -108,6 +108,10 @@
     <string name="survey_server_survey_link_mine">heard directly by you %1$s away, %2$s</string>
     <!-- Another survey radio heard the relay directly: %1$s how far from the packet ("12 km"), %2$s a relative time ("3 h ago"). -->
     <string name="survey_server_survey_link_other">heard directly by another survey %1$s away, %2$s</string>
+    <!-- As survey_server_survey_link_mine, with the reception's RSSI: %1$s how far ("2.3 km"), %2$d the RSSI in dBm (negative), %3$s a relative time ("29 days ago"). -->
+    <string name="survey_server_survey_link_mine_rssi">heard directly by you %1$s away at %2$d dBm, %3$s</string>
+    <!-- As survey_server_survey_link_other, with the reception's RSSI: %1$s how far ("12 km"), %2$d the RSSI in dBm (negative), %3$s a relative time ("3 h ago"). -->
+    <string name="survey_server_survey_link_other_rssi">heard directly by another survey %1$s away at %2$d dBm, %3$s</string>
     <!-- %1$d is a packet count, %2$s a relative time ("3 min. ago"). -->
     <string name="survey_relay_packets">%1$d × · %2$s</string>
     <!-- This phone heard the candidate directly, with no GPS fix to measure from: %1$s is a relative time ("3 min. ago"). -->

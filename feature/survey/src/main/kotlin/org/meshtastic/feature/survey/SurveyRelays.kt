@@ -233,10 +233,10 @@ data class ServerAnswer(
 
 /**
  * The direct reception behind a survey link that is closest in time to the packet: [km] from the packet's fix, its time
- * minus the packet's ([offsetMs], negative before), and whether this survey radio heard it ([mine]) rather than another
- * survey's.
+ * minus the packet's ([offsetMs], negative before), whether this survey radio heard it ([mine]) rather than another
+ * survey's, and its [rssi] in dBm (null when not recorded, or from an older server).
  */
-data class LinkEvidence(val km: Double, val offsetMs: Long, val mine: Boolean)
+data class LinkEvidence(val km: Double, val offsetMs: Long, val mine: Boolean, val rssi: Int? = null)
 
 /** A possible relay suggested by SigSleuth, at [km] from the uploaded packet's fix. */
 data class ServerCandidate(val nodeId: Long, val name: String?, val km: Double)
