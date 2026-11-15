@@ -90,6 +90,9 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -141,6 +144,7 @@ import org.meshtastic.feature.survey.SIGSLEUTH_MAX_ACCURACY_M
 import org.meshtastic.feature.survey.SIGSLEUTH_MAX_FIX_AGE_S
 import org.meshtastic.feature.survey.ServerAnswer
 import org.meshtastic.feature.survey.SurveyFix
+import org.meshtastic.feature.survey.SurveyMeasurement
 import org.meshtastic.feature.survey.SurveyNews
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveyRecorder
@@ -449,14 +453,7 @@ private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNa
         if (!state.waitingForRadio) GpsStatus(state.fix)
         last?.let { measurement ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                InfoRow(
-                    MeshtasticIcons.Snr,
-                    stringResource(
-                        R.string.survey_last_signal,
-                        measurement.rxSnr?.let { NumberFormatter.format(it, 2) } ?: "–",
-                        measurement.rxRssi?.toString() ?: "–",
-                    ),
-                )
+                InfoRow(MeshtasticIcons.Snr, lastSignalText(measurement, session.spreadingFactor))
                 measurement.relayByte?.let { byte ->
                     val relay = relayText(byte, state.relays[byte]?.guess, relayNames)
                     InfoRow(MeshtasticIcons.Route, stringResource(R.string.survey_last_relay, relay))
@@ -545,7 +542,12 @@ private val INFO_TEXT_INDENT = INFO_ICON_SIZE + INFO_ICON_GAP
 
 /** A small icon and a line of text; the icon takes [color] too, or a muted one by default. */
 @Composable
-private fun InfoRow(icon: ImageVector, text: String, color: Color = Color.Unspecified) {
+private fun InfoRow(icon: ImageVector, text: String, color: Color = Color.Unspecified) =
+    InfoRow(icon, AnnotatedString(text), color)
+
+/** [InfoRow] for text with styled parts, such as the coloured margin dot. */
+@Composable
+private fun InfoRow(icon: ImageVector, text: AnnotatedString, color: Color = Color.Unspecified) {
     Row(horizontalArrangement = Arrangement.spacedBy(INFO_ICON_GAP)) {
         Icon(
             icon,
@@ -556,6 +558,26 @@ private fun InfoRow(icon: ImageVector, text: String, color: Color = Color.Unspec
         Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
     }
 }
+
+/**
+ * "Last packet: SNR -6.00 dB ●, RSSI -110 dBm", the dot in roughly the colour SigSleuth's map will give this spot. It
+ * sits in the text, so it wraps with it.
+ */
+@Composable
+private fun lastSignalText(measurement: SurveyMeasurement, spreadingFactor: Int): AnnotatedString {
+    val snr = measurement.rxSnr
+    val snrText =
+        snr?.let { "${stringResource(R.string.survey_snr, NumberFormatter.format(it, 2))} $MARGIN_DOT" } ?: "–"
+    val text = stringResource(R.string.survey_last_signal, snrText, measurement.rxRssi?.toString() ?: "–")
+    if (snr == null) return AnnotatedString(text)
+    val dot = text.indexOf(snrText) + snrText.length - MARGIN_DOT.length
+    return buildAnnotatedString {
+        append(text)
+        addStyle(SpanStyle(color = marginColor(fadeMargin(snr, spreadingFactor))), dot, dot + MARGIN_DOT.length)
+    }
+}
+
+private const val MARGIN_DOT = "●"
 
 /** The problem, and for location the way to fix it, since a refused permission is never asked again. */
 @Composable
