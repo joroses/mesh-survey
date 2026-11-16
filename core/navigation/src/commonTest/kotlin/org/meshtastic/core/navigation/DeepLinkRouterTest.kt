@@ -327,6 +327,11 @@ class DeepLinkRouterTest {
     }
 
     @Test
+    fun `settings survey resolves to the survey screen`() {
+        assertEquals(listOf(SettingsRoute.Settings(destNum = null), SurveyRoute.Survey), route("/settings/survey"))
+    }
+
+    @Test
     fun `settings acknowledgements resolves to the Acknowledgements screen`() {
         assertEquals(
             listOf(SettingsRoute.Settings(destNum = null), SettingsRoute.Acknowledgements),

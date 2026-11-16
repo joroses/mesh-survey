@@ -103,8 +103,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import org.koin.compose.viewmodel.koinViewModel
 import org.meshtastic.core.common.util.DateFormatter
 import org.meshtastic.core.common.util.NumberFormatter
@@ -200,6 +204,14 @@ fun SurveyScreen(
             }
                 .toTypedArray(),
         )
+    }
+    // The Quick Settings tile opens this screen to start, as if Start was pressed. Only while resumed, so the
+    // permission prompt never comes up over another app.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.startRequests.filterNotNull().collect { if (viewModel.takeStartRequest()) requestStart() }
+        }
     }
     var exportSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     val exporter =

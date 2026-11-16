@@ -169,11 +169,9 @@ class SurveyService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(0, getString(R.string.survey_stop), stop)
-            .apply {
-                packageManager.getLaunchIntentForPackage(packageName)?.let {
-                    setContentIntent(PendingIntent.getActivity(this@SurveyService, 0, it, PendingIntent.FLAG_IMMUTABLE))
-                }
-            }
+            .setContentIntent(
+                PendingIntent.getActivity(this, 0, surveyScreenIntent(this), PendingIntent.FLAG_IMMUTABLE),
+            )
             .build()
     }
 

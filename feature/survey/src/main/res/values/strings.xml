@@ -18,6 +18,8 @@
 <!-- English only, kept out of core:resources so upstream string changes never conflict with the fork. -->
 <resources>
     <string name="survey_title">Signal Survey</string>
+    <!-- The launcher shortcut's short label, under its icon on the home screen. -->
+    <string name="survey_shortcut">Survey</string>
     <string name="survey_back">Back</string>
     <string name="survey_intro">Record where your radio hears the mesh, then upload to SigSleuth or export as CSV.</string>
     <string name="survey_not_recording">Not recording</string>

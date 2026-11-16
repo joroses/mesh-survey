@@ -1,6 +1,6 @@
 # Signal survey (`:feature:survey`)
 
-Mesh Survey's own feature; upstream Meshtastic-Android doesn't have it. While a survey runs, the phone saves every LoRa packet its connected node hears, with the phone's GPS position at that moment. Sessions can be exported as CSV or uploaded to a [SigSleuth](https://github.com/joroses/sigsleuth) server, which turns them into a coverage map. It lives in Settings → Advanced → Signal Survey. Android only, since it needs the phone's GPS.
+Mesh Survey's own feature; upstream Meshtastic-Android doesn't have it. While a survey runs, the phone saves every LoRa packet its connected node hears, with the phone's GPS position at that moment. Sessions can be exported as CSV or uploaded to a [SigSleuth](https://github.com/joroses/sigsleuth) server, which turns them into a coverage map. It lives in Settings → Advanced → Signal Survey, also reached from a launcher shortcut (long-press the app icon, once the screen has been opened) and a Quick Settings tile that starts and stops a survey. Android only, since it needs the phone's GPS.
 
 What a survey records, from a privacy point of view, and how to install the app: see the [top-level README](../../README.md#privacy).
 
@@ -68,6 +68,7 @@ Compared with Settings → "Export all packets", it has the phone's own GPS fix 
 | `SurveyCsv.kt` | CSV export |
 | `SurveySettings.kt` | Server address, password and switches |
 | `ui/SurveyScreen.kt`, `ui/SurveyViewModel.kt` | The screen |
+| `SurveyLaunch.kt`, `SurveyTileService.kt` | The launcher shortcut, the Quick Settings tile, and the link to the screen they open |
 
 Some rules copy SigSleuth's and must change with it: the fix limits behind the GPS warning (10 s, 100 m), the map cells (zoom 17 tiles) and when two sessions are on the same network (same spreading factor and bandwidth, frequencies within half a bandwidth).
 
@@ -98,6 +99,7 @@ Keep these edits small; a rebase onto upstream has to carry them.
 | `androidApp/.../di/AppKoinModule.kt` | `FeatureSurveyModule::class` |
 | `androidApp/.../ui/Main.kt` | `surveyGraph(backStack)` |
 | `core/navigation/.../Routes.kt`, `NavigationConfig.kt` | `SurveyRoute` and its serializer |
+| `core/navigation/.../DeepLinkRouter.kt`, `DeepLinkRouterTest.kt` | `settings/survey` opens `SurveyRoute.Survey` |
 | `core/repository/.../SurveyPacketTap.kt` | new: the hook's interface and its shared instance |
 | `core/data/.../manager/SurveyPacketTapImpl.kt` | new: Koin's binding, forwarding to the shared instance |
 | `core/data/.../manager/MeshMessageProcessorImpl.kt` | one import and one call, no constructor parameter |
@@ -120,4 +122,4 @@ The fork's own name and identity, kept out of the Meshtastic trademark (see `CON
 | `core/service/.../MeshNotificationManagerImpl.kt`, `feature/widget/.../LocalStatsWidget.kt` | the app's label in place of `meshtastic_app_name` |
 | `feature/settings/.../AboutScreen.kt` | `GITHUB_REPO_URL` points at this fork; `copyright_notice` stays |
 
-Everything else, including the service's manifest entry and all other strings (English only, prefix `survey_`), is in this module, so upstream's frequent `strings.xml` and manifest changes never conflict.
+Everything else, including the service's and the tile's manifest entries and all other strings (English only, prefix `survey_`), is in this module, so upstream's frequent `strings.xml` and manifest changes never conflict.

@@ -19,6 +19,7 @@ package org.meshtastic.feature.survey.ui
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import co.touchlab.kermit.Logger
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -41,9 +42,11 @@ import org.meshtastic.feature.survey.SurveyRecorder
 import org.meshtastic.feature.survey.SurveyService
 import org.meshtastic.feature.survey.SurveySessionSummary
 import org.meshtastic.feature.survey.SurveySettings
+import org.meshtastic.feature.survey.SurveyStartRequest
 import org.meshtastic.feature.survey.SurveyState
 import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
+import org.meshtastic.feature.survey.publishSurveyShortcut
 import java.util.Locale
 
 @Suppress("LongParameterList")
@@ -54,6 +57,7 @@ class SurveyViewModel(
     private val uploader: SurveyUploader,
     private val settings: SurveySettings,
     private val dao: SurveyDao,
+    private val startRequest: SurveyStartRequest,
     nodes: NodeRepository,
     service: ServiceRepository,
     private val snackbars: SnackbarManager,
@@ -62,6 +66,16 @@ class SurveyViewModel(
 ) : ViewModel() {
     val state: StateFlow<SurveyState> = recorder.state
     val uploading: StateFlow<Boolean> = uploader.uploading
+
+    /** The Quick Settings tile's start request; the screen calls [takeStartRequest] when it changes. */
+    val startRequests: StateFlow<Long?> = startRequest.pending
+
+    init {
+        // Offered once the screen has been found, then kept: a launcher shortcut costs nothing until used.
+        appScope.launch {
+            safeCatching { publishSurveyShortcut(app) }.onFailure { Logger.w { "Survey shortcut not published: $it" } }
+        }
+    }
 
     /** The stored sessions, with the recording one's measurement count from the recorder, which the list lags. */
     val sessions: StateFlow<List<SurveySessionSummary>> =
@@ -126,6 +140,9 @@ class SurveyViewModel(
 
     /** Call once location (and, on Android 13+, notification) permission is granted. */
     fun start() = SurveyService.start(app)
+
+    /** True when the tile asked for a start that should happen now: it is fresh and nothing records yet. */
+    fun takeStartRequest(): Boolean = startRequest.take() && state.value.session == null
 
     /** Location was refused, or granted only approximately. */
     fun noLocation() = recorder.report(SurveyProblem.NO_LOCATION)

@@ -255,6 +255,8 @@ object DeepLinkRouter {
             "help-docs" to SettingsRoute.HelpDocs,
             "local-mesh-discovery" to DiscoveryRoute.DiscoveryGraph,
             "localmeshdiscovery" to DiscoveryRoute.DiscoveryGraph,
+            // Android only: the survey's launcher shortcut, tile and notification open it.
+            "survey" to SurveyRoute.Survey,
         )
 
     private val nodeDetailSubRoutes: Map<String, (Int) -> Route> =

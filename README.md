@@ -16,7 +16,7 @@ Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshta
 
 A signal survey is a record of where you were and when. Read this before you start one.
 
-**What is recorded.** Nothing is recorded until you press Start in Settings → Advanced → Signal Survey. While a survey runs, the app reads the phone's GPS once a second and, for every LoRa packet your node hears, saves a row in a database on the phone. Each row holds:
+**What is recorded.** Nothing is recorded until you start a survey: Start in Settings → Advanced → Signal Survey, or the Signal Survey tile in Quick Settings, which opens that screen and starts it. While a survey runs, the app reads the phone's GPS once a second and, for every LoRa packet your node hears, saves a row in a database on the phone. Each row holds:
 
 - the time to the millisecond
 - your position: latitude, longitude, the fix's accuracy and age

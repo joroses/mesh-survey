@@ -23,5 +23,19 @@
             android:name="org.meshtastic.feature.survey.SurveyService"
             android:exported="false"
             android:foregroundServiceType="location" />
+        <!-- The Quick Settings tile; people add it from the panel's edit screen. -->
+        <service
+            android:name="org.meshtastic.feature.survey.SurveyTileService"
+            android:exported="true"
+            android:icon="@drawable/survey_ic_notification"
+            android:label="@string/survey_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
     </application>
 </manifest>
