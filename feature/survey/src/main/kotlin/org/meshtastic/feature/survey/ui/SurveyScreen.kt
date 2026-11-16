@@ -29,6 +29,8 @@ import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -235,13 +237,17 @@ fun SurveyScreen(
             }
             uploadSettings?.let { current ->
                 item(key = "upload") {
+                    val past = sessions.filter { it.session.id != state.session?.id }
                     UploadCard(
                         current,
                         sessions.firstOrNull { it.session.id == state.session?.id },
-                        uploading,
+                        pastWaiting = past.count { it.waiting },
+                        anyUploaded = past.any { it.uploadedCount > 0 },
+                        uploading = uploading,
                         onSave = viewModel::saveServer,
                         onAutomatic = viewModel::setAutomatic,
                         onUpload = viewModel::upload,
+                        onUploadAll = viewModel::uploadAll,
                     )
                 }
             }
@@ -267,6 +273,7 @@ fun SurveyScreen(
                 SessionCard(
                     summary = summary,
                     recording = summary.session.id == state.session?.id,
+                    waiting = uploadsOn && summary.session.id != state.session?.id && summary.waiting,
                     deletable = state.session == null,
                     uploadsOn = uploadsOn,
                     uploading = uploading,
@@ -535,20 +542,25 @@ private val INFO_ICON_SIZE = 18.dp
 private val INFO_ICON_GAP = 8.dp
 private val INFO_TEXT_INDENT = INFO_ICON_SIZE + INFO_ICON_GAP
 
-/** A small icon and a line of text; the icon takes [color] too, or a muted one by default. */
+/** A small icon and a line of text; the icon takes [iconTint], which defaults to [color], or a muted one. */
 @Composable
-private fun InfoRow(icon: ImageVector, text: String, color: Color = Color.Unspecified) =
-    InfoRow(icon, AnnotatedString(text), color)
+private fun InfoRow(icon: ImageVector, text: String, color: Color = Color.Unspecified, iconTint: Color = color) =
+    InfoRow(icon, AnnotatedString(text), color, iconTint)
 
 /** [InfoRow] for text with styled parts, such as the coloured margin dot. */
 @Composable
-private fun InfoRow(icon: ImageVector, text: AnnotatedString, color: Color = Color.Unspecified) {
+private fun InfoRow(
+    icon: ImageVector,
+    text: AnnotatedString,
+    color: Color = Color.Unspecified,
+    iconTint: Color = color,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(INFO_ICON_GAP)) {
         Icon(
             icon,
             contentDescription = null,
             modifier = Modifier.padding(top = 1.dp).size(INFO_ICON_SIZE),
-            tint = color.takeOrElse { MaterialTheme.colorScheme.onSurfaceVariant },
+            tint = iconTint.takeOrElse { MaterialTheme.colorScheme.onSurfaceVariant },
         )
         Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
     }
@@ -942,16 +954,22 @@ private fun agoText(timeMs: Long): String {
 
 /**
  * Where uploads go, folded to one line once set: a server is entered once, so the form only opens on Set up or Edit.
- * Its status and Upload now are about [recording], the session recording now; ended sessions have their own button.
+ * Its status and Upload now are about [recording], the session recording now; a line counts the [pastWaiting] ended
+ * sessions SigSleuth may have but lacks rows of, which Upload all sends while nothing records. [anyUploaded] says
+ * whether an ended session was sent, so "Everything is uploaded" is not said of private sessions alone.
  */
 @Composable
+@Suppress("LongParameterList")
 private fun UploadCard(
     settings: SurveyUploadSettings,
     recording: SurveySessionSummary?,
+    pastWaiting: Int,
+    anyUploaded: Boolean,
     uploading: Boolean,
     onSave: (SurveyUploadSettings) -> Unit,
     onAutomatic: (Boolean) -> Unit,
     onUpload: (String) -> Unit,
+    onUploadAll: () -> Unit,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -988,19 +1006,33 @@ private fun UploadCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
-                else -> UploadSummary(settings, recording, uploading, onAutomatic, onUpload)
+                else ->
+                    UploadSummary(
+                        settings,
+                        recording,
+                        pastWaiting,
+                        anyUploaded,
+                        uploading,
+                        onAutomatic,
+                        onUpload,
+                        onUploadAll,
+                    )
             }
         }
     }
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun UploadSummary(
     settings: SurveyUploadSettings,
     recording: SurveySessionSummary?,
+    pastWaiting: Int,
+    anyUploaded: Boolean,
     uploading: Boolean,
     onAutomatic: (Boolean) -> Unit,
     onUpload: (String) -> Unit,
+    onUploadAll: () -> Unit,
 ) {
     val pending = recording?.pendingCount ?: 0
     val error = recording?.session?.lastUploadError?.takeIf { pending > 0 }
@@ -1013,8 +1045,6 @@ private fun UploadSummary(
             overflow = TextOverflow.Ellipsis,
         )
         when {
-            recording == null -> Unit
-
             error != null ->
                 InfoRow(MeshtasticIcons.ErrorOutline, uploadErrorText(error), MaterialTheme.colorScheme.error)
 
@@ -1024,7 +1054,19 @@ private fun UploadSummary(
                     pluralStringResource(R.plurals.survey_upload_pending, pending, pending),
                 )
 
-            else -> InfoRow(MeshtasticIcons.CheckCircle, stringResource(R.string.survey_upload_done))
+            pastWaiting == 0 && (recording != null || anyUploaded) ->
+                InfoRow(
+                    MeshtasticIcons.CheckCircle,
+                    stringResource(R.string.survey_upload_done),
+                    iconTint = MaterialTheme.colorScheme.StatusGreen,
+                )
+        }
+        if (pastWaiting > 0) {
+            InfoRow(
+                MeshtasticIcons.CloudUpload,
+                pluralStringResource(R.plurals.survey_upload_past_waiting, pastWaiting, pastWaiting),
+                iconTint = MaterialTheme.colorScheme.tertiary,
+            )
         }
         // The whole row toggles, so the label is part of the touch target and is read with the switch.
         Row(
@@ -1040,25 +1082,31 @@ private fun UploadSummary(
             )
             Switch(checked = settings.automatic, onCheckedChange = null)
         }
-        // Ended sessions are uploaded from their own cards, so nothing is sent that the user did not pick.
-        recording?.let { current ->
-            OutlinedButton(
-                onClick = { onUpload(current.session.id) },
-                enabled = pending > 0 && !uploading,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (uploading) {
-                    CircularProgressIndicator(
-                        Modifier.size(ButtonDefaults.IconSize),
-                        color = LocalContentColor.current,
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.survey_uploading))
-                } else {
-                    Text(stringResource(R.string.survey_upload_now))
-                }
-            }
+        // Upload all sends only sessions already allowed; a private one is sent from its own card, so nothing goes
+        // that the user did not pick.
+        when {
+            recording != null ->
+                UploadButton(R.string.survey_upload_now, pending > 0, uploading) { onUpload(recording.session.id) }
+
+            pastWaiting > 0 -> UploadButton(R.string.survey_upload_all, enabled = true, uploading, onUploadAll)
+        }
+    }
+}
+
+/** Shows Uploading… with a spinner during any run, which may be another session's. */
+@Composable
+private fun UploadButton(@StringRes label: Int, enabled: Boolean, uploading: Boolean, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, enabled = enabled && !uploading, modifier = Modifier.fillMaxWidth()) {
+        if (uploading) {
+            CircularProgressIndicator(
+                Modifier.size(ButtonDefaults.IconSize),
+                color = LocalContentColor.current,
+                strokeWidth = 2.dp,
+            )
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+            Text(stringResource(R.string.survey_uploading))
+        } else {
+            Text(stringResource(label))
         }
     }
 }
@@ -1066,6 +1114,10 @@ private fun UploadSummary(
 /** Measurements SigSleuth does not have yet. */
 private val SurveySessionSummary.pendingCount: Int
     get() = (measurementCount - uploadedCount).coerceAtLeast(0)
+
+/** Allowed to go to SigSleuth but not all there: a run sends it. A private session is never waiting. */
+private val SurveySessionSummary.waiting: Boolean
+    get() = session.upload && pendingCount > 0
 
 /** A refused password is the one failure the user fixes here; [SurveyUploader] words it "HTTP 401" or "HTTP 403". */
 @Composable
@@ -1161,6 +1213,7 @@ private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSett
 private fun SessionCard(
     summary: SurveySessionSummary,
     recording: Boolean,
+    waiting: Boolean,
     deletable: Boolean,
     uploadsOn: Boolean,
     uploading: Boolean,
@@ -1170,7 +1223,11 @@ private fun SessionCard(
 ) {
     val session = summary.session
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    // A waiting session is outlined in the colour of the Upload card's waiting line, so it shows while scrolling.
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        border = if (waiting) BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary) else null,
+    ) {
         Column(
             Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = if (recording) 16.dp else 4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1316,7 +1373,11 @@ private fun UploadProgress(summary: SurveySessionSummary, uploadsOn: Boolean) {
     val uploaded = summary.uploadedCount.coerceAtMost(count)
     if (count == 0 || ((!uploadsOn || !summary.session.upload) && uploaded == 0)) return
     if (uploaded == count) {
-        InfoRow(MeshtasticIcons.CheckCircle, stringResource(R.string.survey_uploaded_all))
+        InfoRow(
+            MeshtasticIcons.CheckCircle,
+            stringResource(R.string.survey_uploaded_all),
+            iconTint = MaterialTheme.colorScheme.StatusGreen,
+        )
     } else {
         Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(

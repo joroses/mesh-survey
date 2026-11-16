@@ -84,6 +84,11 @@ class SurveyUploader(
         }
     }
 
+    /** Uploads the sessions already allowed, for Upload all; it allows no other. */
+    fun uploadAll() {
+        scope.launch { upload() }
+    }
+
     /**
      * Runs [start] with whether the new session may be uploaded: automatic uploads are on, and unreadable settings keep
      * it on the phone. [start] must have published its session by the time it returns, for [setAutomatic] to find.

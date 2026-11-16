@@ -170,6 +170,11 @@
         <item quantity="other">%1$d measurements waiting to upload</item>
     </plurals>
     <string name="survey_upload_done">Everything is uploaded.</string>
+    <plurals name="survey_upload_past_waiting">
+        <item quantity="one">%1$d past session waiting to upload</item>
+        <item quantity="other">%1$d past sessions waiting to upload</item>
+    </plurals>
+    <string name="survey_upload_all">Upload all</string>
     <string name="survey_upload_failed">Last upload failed: %1$s</string>
     <string name="survey_upload_failed_password">Last upload failed: %1$s. Check the password.</string>
     <string name="survey_sessions">Sessions</string>

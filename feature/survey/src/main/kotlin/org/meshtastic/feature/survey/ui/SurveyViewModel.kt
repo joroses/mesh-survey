@@ -146,6 +146,8 @@ class SurveyViewModel(
 
     fun upload(sessionId: String) = uploader.uploadNow(sessionId)
 
+    fun uploadAll() = uploader.uploadAll()
+
     fun delete(sessionId: String) {
         // A delete recounts later sessions, and the recording one keeps earlier sessions' keys from its start.
         if (state.value.session != null) return
