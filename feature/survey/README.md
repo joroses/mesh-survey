@@ -102,6 +102,7 @@ Keep these edits small; a rebase onto upstream has to carry them.
 | `core/data/.../manager/SurveyPacketTapImpl.kt` | new: Koin's binding, forwarding to the shared instance |
 | `core/data/.../manager/MeshMessageProcessorImpl.kt` | one import and one call, no constructor parameter |
 | `core/data/.../manager/MeshMessageProcessorImplTest.kt` | one test of the hook |
+| `core/service/.../ConversationShortcutPublisher.kt`, `ConversationShortcutPublisherTest.kt` | prunes only conversation shortcuts, so the survey's launcher shortcut stays |
 | `feature/settings/.../radio/RadioConfig.kt` | the Settings entry, behind `showSignalSurvey` |
 | `feature/settings/src/androidMain/.../SettingsScreen.kt` | `showSignalSurvey = true` |
 | `.github/workflows/reusable-check.yml` | the module's tests and coverage in the `shard-app` test shard |

@@ -132,24 +132,26 @@ class ConversationShortcutPublisher(
     }
 
     private suspend fun publishShortcuts(conversations: List<Conversation>) {
-        val limit = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context)
-        // rank == list position, so the most recent conversation is rank 0 and shown first.
-        val shortcuts =
-            conversations.take(limit).mapIndexedNotNull { rank, conversation ->
-                when (conversation) {
-                    is Conversation.Dm -> buildDmShortcut(conversation, rank)
-                    is Conversation.Channel -> buildChannelShortcut(conversation, rank)
-                }
-            }
-
         try {
+            // Other features publish dynamic shortcuts of their own (the survey screen's): leave them, and the slots
+            // they take, alone. Every shortcut this class publishes carries the conversation category.
+            val (owned, others) =
+                ShortcutManagerCompat.getDynamicShortcuts(context).partition {
+                    ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION in it.categories.orEmpty()
+                }
+            val limit = (ShortcutManagerCompat.getMaxShortcutCountPerActivity(context) - others.size).coerceAtLeast(0)
+            // rank == list position, so the most recent conversation is rank 0 and shown first.
+            val shortcuts =
+                conversations.take(limit).mapIndexedNotNull { rank, conversation ->
+                    when (conversation) {
+                        is Conversation.Dm -> buildDmShortcut(conversation, rank)
+                        is Conversation.Channel -> buildChannelShortcut(conversation, rank)
+                    }
+                }
             val currentKeys = shortcuts.map { it.id }.toSet()
             // The snapshot now covers these conversations; normal pruning applies to them from here on.
             pendingOnDemandIds.removeAll(currentKeys)
-            val stale =
-                ShortcutManagerCompat.getDynamicShortcuts(context)
-                    .map { it.id }
-                    .filter { it !in currentKeys && it !in pendingOnDemandIds }
+            val stale = owned.map { it.id }.filter { it !in currentKeys && it !in pendingOnDemandIds }
             if (stale.isNotEmpty()) {
                 ShortcutManagerCompat.removeDynamicShortcuts(context, stale)
             }

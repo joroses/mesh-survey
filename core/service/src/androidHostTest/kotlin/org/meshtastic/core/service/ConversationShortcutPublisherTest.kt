@@ -163,7 +163,7 @@ class ConversationShortcutPublisherTest {
     fun `stale shortcuts are removed when no longer part of the conversation set`() = runTest {
         // Simulate a leftover shortcut from a previous session (raw push: the in-memory on-demand protection does not
         // survive a process restart, so the observer owns its cleanup).
-        pushRawShortcut("9^all", "Old Channel")
+        pushRawShortcut("9^all", "Old Channel", conversation = true)
         assertTrue(shortcutManager.dynamicShortcuts.any { it.id == "9^all" })
 
         every { packetRepository.getContacts() } returns flowOf(emptyMap())
@@ -172,6 +172,20 @@ class ConversationShortcutPublisherTest {
         advanceUntilIdle()
 
         assertNull(shortcutManager.dynamicShortcuts.find { it.id == "9^all" }, "stale shortcut should be pruned")
+        assertTrue(shortcutManager.dynamicShortcuts.any { it.id == "0^all" }, "current channels are published")
+    }
+
+    @Test
+    fun `shortcuts other features publish are left alone`() = runTest {
+        // The survey screen publishes a dynamic shortcut of its own, without the conversation category.
+        pushRawShortcut("survey", "Survey")
+
+        every { packetRepository.getContacts() } returns flowOf(emptyMap())
+
+        publisher.startObserving(this)
+        advanceUntilIdle()
+
+        assertTrue(shortcutManager.dynamicShortcuts.any { it.id == "survey" }, "another feature's shortcut is kept")
         assertTrue(shortcutManager.dynamicShortcuts.any { it.id == "0^all" }, "current channels are published")
     }
 
@@ -203,11 +217,16 @@ class ConversationShortcutPublisherTest {
         assertTrue(published.shortLabel?.isNotBlank() == true, "short label must be non-blank")
     }
 
-    private fun pushRawShortcut(id: String, label: String) {
+    private fun pushRawShortcut(id: String, label: String, conversation: Boolean = false) {
         val shortcut =
             androidx.core.content.pm.ShortcutInfoCompat.Builder(context, id)
                 .setShortLabel(label)
                 .setIntent(android.content.Intent(android.content.Intent.ACTION_VIEW))
+                .apply {
+                    if (conversation) {
+                        setCategories(setOf(android.content.pm.ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION))
+                    }
+                }
                 .build()
         androidx.core.content.pm.ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
     }
