@@ -571,7 +571,7 @@ class SurveyRecorderTest {
             hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
             assertEquals(1, recorder.state.value.directCount)
             val session = dao.sessions.single().id
-            val news = SurveyNews(cells = 1, nodes = 2, direct = 1, newCells = 1, newNodes = 1, newDirect = 0)
+            val news = SurveyNews(cells = 1, relays = 2, direct = 1, newCells = 1)
 
             answers.progress?.invoke(session, SurveyUploadProgress(acknowledged = 2, news, failed = false))
             assertEquals(news, recorder.state.value.news)
@@ -607,7 +607,7 @@ class SurveyRecorderTest {
             recorder.stop()
             // The phone had nothing before it, so all of it is new to you.
             assertEquals(
-                SurveyNews(1, 2, 1, localNewCells = 1, localNewNodes = 2, localNewDirect = 1),
+                SurveyNews(1, 2, 1, localNewCells = 1, localNewRelayCells = 1, localNewDirectCells = 1),
                 dao.sessions.single().news,
             )
         }
@@ -669,7 +669,8 @@ class SurveyRecorderTest {
             listOf(0, node, node or SurveyNews.NEW_DIRECT, node, SurveyNews.NEW_CELL or node),
             dao.measurements.filter { it.sessionId == session }.map { it.localNew },
         )
-        val news = SurveyNews(2, 4, 1, localNewCells = 1, localNewNodes = 3, localNewDirect = 1)
+        // Byte 3F, heard in both cells, is one relay; a new relay was heard in both.
+        val news = SurveyNews(2, 3, 1, localNewCells = 1, localNewRelayCells = 2, localNewDirectCells = 1)
         assertEquals(news, recorder.state.value.newToYou)
         recorder.stop()
         assertEquals(news, dao.sessions.single { it.id == session }.news)
@@ -716,7 +717,7 @@ class SurveyRecorderTest {
 
             val killed = dao.sessions.single { it.id == "killed" }
             assertEquals(SurveyStatus.INTERRUPTED, killed.status)
-            assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), killed.news)
+            assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), killed.news)
         }
 
     @Test

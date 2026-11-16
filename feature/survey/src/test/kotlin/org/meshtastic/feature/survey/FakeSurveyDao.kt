@@ -157,7 +157,7 @@ internal class FakeSurveyDao : SurveyDao {
             serverKept = 0,
             serverSkipped = 0,
             serverSkipReasons = null,
-            news = it.news?.copy(newCells = null, newNodes = null, newDirect = null),
+            news = it.news?.copy(newCells = null),
         )
     }
 
@@ -176,51 +176,36 @@ internal class FakeSurveyDao : SurveyDao {
         val rows = measurements.filter { it.sessionId == sessionId && it.cellX != null }
         val answered = rows.any { it.serverNew != null }
         fun cellOf(row: SurveyMeasurement) = row.cellX to row.cellY
-        fun count(rows: List<SurveyMeasurement>, key: (SurveyMeasurement) -> Any) = rows.map(key).distinct().size
-        fun new(bit: Int, key: (SurveyMeasurement) -> Any) =
-            if (answered) count(rows.filter { ((it.serverNew ?: 0) and bit) != 0 }, key) else null
-        fun local(bit: Int, key: (SurveyMeasurement) -> Any) =
-            count(rows.filter { ((it.localNew ?: 0) and bit) != 0 }, key)
-        val node = { row: SurveyMeasurement -> cellOf(row) to row.relayByte }
-        val direct = { row: SurveyMeasurement -> cellOf(row) to row.senderNodeId }
+        fun cells(rows: List<SurveyMeasurement>) = rows.map(::cellOf).distinct().size
+        fun local(bit: Int) = cells(rows.filter { ((it.localNew ?: 0) and bit) != 0 })
         return SurveyNews(
-            cells = count(rows, ::cellOf),
-            nodes = count(rows.filter { it.relayByte != null }, node),
-            direct = count(rows.filter { it.isDirect() }, direct),
-            newCells = new(SurveyNews.NEW_CELL, ::cellOf),
-            newNodes = new(SurveyNews.NEW_NODE, node),
-            newDirect = new(SurveyNews.NEW_DIRECT, direct),
-            localNewCells = local(SurveyNews.NEW_CELL, ::cellOf),
-            localNewNodes = local(SurveyNews.NEW_NODE, node),
-            localNewDirect = local(SurveyNews.NEW_DIRECT, direct),
+            cells = cells(rows),
+            relays = rows.mapNotNull { it.relayByte }.distinct().size,
+            direct = rows.filter { it.isDirect() }.map { it.senderNodeId }.distinct().size,
+            newCells =
+            if (answered) cells(rows.filter { ((it.serverNew ?: 0) and SurveyNews.NEW_CELL) != 0 }) else null,
+            localNewCells = local(SurveyNews.NEW_CELL),
+            localNewRelayCells = local(SurveyNews.NEW_NODE),
+            localNewDirectCells = local(SurveyNews.NEW_DIRECT),
         )
     }
+
+    override suspend fun countDirectSenders(): Int =
+        measurements.filter { it.cellX != null && it.isDirect() }.map { it.senderNodeId }.distinct().size
 
     override suspend fun saveNews(
         sessionId: String,
         cells: Int,
-        nodes: Int,
+        relays: Int,
         direct: Int,
         newCells: Int?,
-        newNodes: Int?,
-        newDirect: Int?,
         localNewCells: Int,
-        localNewNodes: Int,
-        localNewDirect: Int,
+        localNewRelayCells: Int,
+        localNewDirectCells: Int,
     ) = updateSession(sessionId) {
         it.copy(
             news =
-            SurveyNews(
-                cells,
-                nodes,
-                direct,
-                newCells,
-                newNodes,
-                newDirect,
-                localNewCells,
-                localNewNodes,
-                localNewDirect,
-            ),
+            SurveyNews(cells, relays, direct, newCells, localNewCells, localNewRelayCells, localNewDirectCells),
         )
     }
 
@@ -273,15 +258,8 @@ internal class FakeSurveyDao : SurveyDao {
         if (deleted.value == null) deleted.value = SurveyDeleted()
     }
 
-    override suspend fun addDeleted(cells: Int, nodes: Int, direct: Int) {
-        deleted.value =
-            deleted.value?.let {
-                it.copy(
-                    newCells = it.newCells + cells,
-                    newNodes = it.newNodes + nodes,
-                    newDirect = it.newDirect + direct,
-                )
-            }
+    override suspend fun addDeleted(cells: Int) {
+        deleted.value = deleted.value?.let { it.copy(newCells = it.newCells + cells) }
     }
 
     override suspend fun clearDeleted() {

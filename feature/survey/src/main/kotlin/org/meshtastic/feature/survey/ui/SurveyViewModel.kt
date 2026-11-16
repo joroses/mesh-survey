@@ -78,6 +78,9 @@ class SurveyViewModel(
     /** What deleted sessions had added to SigSleuth's map, for the Sessions card's total. */
     val deleted: StateFlow<SurveyDeleted?> = dao.deleted().stateInWhileSubscribed(null)
 
+    /** The distinct senders every session heard directly, for the Sessions card's total. */
+    val directSenders: StateFlow<Int> = dao.directSenders().stateInWhileSubscribed(0)
+
     /** The connected radio's name, which Start would survey with; null while no radio is connected. */
     val radioName: StateFlow<String?> =
         combine(service.connectionState, nodes.ourNodeInfo) { connection, node ->

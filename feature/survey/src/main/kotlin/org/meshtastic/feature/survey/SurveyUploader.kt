@@ -294,19 +294,12 @@ class SurveyAnswers {
  */
 data class SurveyUploadProgress(val acknowledged: Long, val news: SurveyNews?, val failed: Boolean)
 
-/** What the reply says each row adds to the map, as [SurveyNews] bits by seq; empty from servers that do not say. */
+/**
+ * Whether the reply says each row adds a cell to the map, as [SurveyNews.NEW_CELL] or 0 by seq; empty from servers that
+ * do not say.
+ */
 internal fun serverNew(response: UploadResponse): Map<Long, Int> = response.heard
-    .mapNotNull { heard ->
-        val cell = heard.newCell ?: return@mapNotNull null
-        val node = heard.newByte ?: return@mapNotNull null
-        val direct = heard.newDirect ?: return@mapNotNull null
-        heard.seq to
-            (
-                (if (cell) SurveyNews.NEW_CELL else 0) or
-                    (if (node) SurveyNews.NEW_NODE else 0) or
-                    (if (direct) SurveyNews.NEW_DIRECT else 0)
-                )
-    }
+    .mapNotNull { heard -> heard.newCell?.let { heard.seq to if (it) SurveyNews.NEW_CELL else 0 } }
     .toMap()
 
 /** The upload password as HTTP Basic. SigSleuth ignores the user name, so a password alone must still be sent. */
@@ -416,13 +409,8 @@ internal data class UploadHeard(
     @SerialName("link_offset_ms") val linkOffsetMs: Long? = null,
     @SerialName("link_mine") val linkMine: Boolean? = null,
     @SerialName("link_rssi") val linkRssi: Int? = null,
-    /**
-     * Whether the row adds a cell, its relay byte in the cell, or its sender heard directly there; older servers send
-     * none.
-     */
+    /** Whether the row adds a cell to the map; older servers do not say. */
     @SerialName("new_cell") val newCell: Boolean? = null,
-    @SerialName("new_byte") val newByte: Boolean? = null,
-    @SerialName("new_direct") val newDirect: Boolean? = null,
 )
 
 @Serializable

@@ -103,46 +103,48 @@ class SurveyDaoTest {
     }
 
     @Test
-    fun `news count each key once and forget SigSleuth's word with its server`() = runTest {
-        dao.insertSession(session("s", startedAt = 1))
-        dao.insertSession(session("other", startedAt = 2))
+    fun `news count distinct relays and senders, new things by cell, and forget SigSleuth's word with its server`() =
+        runTest {
+            dao.insertSession(session("s", startedAt = 1))
+            dao.insertSession(session("other", startedAt = 2))
 
-        fun row(heardAt: Long, cell: Int?, relayByte: Int, hopLimit: Int = 2, localNew: Int? = null) =
-            measurement("s", heardAt, hopLimit = hopLimit, relayByte = relayByte)
-                .copy(cellX = cell, cellY = cell, localNew = localNew)
-        val seqs =
-            listOf(
-                // New to this phone too: cell 1, and byte 1A there.
-                row(1, cell = 1, relayByte = 0x1A, localNew = SurveyNews.NEW_CELL or SurveyNews.NEW_NODE),
-                row(2, cell = 1, relayByte = 0x1A),
-                // Sender 2 heard directly: its own byte, no hop used.
-                row(3, cell = 1, relayByte = 0x02, hopLimit = 3),
-                row(4, cell = 2, relayByte = 0x1A),
-                // No cell: SigSleuth would not keep it.
-                row(5, cell = null, relayByte = 0x1B),
-            )
-                .map { dao.insertMeasurement(it) }
-        dao.insertMeasurement(measurement("other", 6, relayByte = 0x1C).copy(cellX = 1, cellY = 1))
-        val counted = SurveyNews(cells = 2, nodes = 3, direct = 1, localNewCells = 1, localNewNodes = 1)
-        assertEquals(counted, dao.recountNews("s"))
+            fun row(heardAt: Long, cell: Int?, relayByte: Int, hopLimit: Int = 2, localNew: Int? = null) =
+                measurement("s", heardAt, hopLimit = hopLimit, relayByte = relayByte)
+                    .copy(cellX = cell, cellY = cell, localNew = localNew)
+            val seqs =
+                listOf(
+                    // New to this phone too: cell 1, and byte 1A there.
+                    row(1, cell = 1, relayByte = 0x1A, localNew = SurveyNews.NEW_CELL or SurveyNews.NEW_NODE),
+                    row(2, cell = 1, relayByte = 0x1A),
+                    // Sender 2 heard directly: its own byte, no hop used.
+                    row(3, cell = 1, relayByte = 0x02, hopLimit = 3),
+                    row(4, cell = 2, relayByte = 0x1A),
+                    // No cell: SigSleuth would not keep it.
+                    row(5, cell = null, relayByte = 0x1B),
+                )
+                    .map { dao.insertMeasurement(it) }
+            dao.insertMeasurement(measurement("other", 6, relayByte = 0x1C).copy(cellX = 1, cellY = 1))
+            // Byte 1A in two cells is one relay.
+            val counted = SurveyNews(cells = 2, relays = 2, direct = 1, localNewCells = 1, localNewRelayCells = 1)
+            assertEquals(counted, dao.recountNews("s"))
 
-        // Two batches called cell 1 and byte 1A there new; each counts once.
-        val cell = SurveyNews.NEW_CELL
-        val node = SurveyNews.NEW_NODE
-        dao.markNew("s", mapOf(seqs[0] to (cell or node), seqs[3] to 0))
-        // The progress and the flags of a batch are saved together.
-        val flags = mapOf(seqs[1] to (cell or node), seqs[2] to (node or SurveyNews.NEW_DIRECT))
-        dao.batchUploaded("s", seqs[2], at = 100, kept = 3, skipped = 0, skipReasons = null, flags = flags)
-        assertEquals(seqs[2], dao.sessions().first().single { it.session.id == "s" }.session.uploadedSeq)
-        val news = counted.copy(newCells = 1, newNodes = 2, newDirect = 1)
-        assertEquals(news, dao.recountNews("s"))
-        assertEquals(news, dao.sessions().first().single { it.session.id == "s" }.session.news)
+            // Two batches called cell 1 new; it counts once.
+            val cell = SurveyNews.NEW_CELL
+            val node = SurveyNews.NEW_NODE
+            dao.markNew("s", mapOf(seqs[0] to (cell or node), seqs[3] to 0))
+            // The progress and the flags of a batch are saved together.
+            val flags = mapOf(seqs[1] to (cell or node), seqs[2] to (node or SurveyNews.NEW_DIRECT))
+            dao.batchUploaded("s", seqs[2], at = 100, kept = 3, skipped = 0, skipReasons = null, flags = flags)
+            assertEquals(seqs[2], dao.sessions().first().single { it.session.id == "s" }.session.uploadedSeq)
+            val news = counted.copy(newCells = 1)
+            assertEquals(news, dao.recountNews("s"))
+            assertEquals(news, dao.sessions().first().single { it.session.id == "s" }.session.news)
 
-        // What is new to this phone stays.
-        dao.resetUploads()
-        assertEquals(counted, dao.countNews("s"))
-        assertEquals(counted, dao.sessions().first().single { it.session.id == "s" }.session.news)
-    }
+            // What is new to this phone stays.
+            dao.resetUploads()
+            assertEquals(counted, dao.countNews("s"))
+            assertEquals(counted, dao.sessions().first().single { it.session.id == "s" }.session.news)
+        }
 
     @Test
     fun `cell keys come from earlier sessions on the same network, and news count what is new to you`() = runTest {
@@ -182,7 +184,8 @@ class SurveyDaoTest {
         dao.insertMeasurement(row("now", 0x1B, localNew = node))
         dao.insertMeasurement(row("now", 0x1B, localNew = node))
         dao.insertMeasurement(row("now", 0x1A, cell = 3, localNew = SurveyNews.NEW_CELL or node))
-        val news = SurveyNews(cells = 2, nodes = 3, direct = 0, localNewCells = 1, localNewNodes = 2)
+        // Byte 1B new twice in cell 1 counts one cell; 1A, known in cell 1, is new in cell 3.
+        val news = SurveyNews(cells = 2, relays = 2, direct = 0, localNewCells = 1, localNewRelayCells = 2)
         assertEquals(news, dao.recountNews("now"))
         assertEquals(news, dao.sessions().first().single { it.session.id == "now" }.session.news)
     }
@@ -257,7 +260,7 @@ class SurveyDaoTest {
         assertEquals(SurveyStatus.INTERRUPTED, summary.session.status)
         assertEquals(42L, summary.session.endedAt)
         assertEquals(1, summary.measurementCount)
-        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), summary.session.news)
+        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), summary.session.news)
         assertNull(summaries.single { it.session.id == "stopped" }.session.news)
     }
 
@@ -403,8 +406,8 @@ class SurveyDaoTest {
         assertEquals(listOf(0), flags("third"))
         assertEquals(listOf(0), flags("other network"))
         val news = dao.sessions().first().associate { it.session.id to it.session.news }
-        assertEquals(SurveyNews(1, 2, 0, localNewCells = 1, localNewNodes = 2), news.getValue("second"))
-        assertEquals(0, news.getValue("third")?.localNewNodes)
+        assertEquals(SurveyNews(1, 2, 0, localNewCells = 1, localNewRelayCells = 1), news.getValue("second"))
+        assertEquals(0, news.getValue("third")?.localNewRelayCells)
     }
 
     @Test
@@ -440,7 +443,7 @@ class SurveyDaoTest {
         dao.deleteSession("unanswered")
         assertNull(dao.deleted().first())
         dao.deleteSession("answered")
-        assertEquals(SurveyDeleted(newCells = 1, newNodes = 1, newDirect = 0), dao.deleted().first())
+        assertEquals(SurveyDeleted(newCells = 1), dao.deleted().first())
 
         dao.resetUploads()
         assertNull(dao.deleted().first())

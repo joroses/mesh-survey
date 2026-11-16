@@ -468,9 +468,9 @@ class SurveyUploaderTest {
 
         uploader.upload()
 
-        val cell = SurveyNews.NEW_CELL or SurveyNews.NEW_NODE
-        assertEquals(listOf(cell, 0), dao.measurements.map { it.serverNew })
-        val news = SurveyNews(cells = 1, nodes = 1, direct = 0, newCells = 1, newNodes = 1, newDirect = 0)
+        // Only the new cell is kept; the reply's other answers are not read.
+        assertEquals(listOf(SurveyNews.NEW_CELL, 0), dao.measurements.map { it.serverNew })
+        val news = SurveyNews(cells = 1, relays = 1, direct = 0, newCells = 1)
         assertEquals(news, dao.sessions.single().news)
         assertEquals(
             listOf(
@@ -486,7 +486,7 @@ class SurveyUploaderTest {
         replyFields = ""
         uploader.upload()
         assertNull(dao.measurements.last().serverNew)
-        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), dao.sessions.last().news)
+        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), dao.sessions.last().news)
 
         record("b", 1)
         fail = true
@@ -507,7 +507,7 @@ class SurveyUploaderTest {
         assertEquals(1, dao.recounts)
         assertEquals(listOf(500L, 1_000L, 1_001L, 1_001L), progress.map { it.acknowledged })
         assertEquals(listOf(null, null, null), progress.dropLast(1).map { it.news })
-        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), progress.last().news)
+        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), progress.last().news)
 
         // The first batch works, the second fails.
         record("a", SurveyUploader.BATCH_SIZE + 1)
@@ -531,7 +531,7 @@ class SurveyUploaderTest {
 
         assertTrue(run.isCancelled)
         assertEquals(SurveyUploader.BATCH_SIZE.toLong(), dao.sessions.single().uploadedSeq)
-        assertEquals(SurveyNews(cells = 1, nodes = 1, direct = 0), dao.sessions.single().news)
+        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), dao.sessions.single().news)
     }
 
     @Test

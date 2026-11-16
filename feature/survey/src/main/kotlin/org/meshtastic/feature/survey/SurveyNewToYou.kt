@@ -16,7 +16,9 @@
  */
 package org.meshtastic.feature.survey
 
+import androidx.room3.DeleteColumn
 import androidx.room3.Embedded
+import androidx.room3.RenameColumn
 import androidx.room3.migration.AutoMigrationSpec
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteStatement
@@ -126,12 +128,15 @@ fun Sequence<CellRow>.withLocalNew(): Sequence<Pair<CellRow, Int>> = sequence {
  */
 internal class NewToYou(private val earlier: suspend (SurveyCell) -> List<CellKey>) {
     private val histories = mutableMapOf<SurveyCell, CellHistory>()
-    private val seenCells = mutableSetOf<SurveyCell>()
-    private val seenNodes = mutableSetOf<Pair<SurveyCell, Int>>()
-    private val seenDirect = mutableSetOf<Pair<SurveyCell, Long>>()
+    private val cells = mutableSetOf<SurveyCell>()
+    private val relays = mutableSetOf<Int>()
+    private val directSenders = mutableSetOf<Long>()
+    private val newCells = mutableSetOf<SurveyCell>()
+    private val newRelayCells = mutableSetOf<SurveyCell>()
+    private val newDirectCells = mutableSetOf<SurveyCell>()
 
-    /** This session's keys so far and those new to the phone; no server counts. */
-    var news = SurveyNews(cells = 0, nodes = 0, direct = 0)
+    /** This session's counts so far and what is new to the phone, as the `NEWS` query counts them; no server counts. */
+    var news = SurveyNews(cells = 0, relays = 0, direct = 0)
         private set
 
     suspend fun bits(row: SurveyMeasurement): Int? {
@@ -139,42 +144,37 @@ internal class NewToYou(private val earlier: suspend (SurveyCell) -> List<CellKe
         return histories.getOrPut(cell) { CellHistory(earlier(cell)) }.newBits(row.cellKey())
     }
 
-    /**
-     * Counts a saved row, with its [SurveyMeasurement.localNew] set. A key's rows share their bits; the first counts.
-     */
+    /** Counts a saved row, with its [SurveyMeasurement.localNew] set. */
     fun count(row: SurveyMeasurement) {
         val cell = row.cell() ?: return
         val key = row.cellKey()
         val bits = row.localNew ?: 0
-        val cellAdded = seenCells.add(cell)
-        val node = key.relayByte != null && seenNodes.add(cell to key.relayByte)
-        val direct = key.directSender != null && seenDirect.add(cell to key.directSender)
-        fun new(added: Boolean, bit: Int) = (added && bits and bit != 0).count()
+        cells += cell
+        key.relayByte?.let(relays::add)
+        key.directSender?.let(directSenders::add)
+        if (bits and SurveyNews.NEW_CELL != 0) newCells += cell
+        if (bits and SurveyNews.NEW_NODE != 0) newRelayCells += cell
+        if (bits and SurveyNews.NEW_DIRECT != 0) newDirectCells += cell
         news =
-            news.copy(
-                cells = news.cells + cellAdded.count(),
-                nodes = news.nodes + node.count(),
-                direct = news.direct + direct.count(),
-                localNewCells = news.localNewCells + new(cellAdded, SurveyNews.NEW_CELL),
-                localNewNodes = news.localNewNodes + new(node, SurveyNews.NEW_NODE),
-                localNewDirect = news.localNewDirect + new(direct, SurveyNews.NEW_DIRECT),
+            SurveyNews(
+                cells = cells.size,
+                relays = relays.size,
+                direct = directSenders.size,
+                localNewCells = newCells.size,
+                localNewRelayCells = newRelayCells.size,
+                localNewDirectCells = newDirectCells.size,
             )
     }
 }
 
-private fun Boolean.count() = if (this) 1 else 0
-
-/** Version 5. Sessions go in start order, because a row is new only against sessions that started earlier. */
+/**
+ * Version 5. Sessions go in start order, because a row is new only against sessions that started earlier. Version 6
+ * ([CountNewsByCell]) counts each session afterwards.
+ */
 class FillNewToYou : AutoMigrationSpec {
     override suspend fun onPostMigrate(connection: SQLiteConnection) {
         fillCells(connection)
         fillLocalNew(connection)
-        connection.execSQL(
-            "UPDATE survey_session SET (news_cells, news_nodes, news_direct, news_new_cells, news_new_nodes, " +
-                "news_new_direct, news_local_new_cells, news_local_new_nodes, news_local_new_direct) = " +
-                "(SELECT $NEWS_COLUMNS FROM survey_measurement " +
-                "WHERE session_id = survey_session.id AND cell_x IS NOT NULL)",
-        )
     }
 
     @Suppress("MagicNumber") // Column and parameter indices.
@@ -243,21 +243,45 @@ class FillNewToYou : AutoMigrationSpec {
 }
 
 /**
- * The Sessions card: what every session on this phone was first to have, so each distinct cell, relay byte in a cell
- * and direct sender in a cell per network, and the cells they added to SigSleuth's map, deleted sessions' included
- * ([mapCells], null before any reply). Null while there is nothing to show.
+ * Version 6: [SurveyNews] counts by cell. The renamed columns are counted again at once; SigSleuth's relay and direct
+ * counts and the deleted sessions' ones go, as nothing shows them.
  */
-data class SurveyTotals(val cells: Int, val nodes: Int, val direct: Int, val mapCells: Int?)
+@RenameColumn(tableName = "survey_session", fromColumnName = "news_nodes", toColumnName = "news_relays")
+@RenameColumn(
+    tableName = "survey_session",
+    fromColumnName = "news_local_new_nodes",
+    toColumnName = "news_local_new_relay_cells",
+)
+@RenameColumn(
+    tableName = "survey_session",
+    fromColumnName = "news_local_new_direct",
+    toColumnName = "news_local_new_direct_cells",
+)
+@DeleteColumn(tableName = "survey_session", columnName = "news_new_nodes")
+@DeleteColumn(tableName = "survey_session", columnName = "news_new_direct")
+@DeleteColumn(tableName = "survey_deleted", columnName = "new_nodes")
+@DeleteColumn(tableName = "survey_deleted", columnName = "new_direct")
+class CountNewsByCell : AutoMigrationSpec {
+    override suspend fun onPostMigrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "UPDATE survey_session SET $NEWS_TARGET = (SELECT $NEWS_COLUMNS FROM survey_measurement " +
+                "WHERE session_id = survey_session.id AND cell_x IS NOT NULL)",
+        )
+    }
+}
 
-fun surveyTotals(sessions: List<SurveySession>, deleted: SurveyDeleted?): SurveyTotals? {
+/**
+ * The Sessions card: the distinct cells every session on this phone was first to have per network, the distinct senders
+ * heard directly ([SurveyDao.countDirectSenders]), and the cells the sessions added to SigSleuth's map, deleted
+ * sessions' included ([mapCells], null before any reply). Null while there is nothing to show.
+ */
+data class SurveyTotals(val cells: Int, val direct: Int, val mapCells: Int?)
+
+fun surveyTotals(sessions: List<SurveySession>, deleted: SurveyDeleted?, directSenders: Int): SurveyTotals? {
     val news = sessions.mapNotNull { it.news }
     val answered = news.mapNotNull { it.newCells }
     val mapCells = (answered.sum() + (deleted?.newCells ?: 0)).takeIf { answered.isNotEmpty() || deleted != null }
-    return SurveyTotals(
-        news.sumOf { it.localNewCells },
-        news.sumOf { it.localNewNodes },
-        news.sumOf { it.localNewDirect },
-        mapCells,
-    )
-        .takeIf { it.cells > 0 || mapCells != null }
+    return SurveyTotals(news.sumOf { it.localNewCells }, directSenders, mapCells).takeIf {
+        it.cells > 0 || mapCells != null
+    }
 }

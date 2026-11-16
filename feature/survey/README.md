@@ -21,7 +21,7 @@ What a survey records, from a privacy point of view, and how to install the app:
 
 ## What a session adds
 
-A session counts the map cells it covered, the relay bytes heard in each cell and the nodes heard directly in each cell. **New to you** is what no earlier session on this phone, on the same network, had. **Added to the map** is what SigSleuth's replies call new on its map. The **Surveyed so far** card adds both up over every session. Deleting a session passes its "new to you" on to later sessions that had the same things; what it added to the map still counts.
+A session counts the map cells where it had a fix, the relay bytes it heard and the nodes it heard directly. **New to you** counts cells: those no earlier session on this phone, on the same network, covered, and those where a relay or a direct node was heard for the first time. **Added to the map** is the cells SigSleuth's replies call new on its map. The **Surveyed so far** card, under the Upload card, adds up the cells new to you, the nodes any session heard directly and the cells added to the map. Deleting a session passes its "new to you" on to later sessions that had the same things; what it added to the map still counts.
 
 ## Relay guesses
 

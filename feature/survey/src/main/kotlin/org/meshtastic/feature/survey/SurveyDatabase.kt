@@ -82,23 +82,25 @@ data class SurveySession(
 )
 
 /**
- * A session's distinct cells, relay bytes in a cell and senders heard directly in a cell, and how many of them
- * SigSleuth's replies called new (null until a reply says) or were new to this phone ([SurveyMeasurement.localNew]). A
- * key counts once, whichever batch called it new.
+ * What a session measured where it had a cell: its distinct cells, relay bytes and senders heard directly; the cells
+ * SigSleuth's replies called new to its map (null until a reply says, a cell counting once whichever batch said so);
+ * and the cells that were new to this phone, or where it heard a relay byte or a direct sender for the first time there
+ * ([SurveyMeasurement.localNew]). Every "new" count is of cells, so sessions' counts add up.
  */
 data class SurveyNews(
     val cells: Int,
-    val nodes: Int,
+    val relays: Int,
     val direct: Int,
     @ColumnInfo(name = "new_cells") val newCells: Int? = null,
-    @ColumnInfo(name = "new_nodes") val newNodes: Int? = null,
-    @ColumnInfo(name = "new_direct") val newDirect: Int? = null,
     @ColumnInfo(name = "local_new_cells") val localNewCells: Int = 0,
-    @ColumnInfo(name = "local_new_nodes") val localNewNodes: Int = 0,
-    @ColumnInfo(name = "local_new_direct") val localNewDirect: Int = 0,
+    @ColumnInfo(name = "local_new_relay_cells") val localNewRelayCells: Int = 0,
+    @ColumnInfo(name = "local_new_direct_cells") val localNewDirectCells: Int = 0,
 ) {
     companion object {
-        /** [SurveyMeasurement.serverNew] and [SurveyMeasurement.localNew] bits; the `NEWS` query repeats them. */
+        /**
+         * [SurveyMeasurement.localNew] bits; [SurveyMeasurement.serverNew] uses only [NEW_CELL]. The `NEWS` query
+         * repeats them.
+         */
         const val NEW_CELL = 1
         const val NEW_NODE = 2
         const val NEW_DIRECT = 4
@@ -111,12 +113,7 @@ data class SurveyNews(
  * of the server's answers.
  */
 @Entity(tableName = "survey_deleted")
-data class SurveyDeleted(
-    @PrimaryKey val id: Int = 0,
-    @ColumnInfo(name = "new_cells") val newCells: Int = 0,
-    @ColumnInfo(name = "new_nodes") val newNodes: Int = 0,
-    @ColumnInfo(name = "new_direct") val newDirect: Int = 0,
-)
+data class SurveyDeleted(@PrimaryKey val id: Int = 0, @ColumnInfo(name = "new_cells") val newCells: Int = 0)
 
 /**
  * One packet the survey node heard, with where the phone was. These are the fields of SigSleuth's upload, plus its cell
@@ -150,7 +147,10 @@ data class SurveyMeasurement(
     /** Its SigSleuth map cell ([SurveyCell]); null when SigSleuth would not keep it (no fix, or a poor one). */
     @ColumnInfo(name = "cell_x") val cellX: Int? = null,
     @ColumnInfo(name = "cell_y") val cellY: Int? = null,
-    /** What SigSleuth's upload reply said it adds to the map, as [SurveyNews] bits; null until a reply says. */
+    /**
+     * Whether SigSleuth's upload reply said it adds a cell to the map, as [SurveyNews.NEW_CELL] or 0; null until a
+     * reply says. Rows saved by earlier versions may also carry the other bits, which nothing reads.
+     */
     @ColumnInfo(name = "server_new") val serverNew: Int? = null,
     /**
      * What it adds to this phone's sessions that started earlier on the same spreading factor and bandwidth, as
@@ -205,17 +205,18 @@ private const val CELL = "cell_x || ',' || cell_y"
 /** [SurveyNews]'s columns, counted over one session's measurements that have a cell. */
 internal const val NEWS_COLUMNS =
     "COUNT(DISTINCT $CELL) AS cells, " +
-        "COUNT(DISTINCT CASE WHEN relay_byte IS NOT NULL THEN $CELL || ',' || relay_byte END) AS nodes, " +
-        "COUNT(DISTINCT CASE WHEN $IS_DIRECT THEN $CELL || ',' || sender_node_id END) AS direct, " +
+        "COUNT(DISTINCT relay_byte) AS relays, " +
+        "COUNT(DISTINCT CASE WHEN $IS_DIRECT THEN sender_node_id END) AS direct, " +
         "CASE WHEN COUNT(server_new) > 0 THEN COUNT(DISTINCT CASE WHEN server_new & 1 THEN $CELL END) END " +
         "AS new_cells, " +
-        "CASE WHEN COUNT(server_new) > 0 THEN " +
-        "COUNT(DISTINCT CASE WHEN server_new & 2 THEN $CELL || ',' || relay_byte END) END AS new_nodes, " +
-        "CASE WHEN COUNT(server_new) > 0 THEN " +
-        "COUNT(DISTINCT CASE WHEN server_new & 4 THEN $CELL || ',' || sender_node_id END) END AS new_direct, " +
         "COUNT(DISTINCT CASE WHEN local_new & 1 THEN $CELL END) AS local_new_cells, " +
-        "COUNT(DISTINCT CASE WHEN local_new & 2 THEN $CELL || ',' || relay_byte END) AS local_new_nodes, " +
-        "COUNT(DISTINCT CASE WHEN local_new & 4 THEN $CELL || ',' || sender_node_id END) AS local_new_direct"
+        "COUNT(DISTINCT CASE WHEN local_new & 2 THEN $CELL END) AS local_new_relay_cells, " +
+        "COUNT(DISTINCT CASE WHEN local_new & 4 THEN $CELL END) AS local_new_direct_cells"
+
+/** [SurveyNews]'s columns on `survey_session`, in [NEWS_COLUMNS]' order. */
+internal const val NEWS_TARGET =
+    "(news_cells, news_relays, news_direct, news_new_cells, news_local_new_cells, news_local_new_relay_cells, " +
+        "news_local_new_direct_cells)"
 
 private const val NEWS =
     "SELECT $NEWS_COLUMNS FROM survey_measurement WHERE session_id = :sessionId AND cell_x IS NOT NULL"
@@ -366,7 +367,7 @@ interface SurveyDao {
     @Query(
         "UPDATE survey_session SET uploaded_seq = 0, last_upload_at = NULL, last_upload_error = NULL, " +
             "server_kept = 0, server_skipped = 0, server_skip_reasons = NULL, " +
-            "news_new_cells = NULL, news_new_nodes = NULL, news_new_direct = NULL",
+            "news_new_cells = NULL",
     )
     suspend fun resetSessionUploads()
 
@@ -412,24 +413,29 @@ interface SurveyDao {
     @Query(NEWS)
     suspend fun countNews(sessionId: String): SurveyNews
 
+    /** The distinct senders every session heard directly where it had a cell, as [SurveyNews.direct] counts them. */
+    @Query("SELECT COUNT(DISTINCT sender_node_id) FROM survey_measurement WHERE cell_x IS NOT NULL AND $IS_DIRECT")
+    suspend fun countDirectSenders(): Int
+
+    /** [countDirectSenders], following the session table as [sessions] does, so not each insert while recording. */
+    fun directSenders(): Flow<Int> = sessionRows().map { countDirectSenders() }
+
     @Query(
-        "UPDATE survey_session SET news_cells = :cells, news_nodes = :nodes, news_direct = :direct, " +
-            "news_new_cells = :newCells, news_new_nodes = :newNodes, news_new_direct = :newDirect, " +
-            "news_local_new_cells = :localNewCells, news_local_new_nodes = :localNewNodes, " +
-            "news_local_new_direct = :localNewDirect WHERE id = :sessionId",
+        "UPDATE survey_session SET news_cells = :cells, news_relays = :relays, news_direct = :direct, " +
+            "news_new_cells = :newCells, news_local_new_cells = :localNewCells, " +
+            "news_local_new_relay_cells = :localNewRelayCells, news_local_new_direct_cells = :localNewDirectCells " +
+            "WHERE id = :sessionId",
     )
     @Suppress("LongParameterList")
     suspend fun saveNews(
         sessionId: String,
         cells: Int,
-        nodes: Int,
+        relays: Int,
         direct: Int,
         newCells: Int?,
-        newNodes: Int?,
-        newDirect: Int?,
         localNewCells: Int,
-        localNewNodes: Int,
-        localNewDirect: Int,
+        localNewRelayCells: Int,
+        localNewDirectCells: Int,
     )
 
     /**
@@ -441,14 +447,12 @@ interface SurveyDao {
         saveNews(
             sessionId,
             it.cells,
-            it.nodes,
+            it.relays,
             it.direct,
             it.newCells,
-            it.newNodes,
-            it.newDirect,
             it.localNewCells,
-            it.localNewNodes,
-            it.localNewDirect,
+            it.localNewRelayCells,
+            it.localNewDirectCells,
         )
     }
 
@@ -480,14 +484,11 @@ interface SurveyDao {
     @Query("SELECT * FROM survey_deleted WHERE id = 0")
     fun deleted(): Flow<SurveyDeleted?>
 
-    @Query("INSERT OR IGNORE INTO survey_deleted (id, new_cells, new_nodes, new_direct) VALUES (0, 0, 0, 0)")
+    @Query("INSERT OR IGNORE INTO survey_deleted (id, new_cells) VALUES (0, 0)")
     suspend fun createDeleted()
 
-    @Query(
-        "UPDATE survey_deleted SET new_cells = new_cells + :cells, new_nodes = new_nodes + :nodes, " +
-            "new_direct = new_direct + :direct",
-    )
-    suspend fun addDeleted(cells: Int, nodes: Int, direct: Int)
+    @Query("UPDATE survey_deleted SET new_cells = new_cells + :cells")
+    suspend fun addDeleted(cells: Int)
 
     @Query("DELETE FROM survey_deleted")
     suspend fun clearDeleted()
@@ -502,7 +503,7 @@ interface SurveyDao {
         val news = countNews(sessionId)
         news.newCells?.let { cells ->
             createDeleted()
-            addDeleted(cells, news.newNodes ?: 0, news.newDirect ?: 0)
+            addDeleted(cells)
         }
         val cells = sessionCells(sessionId)
         deleteMeasurements(sessionId)
@@ -537,18 +538,20 @@ interface SurveyDao {
  */
 @Database(
     entities = [SurveySession::class, SurveyMeasurement::class, SurveyDeleted::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
     // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key. 4: whether
     // each session may be uploaded. 5: each measurement's cell, what SigSleuth said it adds and what it adds to the
     // phone's earlier sessions, filled in for older rows, each session's counts of them, and what deleted sessions had
-    // added to the map.
+    // added to the map. 6: those counts by cell (distinct relay bytes and direct senders, cells with a new one) rather
+    // than by pairs of a cell and a key, and no relay or direct counts from SigSleuth or for deleted sessions.
     autoMigrations =
     [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5, spec = FillNewToYou::class),
+        AutoMigration(from = 5, to = 6, spec = CountNewsByCell::class),
     ],
 )
 abstract class SurveyDatabase : RoomDatabase() {

@@ -35,27 +35,27 @@ class SurveyNewToYouTest {
     )
 
     private val offline =
-        session("offline", SurveyNews(40, 210, 25, localNewCells = 7, localNewNodes = 30, localNewDirect = 2))
+        session("offline", SurveyNews(40, 21, 5, localNewCells = 7, localNewRelayCells = 30, localNewDirectCells = 2))
     private val uploaded =
         session(
             "uploaded",
-            SurveyNews(10, 20, 1, newCells = 4, newNodes = 9, newDirect = 1, localNewCells = 3, localNewNodes = 5),
+            SurveyNews(10, 8, 1, newCells = 4, localNewCells = 3, localNewRelayCells = 5),
         )
     private val uncounted = session("uncounted", news = null)
 
     @Test
-    fun `the totals add every session's new to you counts, and the map's cells once SigSleuth answered`() {
-        assertEquals(SurveyTotals(7, 30, 2, mapCells = null), surveyTotals(listOf(offline, uncounted), deleted = null))
-        assertEquals(SurveyTotals(10, 35, 2, mapCells = 4), surveyTotals(listOf(offline, uploaded), deleted = null))
-        assertNull(surveyTotals(listOf(uncounted), deleted = null))
+    fun `the totals add every session's cells new to you, and the map's cells once SigSleuth answered`() {
+        assertEquals(SurveyTotals(7, 5, mapCells = null), surveyTotals(listOf(offline, uncounted), null, 5))
+        assertEquals(SurveyTotals(10, 5, mapCells = 4), surveyTotals(listOf(offline, uploaded), null, 5))
+        assertNull(surveyTotals(listOf(uncounted), null, directSenders = 0))
     }
 
     @Test
     fun `deleted sessions' map cells stay in the total`() {
         assertEquals(
-            SurveyTotals(10, 35, 2, mapCells = 10),
-            surveyTotals(listOf(offline, uploaded), SurveyDeleted(newCells = 6)),
+            SurveyTotals(10, 5, mapCells = 10),
+            surveyTotals(listOf(offline, uploaded), SurveyDeleted(newCells = 6), directSenders = 5),
         )
-        assertEquals(SurveyTotals(0, 0, 0, mapCells = 6), surveyTotals(emptyList(), SurveyDeleted(newCells = 6)))
+        assertEquals(SurveyTotals(0, 0, mapCells = 6), surveyTotals(emptyList(), SurveyDeleted(newCells = 6), 0))
     }
 }

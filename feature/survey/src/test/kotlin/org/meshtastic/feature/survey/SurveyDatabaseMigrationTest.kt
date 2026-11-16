@@ -133,7 +133,7 @@ class SurveyDatabaseMigrationTest {
             assertNull(row.serverNew)
             assertEquals(SurveyNews.NEW_CELL or SurveyNews.NEW_NODE, row.localNew)
             assertEquals(
-                SurveyNews(cells = 1, nodes = 1, direct = 0, localNewCells = 1, localNewNodes = 1),
+                SurveyNews(cells = 1, relays = 1, direct = 0, localNewCells = 1, localNewRelayCells = 1),
                 dao.sessions().first().single().session.news,
             )
             assertOldMeasurement(dao)
@@ -169,7 +169,7 @@ class SurveyDatabaseMigrationTest {
             assertEquals(listOf(cell or node), flags("other channel"))
             assertEquals(listOf(0, node, node or SurveyNews.NEW_DIRECT, null), flags("a-late"))
             assertEquals(
-                SurveyNews(1, 3, 1, localNewCells = 0, localNewNodes = 2, localNewDirect = 1),
+                SurveyNews(1, 3, 1, localNewCells = 0, localNewRelayCells = 1, localNewDirectCells = 1),
                 dao.sessions().first().single { it.session.id == "a-late" }.session.news,
             )
         }
@@ -195,6 +195,59 @@ class SurveyDatabaseMigrationTest {
             assertEquals(listOf(recorded), dao.measurementsAfter("upper", afterSeq = 0, limit = 10).map { it.localNew })
         }
     }
+
+    @Test
+    fun `version 5 counts by pairs are counted again by cell, and deleted sessions keep their map cells`() = runTest {
+        createDatabase(version = 5) {
+            insertSession("s", startedAt = 1000)
+            // Version 5's counts by cell and key, stale once read by cell.
+            execSQL(
+                "UPDATE survey_session SET news_cells = 2, news_nodes = 3, news_direct = 1, news_new_cells = 1, " +
+                    "news_new_nodes = 3, news_new_direct = 1, news_local_new_cells = 2, " +
+                    "news_local_new_nodes = 3, news_local_new_direct = 1",
+            )
+            val cell = SurveyNews.NEW_CELL
+            val node = SurveyNews.NEW_NODE
+            // Byte 1A in two cells; sender 2 heard directly in the second.
+            insertCellRow(1, cellX = 1, relayByte = 0x1A, localNew = cell or node, serverNew = cell or node)
+            insertCellRow(2, cellX = 2, relayByte = 0x1A, localNew = cell or node, serverNew = 0)
+            insertCellRow(3, cellX = 2, relayByte = 0x02, hopLimit = 3, localNew = node or SurveyNews.NEW_DIRECT)
+            execSQL("INSERT INTO survey_deleted (id, new_cells, new_nodes, new_direct) VALUES (0, 4, 7, 2)")
+        }
+
+        withCurrentDatabase { dao ->
+            assertEquals(
+                SurveyNews(
+                    cells = 2,
+                    relays = 2,
+                    direct = 1,
+                    newCells = 1,
+                    localNewCells = 2,
+                    localNewRelayCells = 2,
+                    localNewDirectCells = 1,
+                ),
+                dao.sessions().first().single().session.news,
+            )
+            assertEquals(SurveyDeleted(newCells = 4), dao.deleted().first())
+            assertEquals(1, dao.countDirectSenders())
+        }
+    }
+
+    /** A version 5 row of session "s" from sender 2, with its cell and what is new. */
+    @Suppress("LongParameterList")
+    private fun androidx.sqlite.SQLiteConnection.insertCellRow(
+        seq: Long,
+        cellX: Int,
+        relayByte: Int,
+        hopLimit: Int = 2,
+        localNew: Int,
+        serverNew: Int? = null,
+    ) = execSQL(
+        "INSERT INTO survey_measurement (seq, session_id, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, " +
+            "sender_node_id, recipient_node_id, packet_id, hop_start, hop_limit, relay_byte, cell_x, cell_y, " +
+            "local_new, server_new) VALUES ($seq, 's', 1500, 1.5, 2.5, 4.0, 300, 2, 4294967295, $seq, 3, " +
+            "$hopLimit, $relayByte, $cellX, $cellX, $localNew, ${serverNew ?: "NULL"})",
+    )
 
     private fun androidx.sqlite.SQLiteConnection.insertSession(
         id: String,

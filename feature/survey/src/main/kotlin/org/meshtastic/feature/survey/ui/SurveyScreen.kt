@@ -56,6 +56,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -179,7 +180,9 @@ fun SurveyScreen(
     val uploading by viewModel.uploading.collectAsStateWithLifecycle()
     val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
-    val totals = remember(sessions, deleted) { surveyTotals(sessions.map { it.session }, deleted) }
+    val directSenders by viewModel.directSenders.collectAsStateWithLifecycle()
+    val totals =
+        remember(sessions, deleted, directSenders) { surveyTotals(sessions.map { it.session }, deleted, directSenders) }
     // Only while this screen is in front: Android drops the flag once the app is in the background.
     KeepScreenOn(keepScreenOn && state.session != null)
 
@@ -251,6 +254,9 @@ fun SurveyScreen(
                     )
                 }
             }
+            // Under Upload, so recording does not push the Upload card down; the lifetime progress, apart from the
+            // list.
+            totals?.let { item(key = "totals") { TotalsCard(it) } }
             item(key = "sessions") {
                 Text(
                     stringResource(R.string.survey_sessions),
@@ -258,7 +264,6 @@ fun SurveyScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            totals?.let { item(key = "totals") { TotalsCard(it) } }
             if (sessions.isEmpty()) {
                 item(key = "no_sessions") {
                     EmptyState(
@@ -437,17 +442,7 @@ private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNa
                 modifier = Modifier.weight(1f),
             )
         }
-        state.newToYou
-            ?.takeIf { it.cells > 0 }
-            ?.let {
-                InfoRow(
-                    MeshtasticIcons.PhoneAndroid,
-                    stringResource(
-                        R.string.survey_new_to_you,
-                        newsText(it.localNewCells, it.localNewNodes, it.localNewDirect),
-                    ),
-                )
-            }
+        state.newToYou?.takeIf { it.cells > 0 }?.let { InfoRow(MeshtasticIcons.PhoneAndroid, newToYouText(it)) }
         state.news?.newCells?.let {
             InfoRow(MeshtasticIcons.Map, pluralStringResource(R.plurals.survey_cells_added, it, it))
         }
@@ -472,6 +467,7 @@ private fun Stat(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
+    note: String? = null,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
 ) {
@@ -500,6 +496,9 @@ private fun Stat(
             }
         }
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        note?.let {
+            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.StatusGreen)
+        }
     }
 }
 
@@ -1234,43 +1233,23 @@ private fun SessionCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    DateFormatter.formatDateTime(session.startedAt),
+                    sessionTitle(session),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
-                if (recording) {
-                    Text(
-                        stringResource(R.string.survey_recording),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+                SessionBadge(summary, recording, waiting)
             }
-            Text(radioText(session), style = MaterialTheme.typography.bodyMedium)
-            Text(
-                sessionFacts(summary, recording),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            session.news?.let { news ->
-                if (news.cells > 0) {
-                    Text(
-                        sessionNewsText(news),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                news.newCells?.let {
-                    Text(
-                        pluralStringResource(R.plurals.survey_cells_added, it, it),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            session.news?.takeIf { it.cells > 0 }?.let { SessionStats(it) }
+            session.news?.newCells?.let {
+                InfoRow(MeshtasticIcons.Map, pluralStringResource(R.plurals.survey_cells_added, it, it))
             }
             UploadProgress(summary, uploadsOn)
-            serverText(session)?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // The details, small and muted under what the session found.
+            Column {
+                val muted = MaterialTheme.colorScheme.onSurfaceVariant
+                Text(radioText(session), style = MaterialTheme.typography.bodySmall, color = muted)
+                Text(sessionFacts(summary, recording), style = MaterialTheme.typography.bodySmall, color = muted)
+                serverText(session)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
             }
             session.lastUploadError?.let {
                 Text(
@@ -1314,78 +1293,156 @@ private fun SessionCard(
     }
 }
 
-/** "5 cells · 18 relays · 3 direct"; the notification has the same. */
+/** "New to you: 4 cells · a new relay in 9 cells · a new direct node in 1 cell"; the notification has the same. */
 @Composable
 @ReadOnlyComposable
-private fun newsText(cells: Int, nodes: Int, direct: Int): String = listOf(
-    pluralStringResource(R.plurals.survey_cells, cells, cells),
-    pluralStringResource(R.plurals.survey_nodes, nodes, nodes),
-    stringResource(R.string.survey_direct_count, direct),
-)
-    .joinToString(" · ")
-
-/** What a session was first on this phone to have, out of what it measured. */
-@Composable
-@ReadOnlyComposable
-private fun sessionNewsText(news: SurveyNews): String {
+private fun newToYouText(news: SurveyNews): String {
     val parts =
-        listOf(
-            pluralStringResource(R.plurals.survey_cells_of, news.cells, news.localNewCells, news.cells),
-            pluralStringResource(R.plurals.survey_nodes_of, news.nodes, news.localNewNodes, news.nodes),
-            stringResource(R.string.survey_direct_of, news.localNewDirect, news.direct),
+        listOfNotNull(
+            news.localNewCells.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.survey_cells, it, it) },
+            news.localNewRelayCells
+                .takeIf { it > 0 }
+                ?.let { pluralStringResource(R.plurals.survey_new_relay_cells, it, it) },
+            news.localNewDirectCells
+                .takeIf { it > 0 }
+                ?.let { pluralStringResource(R.plurals.survey_new_direct_cells, it, it) },
         )
-            .joinToString(" · ")
-    return stringResource(R.string.survey_new_to_you, parts)
+    if (parts.isEmpty()) return stringResource(R.string.survey_nothing_new)
+    return stringResource(R.string.survey_new_to_you, parts.joinToString(" · "))
 }
 
-/** What every session on this phone was first to have, and the cells they added to SigSleuth's map. */
+/** A session's cells, relays and direct senders, each with what was new to this phone under it in green. */
+@Composable
+private fun SessionStats(news: SurveyNews) {
+    @Composable
+    @ReadOnlyComposable
+    fun newIn(cells: Int) = cells
+        .takeIf { it > 0 }
+        ?.let {
+            pluralStringResource(R.plurals.survey_stat_new_in_cells, it, it)
+        }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Stat(
+            news.cells.toString(),
+            stringResource(R.string.survey_stat_cells),
+            Modifier.weight(1f),
+            note = news.localNewCells.takeIf { it > 0 }?.let { stringResource(R.string.survey_stat_new, it) },
+        )
+        Stat(
+            news.relays.toString(),
+            stringResource(R.string.survey_stat_relays_heard),
+            Modifier.weight(1f),
+            note = newIn(news.localNewRelayCells),
+        )
+        Stat(
+            news.direct.toString(),
+            stringResource(R.string.survey_stat_direct),
+            Modifier.weight(1f),
+            note = newIn(news.localNewDirectCells),
+        )
+    }
+}
+
+/**
+ * Where a session stands, beside its date: recording, waiting to upload (blue, as its border), or uploaded (green).
+ * Nothing for a session that is private or was never sent.
+ */
+@Composable
+private fun SessionBadge(summary: SurveySessionSummary, recording: Boolean, waiting: Boolean) {
+    val (icon, text, color) =
+        when {
+            recording -> Triple(null, R.string.survey_recording, MaterialTheme.colorScheme.primary)
+
+            waiting ->
+                Triple(MeshtasticIcons.CloudUpload, R.string.survey_session_waiting, MaterialTheme.colorScheme.tertiary)
+
+            summary.measurementCount > 0 && summary.uploadedCount >= summary.measurementCount ->
+                Triple(MeshtasticIcons.CheckCircle, R.string.survey_uploaded_all, MaterialTheme.colorScheme.StatusGreen)
+
+            else -> return
+        }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        icon?.let { Icon(it, contentDescription = null, modifier = Modifier.size(INFO_ICON_SIZE), tint = color) }
+        Text(stringResource(text), style = MaterialTheme.typography.labelLarge, color = color)
+    }
+}
+
+/** The cells, the senders heard directly and the cells added to the map of every session on this phone. */
 @Composable
 private fun TotalsCard(totals: SurveyTotals) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    // The one card in the container colour, with the screen's biggest numbers: the progress across every session.
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors =
+        CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+    ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.survey_totals), style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stat(totals.cells.toString(), stringResource(R.string.survey_totals_cells), Modifier.weight(1f))
-                Stat(totals.nodes.toString(), stringResource(R.string.survey_totals_relays), Modifier.weight(1f))
-                Stat(totals.direct.toString(), stringResource(R.string.survey_totals_direct), Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(MeshtasticIcons.Map, contentDescription = null)
+                Text(stringResource(R.string.survey_totals), style = MaterialTheme.typography.titleMedium)
             }
-            totals.mapCells?.let {
-                InfoRow(MeshtasticIcons.Map, pluralStringResource(R.plurals.survey_cells_added, it, it))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TotalStat(totals.cells, stringResource(R.string.survey_stat_cells), Modifier.weight(1f))
+                TotalStat(totals.direct, stringResource(R.string.survey_stat_direct), Modifier.weight(1f))
+                totals.mapCells?.let {
+                    TotalStat(it, stringResource(R.string.survey_totals_map), Modifier.weight(1f))
+                }
             }
         }
     }
 }
 
-/** Length, size and how it ended: "1:12:03 · 1234 measurements · Stopped". */
+/** A [TotalsCard] figure: [Stat]'s layout, larger, in the card's content colour. */
 @Composable
-private fun sessionFacts(summary: SurveySessionSummary, recording: Boolean): String {
-    val session = summary.session
-    val count = pluralStringResource(R.plurals.survey_measurements, summary.measurementCount, summary.measurementCount)
-    if (recording) return count
-    val duration = session.endedAt?.let { clockText(it - session.startedAt) }
-    return listOfNotNull(duration, count, stringResource(session.status.label())).joinToString(" · ")
+private fun TotalStat(value: Int, label: String, modifier: Modifier = Modifier) {
+    Column(modifier.semantics(mergeDescendants = true) {}.padding(vertical = 4.dp)) {
+        Text(
+            value.toString(),
+            style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
+            maxLines = 1,
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = LocalContentColor.current.copy(alpha = SECONDARY_ALPHA),
+        )
+    }
 }
 
-/** How much SigSleuth has; nothing when nothing was ever sent and uploads are off or the session is private. */
+private const val SECONDARY_ALPHA = 0.8f
+
+/** When it started and, once ended, how long it ran: "16 Nov 2026 10:02 · 0:07:25". */
+private fun sessionTitle(session: SurveySession): String {
+    val start = DateFormatter.formatDateTime(session.startedAt)
+    val duration = session.endedAt?.let { clockText(it - session.startedAt) } ?: return start
+    return "$start · $duration"
+}
+
+/** Size and how it ended: "1234 measurements · Stopped". */
+@Composable
+private fun sessionFacts(summary: SurveySessionSummary, recording: Boolean): String {
+    val count = pluralStringResource(R.plurals.survey_measurements, summary.measurementCount, summary.measurementCount)
+    if (recording) return count
+    return "$count · ${stringResource(summary.session.status.label())}"
+}
+
+/**
+ * How much SigSleuth has, while some is missing; nothing when nothing was ever sent and uploads are off or the session
+ * is private. A fully uploaded session says so beside its date ([SessionBadge]).
+ */
 @Composable
 private fun UploadProgress(summary: SurveySessionSummary, uploadsOn: Boolean) {
     val count = summary.measurementCount
     val uploaded = summary.uploadedCount.coerceAtMost(count)
-    if (count == 0 || ((!uploadsOn || !summary.session.upload) && uploaded == 0)) return
-    if (uploaded == count) {
-        InfoRow(
-            MeshtasticIcons.CheckCircle,
-            stringResource(R.string.survey_uploaded_all),
-            iconTint = MaterialTheme.colorScheme.StatusGreen,
-        )
-    } else {
-        Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                stringResource(R.string.survey_uploaded_of, uploaded, count),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            LinearProgressIndicator(progress = { uploaded.toFloat() / count }, modifier = Modifier.fillMaxWidth())
-        }
+    val missing = uploaded < count
+    val shown = uploaded > 0 || (uploadsOn && summary.session.upload)
+    if (!missing || !shown) return
+    Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.survey_uploaded_of, uploaded, count), style = MaterialTheme.typography.bodyMedium)
+        LinearProgressIndicator(progress = { uploaded.toFloat() / count }, modifier = Modifier.fillMaxWidth())
     }
 }
 
