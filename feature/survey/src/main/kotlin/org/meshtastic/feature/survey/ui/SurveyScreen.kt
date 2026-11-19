@@ -39,40 +39,49 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
@@ -86,22 +95,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.takeOrElse
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -119,25 +138,35 @@ import org.meshtastic.core.resources.survey_relay_server_candidate
 import org.meshtastic.core.resources.survey_relay_server_candidates
 import org.meshtastic.core.ui.component.EmptyState
 import org.meshtastic.core.ui.icon.ArrowBack
+import org.meshtastic.core.ui.icon.Check
 import org.meshtastic.core.ui.icon.CheckCircle
 import org.meshtastic.core.ui.icon.ChevronRight
 import org.meshtastic.core.ui.icon.CloudUpload
+import org.meshtastic.core.ui.icon.Delete
+import org.meshtastic.core.ui.icon.DoDisturb
 import org.meshtastic.core.ui.icon.ErrorOutline
+import org.meshtastic.core.ui.icon.FileDownload
 import org.meshtastic.core.ui.icon.History
 import org.meshtastic.core.ui.icon.Info
 import org.meshtastic.core.ui.icon.LinkOff
 import org.meshtastic.core.ui.icon.LocationDisabled
+import org.meshtastic.core.ui.icon.LocationOn
 import org.meshtastic.core.ui.icon.Map
 import org.meshtastic.core.ui.icon.MeshRadio
 import org.meshtastic.core.ui.icon.MeshtasticIcons
+import org.meshtastic.core.ui.icon.More
 import org.meshtastic.core.ui.icon.MyLocation
-import org.meshtastic.core.ui.icon.PhoneAndroid
 import org.meshtastic.core.ui.icon.PlayArrow
 import org.meshtastic.core.ui.icon.Route
+import org.meshtastic.core.ui.icon.Rssi
 import org.meshtastic.core.ui.icon.Snr
+import org.meshtastic.core.ui.icon.Verified
 import org.meshtastic.core.ui.icon.Visibility
 import org.meshtastic.core.ui.icon.VisibilityOff
 import org.meshtastic.core.ui.theme.StatusColors.StatusGreen
+import org.meshtastic.core.ui.theme.StatusColors.StatusOrange
+import org.meshtastic.core.ui.theme.StatusColors.StatusRed
+import org.meshtastic.core.ui.theme.StatusColors.StatusSky
 import org.meshtastic.core.ui.theme.StatusColors.StatusYellow
 import org.meshtastic.core.ui.util.KeepScreenOn
 import org.meshtastic.feature.survey.DIRECT_HISTORY
@@ -225,12 +254,13 @@ fun SurveyScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.survey_title)) },
+                title = { Text(stringResource(R.string.survey_title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(MeshtasticIcons.ArrowBack, contentDescription = stringResource(R.string.survey_back))
                     }
                 },
+                actions = { KeepScreenOnChip(keepScreenOn, viewModel::setKeepScreenOn) },
             )
         },
     ) { padding ->
@@ -244,8 +274,6 @@ fun SurveyScreen(
                     state,
                     radioName,
                     relayNames,
-                    keepScreenOn = keepScreenOn,
-                    onKeepScreenOn = viewModel::setKeepScreenOn,
                     onStart = requestStart,
                     onStop = viewModel::stop,
                 )
@@ -286,7 +314,9 @@ fun SurveyScreen(
                     )
                 }
             }
-            items(sessions, key = { it.session.id }) { summary ->
+            itemsIndexed(sessions, key = { _, summary -> summary.session.id }) { index, summary ->
+                // Newest first: a card names its radio when it differs from the session before it, the oldest always.
+                val older = sessions.getOrNull(index + 1)?.session
                 SessionCard(
                     summary = summary,
                     recording = summary.session.id == state.session?.id,
@@ -294,6 +324,7 @@ fun SurveyScreen(
                     deletable = state.session == null,
                     uploadsOn = uploadsOn,
                     uploading = uploading,
+                    showRadio = older == null || radioKey(older) != radioKey(summary.session),
                     onUpload = { viewModel.upload(summary.session.id) },
                     onExport = {
                         exportSessionId = summary.session.id
@@ -313,14 +344,22 @@ private const val SHORT_ID_LENGTH = 8
 private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
 private const val SECONDS_PER_HOUR = 3_600L
+private const val SECONDS_PER_DAY = 86_400L
+
+/** What [radioText] names: two sessions with the same key show the same radio line. */
+private fun radioKey(session: SurveySession) = listOf(
+    session.receiverNodeId,
+    session.receiverName,
+    session.modemPreset,
+    session.spreadingFactor,
+    session.frequencyMhz,
+)
 
 @Composable
 private fun RecordingCard(
     state: SurveyState,
     radioName: String?,
     relayNames: Map<Long, String>,
-    keepScreenOn: Boolean,
-    onKeepScreenOn: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -334,7 +373,6 @@ private fun RecordingCard(
                 RecordingDetails(state, session, relayNames)
             }
             state.problem?.let { ProblemBanner(it) }
-            KeepScreenOnRow(keepScreenOn, onKeepScreenOn)
             if (session == null) {
                 Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
                     Icon(
@@ -362,22 +400,31 @@ private fun RecordingCard(
     }
 }
 
-/** The whole row toggles, so the label is part of the touch target and is read with the switch. */
+/**
+ * Keep screen on, in the top bar so it stays out of the cards and in view in every state. A chip rather than an icon,
+ * so its words say what it does. On, it is filled in the colour of a switch that is on and checked; off, only outlined.
+ */
 @Composable
-private fun KeepScreenOnRow(keepScreenOn: Boolean, onKeepScreenOn: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth()
-            .toggleable(value = keepScreenOn, role = Role.Switch, onValueChange = onKeepScreenOn)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            stringResource(R.string.survey_keep_screen_on),
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Switch(checked = keepScreenOn, onCheckedChange = null)
-    }
+private fun KeepScreenOnChip(keepScreenOn: Boolean, onKeepScreenOn: (Boolean) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    FilterChip(
+        selected = keepScreenOn,
+        onClick = { onKeepScreenOn(!keepScreenOn) },
+        label = { Text(stringResource(R.string.survey_keep_screen_on), maxLines = 1) },
+        modifier = Modifier.padding(end = 8.dp),
+        leadingIcon =
+        if (keepScreenOn) {
+            { Icon(MeshtasticIcons.Check, contentDescription = null, Modifier.size(FilterChipDefaults.IconSize)) }
+        } else {
+            null
+        },
+        colors =
+        FilterChipDefaults.filterChipColors(
+            selectedContainerColor = colors.primary,
+            selectedLabelColor = colors.onPrimary,
+            selectedLeadingIconColor = colors.onPrimary,
+        ),
+    )
 }
 
 /** A coloured dot and what the survey is doing; while recording, how long it has run. */
@@ -435,51 +482,76 @@ private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNa
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Stat(
-                value = state.measurementCount.toString(),
-                label = stringResource(R.string.survey_stat_measurements),
-                modifier = Modifier.weight(1f),
-            )
-            Stat(
-                value = state.relays.size.toString(),
-                label = stringResource(R.string.survey_stat_relays),
-                modifier = Modifier.weight(1f),
-                onClick = { showRelays = true }.takeIf { state.relays.isNotEmpty() },
-                onClickLabel = stringResource(R.string.survey_relays_open),
-            )
-            Stat(
-                value = last?.let { agoText(it.heardAtMs) } ?: "–",
-                label = stringResource(R.string.survey_stat_since_last),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        state.newToYou?.takeIf { it.cells > 0 }?.let { InfoRow(MeshtasticIcons.PhoneAndroid, newToYouText(it)) }
-        state.news?.newCells?.let {
-            InfoRow(MeshtasticIcons.Map, pluralStringResource(R.plurals.survey_cells_added, it, it))
-        }
+        // The figures its session card shows once it ends. Relays counts every byte heard, as the list it opens does;
+        // the session card counts those heard with a fix.
+        NewsStats(
+            state.newToYou ?: NO_NEWS,
+            relays = state.relays.size,
+            mapCells = state.news?.newCells,
+            onRelays = { showRelays = true }.takeIf { state.relays.isNotEmpty() },
+        )
         // While the radio is away GPS is off on purpose; the header and the line above say so.
         if (!state.waitingForRadio) GpsStatus(state.fix)
-        last?.let { measurement ->
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                InfoRow(MeshtasticIcons.Snr, lastSignalText(measurement, session.spreadingFactor))
-                measurement.relayByte?.let { byte ->
-                    val relay = relayText(byte, state.relays[byte], relayNames)
-                    InfoRow(MeshtasticIcons.Route, stringResource(R.string.survey_last_relay, relay))
-                }
-            }
-        }
-        if (showRelays) RelaysDialog(state, relayNames, onDismiss = { showRelays = false })
+        LastPacket(last, session.spreadingFactor, state.relays, relayNames)
+        if (showRelays) RelaysSheet(state, session.spreadingFactor, relayNames, onDismiss = { showRelays = false })
     }
 }
 
-/** One figure with its label under it; with [onClick], tappable and marked so. */
+private val NO_NEWS = SurveyNews(cells = 0, relays = 0, direct = 0)
+
+/** How long ago the last packet came, with its signal and relay under it; until one comes, that none has. */
 @Composable
+private fun LastPacket(
+    last: SurveyMeasurement?,
+    spreadingFactor: Int,
+    relays: Map<Int, RelayStats>,
+    names: Map<Long, String>,
+) {
+    val now = currentTime()
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            if (last == null) {
+                stringResource(R.string.survey_no_packet)
+            } else {
+                stringResource(R.string.survey_last_packet, agoText(last.heardAtMs, now))
+            },
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        last?.let { measurement ->
+            InfoRow(MeshtasticIcons.Snr) {
+                val snr = measurement.rxSnr
+                SnrText(
+                    stringResource(
+                        R.string.survey_last_signal,
+                        if (snr == null) "–" else SNR_SLOT,
+                        measurement.rxRssi?.toString() ?: "–",
+                    ),
+                    snr,
+                    SNR_DECIMALS_CARD,
+                    spreadingFactor,
+                )
+            }
+            measurement.relayByte?.let { byte ->
+                val relay = relayText(byte, relays[byte], names)
+                InfoRow(MeshtasticIcons.Route, relayByteMarked(stringResource(R.string.survey_last_relay, relay), byte))
+            }
+        }
+    }
+}
+
+/**
+ * One figure with its label under it, then the [note] of what was new to this phone in green and the [mapNote] of what
+ * SigSleuth's map gained in its colour; with [onClick], tappable and marked so.
+ */
+@Composable
+@Suppress("LongParameterList")
 private fun Stat(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
     note: String? = null,
+    mapNote: String? = null,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
 ) {
@@ -510,6 +582,9 @@ private fun Stat(
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         note?.let {
             Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.StatusGreen)
+        }
+        mapNote?.let {
+            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.StatusSky)
         }
     }
 }
@@ -558,14 +633,18 @@ private val INFO_TEXT_INDENT = INFO_ICON_SIZE + INFO_ICON_GAP
 private fun InfoRow(icon: ImageVector, text: String, color: Color = Color.Unspecified, iconTint: Color = color) =
     InfoRow(icon, AnnotatedString(text), color, iconTint)
 
-/** [InfoRow] for text with styled parts, such as the coloured margin dot. */
+/** [InfoRow] for text with styled parts, such as the relay byte. */
 @Composable
 private fun InfoRow(
     icon: ImageVector,
     text: AnnotatedString,
     color: Color = Color.Unspecified,
     iconTint: Color = color,
-) {
+) = InfoRow(icon, iconTint) { Text(text, style = MaterialTheme.typography.bodyMedium, color = color) }
+
+/** [InfoRow]'s icon beside any [text], such as one with an SNR chip. */
+@Composable
+private fun InfoRow(icon: ImageVector, iconTint: Color = Color.Unspecified, text: @Composable () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(INFO_ICON_GAP)) {
         Icon(
             icon,
@@ -573,29 +652,62 @@ private fun InfoRow(
             modifier = Modifier.padding(top = 1.dp).size(INFO_ICON_SIZE),
             tint = iconTint.takeOrElse { MaterialTheme.colorScheme.onSurfaceVariant },
         )
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
+        text()
     }
 }
 
 /**
- * "Last packet: SNR -6.00 dB ●, RSSI -110 dBm", the dot in roughly the colour SigSleuth's map will give this spot. It
- * sits in the text, so it wraps with it.
+ * [text] with [snr] drawn as a chip where [SNR_SLOT] stands in it: the SNR and its unit on roughly the colour
+ * SigSleuth's map will give this spot (its fade margin), in black or white, whichever reads better. The chip sits in
+ * the text, so it wraps with it, and a translation can put it anywhere. Without an SNR, [text] as it is.
  */
 @Composable
-private fun lastSignalText(measurement: SurveyMeasurement, spreadingFactor: Int): AnnotatedString {
-    val snr = measurement.rxSnr
-    val snrText =
-        snr?.let { "${stringResource(R.string.survey_snr, NumberFormatter.format(it, 2))} $MARGIN_DOT" } ?: "–"
-    val text = stringResource(R.string.survey_last_signal, snrText, measurement.rxRssi?.toString() ?: "–")
-    if (snr == null) return AnnotatedString(text)
-    val dot = text.indexOf(snrText) + snrText.length - MARGIN_DOT.length
-    return buildAnnotatedString {
-        append(text)
-        addStyle(SpanStyle(color = marginColor(fadeMargin(snr, spreadingFactor))), dot, dot + MARGIN_DOT.length)
+private fun SnrText(text: String, snr: Float?, decimals: Int, spreadingFactor: Int, color: Color = Color.Unspecified) {
+    val style = MaterialTheme.typography.bodyMedium
+    val at = text.indexOf(SNR_SLOT)
+    if (snr == null || at < 0) {
+        Text(text, style = style, color = color)
+        return
     }
+    val label = stringResource(R.string.survey_snr, NumberFormatter.format(snr, decimals))
+    val fill = marginColor(fadeMargin(snr, spreadingFactor))
+    val chipStyle = style.copy(fontFeatureSettings = "tnum")
+    // A placeholder needs its size up front: the label's width plus the chip's padding, one line high.
+    val labelWidth = rememberTextMeasurer().measure(label, chipStyle, maxLines = 1).size.width
+    val width = with(LocalDensity.current) { (labelWidth + 2 * SNR_CHIP_PADDING.roundToPx()).toSp() }
+    val height = style.lineHeight.takeOrElse { style.fontSize * SNR_CHIP_LINE_HEIGHT }
+    val chip =
+        InlineTextContent(Placeholder(width, height, PlaceholderVerticalAlign.TextCenter)) {
+            Box(
+                Modifier.fillMaxSize().background(fill, MaterialTheme.shapes.extraSmall),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, style = chipStyle, color = contentOn(fill), maxLines = 1)
+            }
+        }
+    val annotated = buildAnnotatedString {
+        append(text.substring(0, at))
+        appendInlineContent(SNR_CHIP, label)
+        append(text.substring(at + SNR_SLOT.length))
+    }
+    Text(annotated, style = style, color = color, inlineContent = mapOf(SNR_CHIP to chip))
 }
 
-private const val MARGIN_DOT = "●"
+/** Black or white, whichever has more contrast on [fill]. */
+private fun contentOn(fill: Color): Color {
+    val shifted = fill.luminance() + LUMINANCE_FLARE
+    // Black's contrast is shifted / flare, white's (1 + flare) / shifted: black wins once shifted² passes the product.
+    return if (shifted * shifted > (1 + LUMINANCE_FLARE) * LUMINANCE_FLARE) Color.Black else Color.White
+}
+
+/** Where [SnrText] puts the chip: a character no string resource contains. */
+private const val SNR_SLOT = "￼"
+private const val SNR_CHIP = "snr"
+private const val SNR_DECIMALS_CARD = 2
+private const val SNR_DECIMALS_LIST = 1
+private const val SNR_CHIP_LINE_HEIGHT = 1.4f
+private const val LUMINANCE_FLARE = 0.05f
+private val SNR_CHIP_PADDING = 4.dp
 
 /** The problem, and for location the way to fix it, since a refused permission is never asked again. */
 @Composable
@@ -685,18 +797,18 @@ private fun presetName(preset: String): String =
     preset.split('_').joinToString("") { word -> word.lowercase().replaceFirstChar { it.uppercase() } }
 
 /**
- * The relay byte with who sent it on: SigSleuth's answer when it named a node, else this phone's guess. The lines under
- * it in the relays list show the evidence, so the headline carries no confidence mark.
+ * The relay byte with who sent it on: SigSleuth's answer when it named a node ([confirmedNode]), else this phone's
+ * guess. The relays list marks how sure it is beside it ([ConfidenceMark]) and shows the evidence under it.
  */
 @Composable
 private fun relayText(relayByte: Int, relay: RelayStats?, names: Map<Long, String>): String {
-    val byte = "%02x".format(Locale.ROOT, relayByte)
+    val byte = relayByteText(relayByte)
     fun name(id: Long) = nodeName(id, names)
     val guess = relay?.guess
-    val named = relay?.server?.nodeId?.takeIf { guess !is RelayGuess.Direct }
+    val named = relay?.confirmedNode
     if (named != null) return stringResource(R.string.survey_relay_named, byte, name(named))
     return when (guess) {
-        is RelayGuess.Direct -> stringResource(R.string.survey_relay_direct, name(guess.senderId))
+        is RelayGuess.Direct -> stringResource(R.string.survey_relay_direct, byte, name(guess.senderId))
 
         is RelayGuess.Likely,
         is RelayGuess.Possible,
@@ -718,121 +830,337 @@ private fun relayText(relayByte: Int, relay: RelayStats?, names: Map<Long, Strin
     }
 }
 
+/** The node SigSleuth named as this byte's relay, unless the packet came straight from its sender. */
+private val RelayStats.confirmedNode: Long?
+    get() = server?.nodeId?.takeIf { guess !is RelayGuess.Direct }
+
+/** The single node [relayText] names, if it names one. */
+private val RelayStats.shownNode: Long?
+    get() = confirmedNode ?: guess.nodeIds.singleOrNull()
+
 private const val MAX_RELAY_NAMES = 3
 private const val METERS_PER_KM = 1_000.0
 private const val METERS_ROUNDING = 10
 
 private fun nodeName(id: Long, names: Map<Long, String>) = names[id] ?: "!%08x".format(Locale.ROOT, id)
 
-/** This session's relay bytes, most packets first, each with its guess and every candidate with how it is known. */
-@Composable
-private fun RelaysDialog(state: SurveyState, names: Map<Long, String>, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.survey_relays_title)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                state.relays.entries
-                    .sortedByDescending { it.value.packets }
-                    .forEach { (byte, relay) ->
-                        HorizontalDivider()
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    relayText(byte, relay, names),
-                                    Modifier.weight(1f),
-                                    style = MaterialTheme.typography.titleSmall,
-                                )
-                                Text(
-                                    stringResource(
-                                        R.string.survey_relay_packets,
-                                        relay.packets,
-                                        DateFormatter.formatRelativeTime(relay.lastHeardMs),
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            relay.server?.let { answer ->
-                                Text(
-                                    serverText(answer, names),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            // Every candidate, not just the guessed tier, so the list shows how unsure the guess is.
-                            relay.candidates.forEach { candidate ->
-                                val detail =
-                                    when (candidate) {
-                                        is RelayCandidate.Heard ->
-                                            state.neighbours[candidate.nodeId]?.let { candidateText(it, state.fix) }
+/** A relay byte as it is written everywhere on these screens: "0x3f". */
+private fun relayByteText(relayByte: Int) = "0x%02x".format(Locale.ROOT, relayByte)
 
-                                        is RelayCandidate.Placed -> placedText(candidate, state.fix)
-                                    }
-                                detail?.let { RelayCandidateLine(nodeName(candidate.nodeId, names), it) }
-                            }
-                            // Nodes heard here too weakly to have sent this packet, so the list says why they left.
-                            relay.ruledOut.forEach { node ->
-                                RelayCandidateLine(
-                                    nodeName(node.nodeId, names),
-                                    stringResource(
-                                        R.string.survey_relay_ruled_out,
-                                        node.packetSignal.roundToInt(),
-                                        node.strongestHere.roundToInt(),
-                                    ),
-                                )
-                            }
-                        }
-                    }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.survey_close)) } },
-    )
-}
-
-/** A node's short name with how it is known, or why it was ruled out. */
+/**
+ * [text] with [relayByte] in the one colour relay bytes have on these screens, and in monospace like a code, so it is
+ * easy to find.
+ */
 @Composable
-private fun RelayCandidateLine(name: String, detail: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(name, Modifier.widthIn(min = 48.dp), style = MaterialTheme.typography.bodySmall)
-        Text(detail, style = MaterialTheme.typography.bodySmall)
+@ReadOnlyComposable
+private fun relayByteMarked(text: String, relayByte: Int): AnnotatedString = highlighted(
+    text,
+    relayByteText(relayByte),
+    SpanStyle(color = MaterialTheme.colorScheme.StatusOrange, fontFamily = FontFamily.Monospace),
+)
+
+/** [text] with the first [part] in [style]; unchanged when [part] is not in it. */
+private fun highlighted(text: String, part: String, style: SpanStyle): AnnotatedString {
+    val at = text.indexOf(part)
+    if (at < 0) return AnnotatedString(text)
+    return buildAnnotatedString {
+        append(text)
+        addStyle(style, at, at + part.length)
     }
 }
 
 /**
- * Distance to the nearest reception cell and when that cell was heard, or without a fix the latest direct time. A later
- * direct reception elsewhere is left out to keep the line short.
+ * This session's relay bytes, most packets first, each with how sure its guess is, its last packet, and every candidate
+ * with how it is known, measured from where that packet was heard: the guess was made there, not where the phone is
+ * now.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RelaysSheet(state: SurveyState, spreadingFactor: Int, names: Map<Long, String>, onDismiss: () -> Unit) {
+    val sheetState =
+        rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+        )
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        val now = currentTime()
+        LazyColumn(
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                Text(
+                    stringResource(R.string.survey_relays_title),
+                    Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+            }
+            val relays = state.relays.entries.sortedByDescending { it.value.packets }
+            itemsIndexed(relays, key = { _, entry -> entry.key }) { index, (byte, relay) ->
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (index > 0) HorizontalDivider()
+                    RelayEntry(byte, relay, spreadingFactor, state.neighbours, names, now)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One relay byte: how sure, who, and when its last packet came, then that packet's signal, SigSleuth's answer and the
+ * candidates under the name. The guessed candidates stand out; the rest are muted. Times are measured from [now].
  */
 @Composable
-private fun candidateText(sender: DirectSender, fix: SurveyFix?): String {
+@Suppress("LongParameterList")
+private fun RelayEntry(
+    relayByte: Int,
+    relay: RelayStats,
+    spreadingFactor: Int,
+    neighbours: Map<Long, DirectSender>,
+    names: Map<Long, String>,
+    now: Long,
+) {
+    val packet = relay.last
+    val guessed = relay.guess.nodeIds.toSet()
+    fun tone(nodeId: Long) = if (nodeId in guessed) LineTone.GUESS else LineTone.OTHER
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MARK_GAP)) {
+            ConfidenceMark(relay)
+            Text(
+                relayByteMarked(relayText(relayByte, relay, names), relayByte),
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                agoText(relay.lastHeardMs, now),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Column(Modifier.padding(start = MARK_SIZE + MARK_GAP), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PacketLine(relay, spreadingFactor)
+            relay.server?.let { answer ->
+                val sameAsHeader = answer.nodeId != null && answer.nodeId == relay.shownNode
+                Text(
+                    sigSleuthLabelled(serverText(answer, names, sameAsHeader, now)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // Every candidate, not just the guessed tier, so the list shows how unsure the guess is.
+            relay.candidates.forEach { candidate ->
+                val name = nodeName(candidate.nodeId, names)
+                val tone = tone(candidate.nodeId)
+                when (candidate) {
+                    is RelayCandidate.Heard ->
+                        CandidateLine(
+                            MeshtasticIcons.Rssi,
+                            MaterialTheme.colorScheme.tertiary,
+                            name,
+                            neighbours[candidate.nodeId]?.let { candidateText(it, packet, now) }
+                                ?: stringResource(R.string.survey_relay_candidate_heard),
+                            tone,
+                        )
+
+                    // Its text gives only a distance, so the icon says where the position comes from.
+                    is RelayCandidate.Reported ->
+                        CandidateLine(
+                            MeshtasticIcons.LocationOn,
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                            name,
+                            placedText(candidate, packet),
+                            tone,
+                            stringResource(R.string.survey_relay_reported_position),
+                        )
+
+                    is RelayCandidate.Mapped ->
+                        CandidateLine(
+                            MeshtasticIcons.Map,
+                            MaterialTheme.colorScheme.StatusSky,
+                            name,
+                            placedText(candidate, packet),
+                            tone,
+                        )
+                }
+            }
+            // Nodes heard here too weakly to have sent this packet, so the list says why they left.
+            relay.ruledOut.forEach { node ->
+                CandidateLine(
+                    MeshtasticIcons.DoDisturb,
+                    MaterialTheme.colorScheme.StatusRed,
+                    nodeName(node.nodeId, names),
+                    stringResource(
+                        R.string.survey_relay_ruled_out,
+                        node.packetSignal.roundToInt(),
+                        node.strongestHere.roundToInt(),
+                    ),
+                    LineTone.RULED_OUT,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * How sure the name beside it is: SigSleuth's badge, in its colour, when it named the relay; a green check for a direct
+ * packet or this phone's likely guess; an amber question mark when the guess is only possible or ambiguous; and a grey
+ * one when no candidate is left. The question mark is the module's own: MeshtasticIcons.HelpOutline draws an "i".
+ */
+@Composable
+private fun ConfidenceMark(relay: RelayStats) {
+    val modifier = Modifier.size(MARK_SIZE)
+    val colors = MaterialTheme.colorScheme
+    val guess = relay.guess
+    val unsure = ImageVector.vectorResource(R.drawable.survey_ic_help)
+    when {
+        relay.confirmedNode != null ->
+            Icon(MeshtasticIcons.Verified, stringResource(R.string.survey_relay_confirmed), modifier, colors.StatusSky)
+
+        // The name beside it already says "direct".
+        guess is RelayGuess.Direct -> Icon(MeshtasticIcons.CheckCircle, null, modifier, colors.StatusGreen)
+
+        guess is RelayGuess.Likely ->
+            Icon(
+                MeshtasticIcons.CheckCircle,
+                stringResource(R.string.survey_relay_likely),
+                modifier,
+                colors.StatusGreen,
+            )
+
+        guess is RelayGuess.Possible || guess is RelayGuess.Ambiguous ->
+            Icon(unsure, stringResource(R.string.survey_relay_uncertain), modifier, colors.StatusYellow)
+
+        else ->
+            Icon(
+                unsure,
+                stringResource(R.string.survey_relay_unknown),
+                modifier,
+                colors.onSurfaceVariant,
+            )
+    }
+}
+
+/**
+ * The packet count, then the last packet's RSSI and SNR when the radio gave them, the SNR as a chip like the "Last
+ * packet" line's.
+ */
+@Composable
+private fun PacketLine(relay: RelayStats, spreadingFactor: Int) {
+    val count = pluralStringResource(R.plurals.survey_relay_packets, relay.packets, relay.packets)
+    val rssi = relay.last.rxRssi?.takeIf { it != 0 }
+    val snr = relay.last.rxSnr
+    val text =
+        when {
+            rssi == null -> count
+            snr == null -> stringResource(R.string.survey_relay_rssi, count, rssi)
+            else -> stringResource(R.string.survey_relay_signal, count, rssi, SNR_SLOT)
+        }
+    SnrText(
+        text,
+        snr.takeIf { rssi != null },
+        SNR_DECIMALS_LIST,
+        spreadingFactor,
+        MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** [text] with its "SigSleuth" in SigSleuth's colour, so the answer reads as SigSleuth's without colouring the line. */
+@Composable
+@ReadOnlyComposable
+private fun sigSleuthLabelled(text: String): AnnotatedString =
+    highlighted(text, SIGSLEUTH, SpanStyle(color = MaterialTheme.colorScheme.StatusSky))
+
+private const val SIGSLEUTH = "SigSleuth"
+
+/** How much a candidate line stands out: the guess, another candidate, or one the packet's signal ruled out. */
+private enum class LineTone {
+    GUESS,
+    OTHER,
+    RULED_OUT,
+}
+
+/**
+ * A candidate's kind as an icon in [iconTint], the colour of what the knowledge comes from (your radio, SigSleuth, the
+ * node's own claim, or red when ruled out), then its short name and how it is known or why it was ruled out, toned by
+ * [tone]. [kind] describes the icon for screen readers when [detail] does not already say it.
+ */
+@Composable
+private fun CandidateLine(
+    icon: ImageVector,
+    iconTint: Color,
+    name: String,
+    detail: String,
+    tone: LineTone,
+    kind: String? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val color =
+        when (tone) {
+            LineTone.GUESS -> LocalContentColor.current
+            LineTone.OTHER -> colors.onSurfaceVariant
+            LineTone.RULED_OUT -> colors.outline
+        }
+    val weight = if (tone == LineTone.GUESS) FontWeight.SemiBold else null
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, kind, Modifier.size(LINE_ICON_SIZE), tint = iconTint)
+        Text(
+            name,
+            Modifier.widthIn(min = 48.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = color,
+            fontWeight = weight,
+        )
+        Text(detail, style = MaterialTheme.typography.bodyMedium, color = color)
+    }
+}
+
+private val MARK_SIZE = 20.dp
+private val MARK_GAP = 8.dp
+private val LINE_ICON_SIZE = 16.dp
+
+/**
+ * Distance from where [packet] was heard to the nearest cell where [sender] was heard directly, and when that cell was
+ * heard; for a packet without a fix, the latest direct time. A later direct reception elsewhere is left out to keep the
+ * line short.
+ */
+@Composable
+private fun candidateText(sender: DirectSender, packet: SurveyMeasurement, now: Long): String {
+    val latitude = packet.latitude
+    val longitude = packet.longitude
     val nearest =
-        fix?.let { sender.nearest(it.latitude, it.longitude, nowMillis - DIRECT_HISTORY.inWholeMilliseconds) }
+        if (latitude == null || longitude == null) {
+            null
+        } else {
+            sender.nearest(latitude, longitude, packet.heardAtMs - DIRECT_HISTORY.inWholeMilliseconds)
+        }
             ?: return stringResource(
                 R.string.survey_relay_candidate,
-                DateFormatter.formatRelativeTime(sender.lastDirectMs),
+                agoText(sender.lastDirectMs, now),
             )
     return stringResource(
         R.string.survey_relay_candidate_at,
         distanceText(nearest.meters),
-        DateFormatter.formatRelativeTime(nearest.heardAtMs),
+        agoText(nearest.heardAtMs, now),
     )
 }
 
 /**
- * Distance from here to where [candidate] is said to be, which is a claim rather than a reception, with its reach when
- * that is what let it in from farther than [FAR].
+ * Distance from where [packet] was heard to where [candidate] is said to be, which is a claim rather than a reception,
+ * with its reach when that is what let it in from farther than [FAR].
  */
 @Composable
 @ReadOnlyComposable
-private fun placedText(candidate: RelayCandidate.Placed, fix: SurveyFix?): String {
+private fun placedText(candidate: RelayCandidate.Placed, packet: SurveyMeasurement): String {
     val mapped = candidate is RelayCandidate.Mapped
-    if (fix == null) {
+    val latitude = packet.latitude
+    val longitude = packet.longitude
+    if (latitude == null || longitude == null) {
         return stringResource(
             if (mapped) R.string.survey_relay_candidate_mapped else R.string.survey_relay_candidate_reported,
             distanceText(candidate.withinMeters),
         )
     }
-    val meters = latLongToMeter(candidate.latitude, candidate.longitude, fix.latitude, fix.longitude)
+    val meters = latLongToMeter(candidate.latitude, candidate.longitude, latitude, longitude)
     val distance =
         distanceText(meters).let {
             if ((candidate as? RelayCandidate.Mapped)?.estimated == true) {
@@ -852,11 +1180,12 @@ private fun placedText(candidate: RelayCandidate.Placed, fix: SurveyFix?): Strin
 
 /**
  * SigSleuth's answer for one of this byte's uploaded packets, which may be older than the guess above it. A survey
- * link's evidence takes the place of the packet's time.
+ * link's evidence takes the place of the packet's time. The node's name is left out when [sameAsHeader], as the line
+ * above already shows it.
  */
 @Composable
-private fun serverText(answer: ServerAnswer, names: Map<Long, String>): String {
-    val time = DateFormatter.formatRelativeTime(answer.heardAtMs)
+private fun serverText(answer: ServerAnswer, names: Map<Long, String>, sameAsHeader: Boolean, now: Long): String {
+    val time = agoText(answer.heardAtMs, now)
     val node = answer.nodeId
     if (node == null) {
         return if (answer.candidates.isEmpty()) {
@@ -875,14 +1204,21 @@ private fun serverText(answer: ServerAnswer, names: Map<Long, String>): String {
         }
     }
     val evidence = answer.evidence
-    return if (evidence == null) {
-        stringResource(R.string.survey_relay_server, nodeName(node, names), howText(answer.how), time)
-    } else {
-        stringResource(
-            R.string.survey_relay_server_evidence,
-            nodeName(node, names),
-            evidenceText(evidence, answer.heardAtMs),
-        )
+    return when {
+        evidence == null && sameAsHeader -> stringResource(R.string.survey_relay_server_same, howText(answer.how), time)
+
+        evidence == null ->
+            stringResource(R.string.survey_relay_server, nodeName(node, names), howText(answer.how), time)
+
+        sameAsHeader ->
+            stringResource(R.string.survey_relay_server_evidence_same, evidenceText(evidence, answer.heardAtMs, now))
+
+        else ->
+            stringResource(
+                R.string.survey_relay_server_evidence,
+                nodeName(node, names),
+                evidenceText(evidence, answer.heardAtMs, now),
+            )
     }
 }
 
@@ -906,9 +1242,9 @@ private fun howText(how: String): String = when (how) {
  */
 @Composable
 @ReadOnlyComposable
-private fun evidenceText(evidence: LinkEvidence, packetMs: Long): String {
+private fun evidenceText(evidence: LinkEvidence, packetMs: Long, now: Long): String {
     val distance = distanceText(evidence.km * METERS_PER_KM)
-    val time = DateFormatter.formatRelativeTime(packetMs + evidence.offsetMs)
+    val time = agoText(packetMs + evidence.offsetMs, now)
     val rssi = evidence.rssi
     return when {
         rssi == null && evidence.mine -> stringResource(R.string.survey_server_survey_link_mine, distance, time)
@@ -952,15 +1288,26 @@ private fun clockText(millis: Long): String {
         )
 }
 
-/** How long ago [timeMs] was, coarsely: 12 s, 3 min, 2 h. */
+/**
+ * How long before [now] [timeMs] was, coarsely: "12 s ago", "3 min ago", "2 h ago", then the system's words ("3 days
+ * ago"). The system's alone counts whole minutes, which says "0 min. ago" for the packet just heard.
+ */
 @Composable
-private fun agoText(timeMs: Long): String {
-    val seconds = ((currentTime() - timeMs) / MILLIS_PER_SECOND).coerceAtLeast(0)
-    return when {
-        seconds < SECONDS_PER_MINUTE -> stringResource(R.string.survey_seconds, seconds.toInt())
-        seconds < SECONDS_PER_HOUR -> stringResource(R.string.survey_minutes, (seconds / SECONDS_PER_MINUTE).toInt())
-        else -> stringResource(R.string.survey_hours, (seconds / SECONDS_PER_HOUR).toInt())
-    }
+@ReadOnlyComposable
+private fun agoText(timeMs: Long, now: Long): String {
+    val seconds = ((now - timeMs) / MILLIS_PER_SECOND).coerceAtLeast(0)
+    val duration =
+        when {
+            seconds < SECONDS_PER_MINUTE -> stringResource(R.string.survey_seconds, seconds.toInt())
+
+            seconds < SECONDS_PER_HOUR ->
+                stringResource(R.string.survey_minutes, (seconds / SECONDS_PER_MINUTE).toInt())
+
+            seconds < SECONDS_PER_DAY -> stringResource(R.string.survey_hours, (seconds / SECONDS_PER_HOUR).toInt())
+
+            else -> return DateFormatter.formatRelativeTime(timeMs)
+        }
+    return stringResource(R.string.survey_ago, duration)
 }
 
 /**
@@ -1220,7 +1567,13 @@ private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSett
     }
 }
 
+/**
+ * A session: when, its upload state, what it found, then small details. Its radio is named only when [showRadio], so a
+ * list of sessions on one radio does not repeat it. Export and Delete wait in a menu; Upload shows while rows are
+ * missing.
+ */
 @Composable
+@Suppress("LongParameterList")
 private fun SessionCard(
     summary: SurveySessionSummary,
     recording: Boolean,
@@ -1228,17 +1581,20 @@ private fun SessionCard(
     deletable: Boolean,
     uploadsOn: Boolean,
     uploading: Boolean,
+    showRadio: Boolean,
     onUpload: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val session = summary.session
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    val canUpload = !recording && uploadsOn && summary.pendingCount > 0
     // A waiting session is outlined in the colour of the Upload card's waiting line, so it shows while scrolling.
     Card(
         modifier = Modifier.fillMaxWidth(),
         border = if (waiting) BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary) else null,
     ) {
+        // The bottom row's buttons bring their own touch padding, so the card's is smaller under them.
         Column(
             Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = if (recording) 16.dp else 4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1251,15 +1607,12 @@ private fun SessionCard(
                 )
                 SessionBadge(summary, recording, waiting)
             }
-            session.news?.takeIf { it.cells > 0 }?.let { SessionStats(it) }
-            session.news?.newCells?.let {
-                InfoRow(MeshtasticIcons.Map, pluralStringResource(R.plurals.survey_cells_added, it, it))
-            }
+            session.news?.takeIf { it.cells > 0 }?.let { NewsStats(it) }
             UploadProgress(summary, uploadsOn)
             // The details, small and muted under what the session found.
             Column {
                 val muted = MaterialTheme.colorScheme.onSurfaceVariant
-                Text(radioText(session), style = MaterialTheme.typography.bodySmall, color = muted)
+                if (showRadio) Text(radioText(session), style = MaterialTheme.typography.bodySmall, color = muted)
                 Text(sessionFacts(summary, recording), style = MaterialTheme.typography.bodySmall, color = muted)
                 serverText(session)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
             }
@@ -1270,25 +1623,22 @@ private fun SessionCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            // A session still recording can be neither exported whole nor deleted, so it offers neither. No session is
-            // deleted while one records ([SurveyViewModel.delete]).
+            // A session still recording can be neither exported whole nor deleted, so it has no menu. No session is
+            // deleted while one records ([SurveyViewModel.delete]). The menu sits down here, not beside the date, so
+            // a long badge never pushes the date onto two lines.
             if (!recording) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    if (deletable) {
-                        TextButton(
-                            onClick = { confirmDelete = true },
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        ) {
-                            Text(stringResource(R.string.survey_delete))
-                        }
-                    }
-                    TextButton(onClick = onExport) { Text(stringResource(R.string.survey_export)) }
-                    // Disabled, not spinning, during a run: the run may be another session's.
-                    if (uploadsOn && summary.pendingCount > 0) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (canUpload) {
+                        // Disabled, not spinning, during a run: the run may be another session's.
                         TextButton(onClick = onUpload, enabled = !uploading) {
                             Text(stringResource(R.string.survey_upload_session))
                         }
                     }
+                    SessionMenu(deletable, onExport, onDelete = { confirmDelete = true })
                 }
             }
         }
@@ -1305,27 +1655,53 @@ private fun SessionCard(
     }
 }
 
-/** "New to you: 4 cells · a new relay in 9 cells · a new direct node in 1 cell"; the notification has the same. */
+/** Export and, while nothing records, Delete: every ended session has them, so they wait behind ⋮. */
 @Composable
-@ReadOnlyComposable
-private fun newToYouText(news: SurveyNews): String {
-    val parts =
-        listOfNotNull(
-            news.localNewCells.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.survey_cells, it, it) },
-            news.localNewRelayCells
-                .takeIf { it > 0 }
-                ?.let { pluralStringResource(R.plurals.survey_new_relay_cells, it, it) },
-            news.localNewDirectCells
-                .takeIf { it > 0 }
-                ?.let { pluralStringResource(R.plurals.survey_new_direct_cells, it, it) },
-        )
-    if (parts.isEmpty()) return stringResource(R.string.survey_nothing_new)
-    return stringResource(R.string.survey_new_to_you, parts.joinToString(" · "))
+private fun SessionMenu(deletable: Boolean, onExport: () -> Unit, onDelete: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    // Pulled right by the button's own padding, so the icon lines up with the card's text.
+    Box(Modifier.offset(x = MENU_BUTTON_INSET)) {
+        IconButton(onClick = { open = true }) {
+            Icon(MeshtasticIcons.More, contentDescription = stringResource(R.string.survey_session_actions))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.survey_export)) },
+                onClick = {
+                    open = false
+                    onExport()
+                },
+                leadingIcon = { Icon(MeshtasticIcons.FileDownload, contentDescription = null) },
+            )
+            if (deletable) {
+                val error = MaterialTheme.colorScheme.error
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.survey_delete), color = error) },
+                    onClick = {
+                        open = false
+                        onDelete()
+                    },
+                    leadingIcon = { Icon(MeshtasticIcons.Delete, contentDescription = null, tint = error) },
+                )
+            }
+        }
+    }
 }
 
-/** A session's cells, relays and direct senders, each with what was new to this phone under it in green. */
+private val MENU_BUTTON_INSET = 12.dp
+
+/**
+ * Cells, relays and senders heard directly, each with what was new to this phone under it in green, and under the
+ * cells, once SigSleuth has answered, the [mapCells] its map gained. With [onRelays], the relays figure opens their
+ * list.
+ */
 @Composable
-private fun SessionStats(news: SurveyNews) {
+private fun NewsStats(
+    news: SurveyNews,
+    relays: Int = news.relays,
+    mapCells: Int? = news.newCells,
+    onRelays: (() -> Unit)? = null,
+) {
     @Composable
     @ReadOnlyComposable
     fun newIn(cells: Int) = cells
@@ -1339,12 +1715,15 @@ private fun SessionStats(news: SurveyNews) {
             stringResource(R.string.survey_stat_cells),
             Modifier.weight(1f),
             note = news.localNewCells.takeIf { it > 0 }?.let { stringResource(R.string.survey_stat_new, it) },
+            mapNote = mapCells?.let { stringResource(R.string.survey_stat_added, it) },
         )
         Stat(
-            news.relays.toString(),
+            relays.toString(),
             stringResource(R.string.survey_stat_relays_heard),
             Modifier.weight(1f),
             note = newIn(news.localNewRelayCells),
+            onClick = onRelays,
+            onClickLabel = stringResource(R.string.survey_relays_open),
         )
         Stat(
             news.direct.toString(),
@@ -1433,11 +1812,11 @@ private fun sessionTitle(session: SurveySession): String {
     return "$start · $duration"
 }
 
-/** Size and how it ended: "1234 measurements · Stopped". */
+/** Size and, when it ended on its own, how: "1234 measurements · Ended: app was closed". A Stop goes unsaid. */
 @Composable
 private fun sessionFacts(summary: SurveySessionSummary, recording: Boolean): String {
     val count = pluralStringResource(R.plurals.survey_measurements, summary.measurementCount, summary.measurementCount)
-    if (recording) return count
+    if (recording || summary.session.status == SurveyStatus.STOPPED) return count
     return "$count · ${stringResource(summary.session.status.label())}"
 }
 
@@ -1458,7 +1837,7 @@ private fun UploadProgress(summary: SurveySessionSummary, uploadsOn: Boolean) {
     }
 }
 
-/** What SigSleuth kept and skipped, with the reasons for the skips. */
+/** What SigSleuth kept and, if any, what it skipped and why. */
 @Composable
 private fun serverText(session: SurveySession): String? {
     if (session.serverKept + session.serverSkipped == 0L) return null
@@ -1466,15 +1845,18 @@ private fun serverText(session: SurveySession): String? {
         SurveyUploader.decodeSkipReasons(session.serverSkipReasons).entries.map { (reason, count) ->
             skipReasonText(reason, count)
         }
-    return if (reasons.isEmpty()) {
-        stringResource(R.string.survey_server_kept, session.serverKept, session.serverSkipped)
-    } else {
-        stringResource(
-            R.string.survey_server_kept_reasons,
-            session.serverKept,
-            session.serverSkipped,
-            reasons.joinToString(),
-        )
+    return when {
+        session.serverSkipped == 0L -> stringResource(R.string.survey_server_kept_all, session.serverKept)
+
+        reasons.isEmpty() -> stringResource(R.string.survey_server_kept, session.serverKept, session.serverSkipped)
+
+        else ->
+            stringResource(
+                R.string.survey_server_kept_reasons,
+                session.serverKept,
+                session.serverSkipped,
+                reasons.joinToString(),
+            )
     }
 }
 

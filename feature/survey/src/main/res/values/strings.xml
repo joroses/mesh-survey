@@ -40,8 +40,8 @@
         <item quantity="one">%1$d measurement</item>
         <item quantity="other">%1$d measurements</item>
     </plurals>
-    <!-- The notification's text: %1$s is the measurement count ("12 measurements"), %2$d how many were heard directly. -->
-    <string name="survey_measurements_direct">%1$s · %2$d direct</string>
+    <!-- The notification's text, the recording card's three figures: distinct cells, relay bytes and senders heard directly. -->
+    <string name="survey_notification_stats">Cells %1$d · Relays %2$d · Heard directly %3$d</string>
     <!-- What a session added that no earlier session on this phone had, on the same LoRa settings: %1$s lists it ("4 cells · a new relay in 9 cells · a new direct node in 1 cell"). A relay or direct node is new in a cell when no earlier session heard it there. -->
     <string name="survey_new_to_you">New to you: %1$s</string>
     <string name="survey_nothing_new">Nothing new to you yet</string>
@@ -68,6 +68,8 @@
     <string name="survey_stat_direct">Heard directly</string>
     <!-- Under a session's cell count: cells no earlier session on this phone had. -->
     <string name="survey_stat_new">+%1$d new</string>
+    <!-- Under a session's cell count, once SigSleuth has answered: the cells its map did not have. -->
+    <string name="survey_stat_added">%1$d added to map</string>
     <!-- Under a session's relay or direct count: the cells where one was heard there for the first time on this phone. -->
     <plurals name="survey_stat_new_in_cells">
         <item quantity="one">new in %1$d cell</item>
@@ -78,9 +80,11 @@
     <string name="survey_totals_map">Added to the map</string>
     <!-- A session's upload state, beside its date. -->
     <string name="survey_session_waiting">Waiting to upload</string>
-    <string name="survey_stat_measurements">Measurements</string>
-    <string name="survey_stat_relays">Relay bytes</string>
-    <string name="survey_stat_since_last">Since last packet</string>
+    <!-- Over the last packet's signal and relay: %1$s is how long ago it came ("12 s ago"). -->
+    <string name="survey_last_packet">Last packet · %1$s</string>
+    <string name="survey_no_packet">No packet yet</string>
+    <!-- %1$s is a duration ("12 s", "3 min", "2 h"). -->
+    <string name="survey_ago">%1$s ago</string>
     <string name="survey_seconds">%1$d s</string>
     <string name="survey_minutes">%1$d min</string>
     <string name="survey_hours">%1$d h</string>
@@ -88,20 +92,29 @@
     <string name="survey_gps_none">No GPS fix yet</string>
     <!-- %1$d and %2$d are SigSleuth's limits, in seconds and metres. -->
     <string name="survey_gps_skipped">SigSleuth skips packets heard now: it needs a fix at most %1$d s old and within %2$d m.</string>
-    <!-- %1$s is the SNR with its unit and a coloured dot ("-6.00 dB ●"), or "–"; %2$s the RSSI. -->
-    <string name="survey_last_signal">Last packet: SNR %1$s, RSSI %2$s dBm</string>
+    <!-- The last packet's signal: %1$s is the SNR with its unit ("-6.00 dB"), drawn as a chip in its fade margin's colour, or "–"; %2$s the RSSI. -->
+    <string name="survey_last_signal">SNR %1$s, RSSI %2$s dBm</string>
     <!-- An SNR value: %1$s is the number. -->
     <string name="survey_snr">%1$s dB</string>
     <string name="survey_last_relay">Relay: %1$s</string>
-    <!-- %1$s is the sender's short name: the packet was not relayed. -->
-    <string name="survey_relay_direct">%1$s (direct)</string>
-    <!-- Who relayed a packet: %1$s is the relay byte in hex (3f), %2$s one short name or several joined by survey_relay_or. -->
-    <string name="survey_relay_named">%1$s: %2$s</string>
+    <!-- The packet was not relayed: %1$s is the relay byte, which is the sender's own ("0x3f"), %2$s the sender's short name. -->
+    <string name="survey_relay_direct">%1$s → %2$s (direct)</string>
+    <!-- Who relayed a packet: %1$s is the relay byte in hex ("0x3f"), %2$s one short name or several joined by survey_relay_or. -->
+    <string name="survey_relay_named">%1$s → %2$s</string>
     <string name="survey_relay_or">%1$s or %2$s</string>
     <string name="survey_relays_open">Show relays</string>
     <string name="survey_relays_title">Relays</string>
+    <!-- Marks beside a relay byte, read out by screen readers. -->
+    <string name="survey_relay_confirmed">Confirmed by SigSleuth</string>
+    <string name="survey_relay_likely">Likely guess</string>
+    <string name="survey_relay_uncertain">Uncertain guess</string>
+    <string name="survey_relay_unknown">Unknown relay</string>
+    <!-- Read out by screen readers for a relay candidate known by the position it reports, before its distance. -->
+    <string name="survey_relay_reported_position">Reported position</string>
     <!-- SigSleuth's answer for an uploaded packet with this relay byte: %1$s the node's short name, %2$s how SigSleuth knows, %3$s when the packet was heard ("3 min. ago"). -->
     <string name="survey_relay_server">SigSleuth: %1$s, %2$s · %3$s</string>
+    <!-- As survey_relay_server, when the relay byte's line above already names the same node: %1$s how SigSleuth knows, %2$s when the packet was heard. -->
+    <string name="survey_relay_server_same">SigSleuth: %1$s · %2$s</string>
     <string name="survey_relay_server_unknown">SigSleuth: unknown · %1$s</string>
     <string name="survey_server_direct">heard directly</string>
     <string name="survey_server_survey_link">heard nearby by a survey</string>
@@ -111,6 +124,8 @@
     <string name="survey_server_only_candidate">the only one that could</string>
     <!-- SigSleuth's answer with the evidence behind it, in place of the packet's time: %1$s the node's short name, %2$s where and when the node was heard directly ("heard directly by you 2.3 km away, 29 days ago"). -->
     <string name="survey_relay_server_evidence">SigSleuth: %1$s, %2$s</string>
+    <!-- As survey_relay_server_evidence, when the relay byte's line above already names the same node: %1$s where and when the node was heard directly. -->
+    <string name="survey_relay_server_evidence_same">SigSleuth: %1$s</string>
     <!-- This survey radio heard the relay directly: %1$s how far from the packet ("2.3 km"), %2$s a relative time ("29 days ago"). -->
     <string name="survey_server_survey_link_mine">heard directly by you %1$s away, %2$s</string>
     <!-- Another survey radio heard the relay directly: %1$s how far from the packet ("12 km"), %2$s a relative time ("3 h ago"). -->
@@ -119,16 +134,24 @@
     <string name="survey_server_survey_link_mine_rssi">heard directly by you %1$s away at %2$d dBm, %3$s</string>
     <!-- As survey_server_survey_link_other, with the reception's RSSI: %1$s how far ("12 km"), %2$d the RSSI in dBm (negative), %3$s a relative time ("3 h ago"). -->
     <string name="survey_server_survey_link_other_rssi">heard directly by another survey %1$s away at %2$d dBm, %3$s</string>
-    <!-- %1$d is a packet count, %2$s a relative time ("3 min. ago"). -->
-    <string name="survey_relay_packets">%1$d × · %2$s</string>
-    <!-- This phone heard the candidate directly, with no GPS fix to measure from: %1$s is a relative time ("3 min. ago"). -->
+    <plurals name="survey_relay_packets">
+        <item quantity="one">%1$d packet</item>
+        <item quantity="other">%1$d packets</item>
+    </plurals>
+    <!-- A relay byte's packets and its last packet's signal: %1$s the packet count ("18 packets"), %2$d the RSSI in dBm (negative), %3$s the SNR with its unit ("-6.3 dB"), drawn as a chip in its fade margin's colour. -->
+    <string name="survey_relay_signal">%1$s · %2$d dBm / %3$s</string>
+    <!-- As survey_relay_signal without an SNR: %1$s the packet count, %2$d the RSSI in dBm. -->
+    <string name="survey_relay_rssi">%1$s · %2$d dBm</string>
+    <!-- This phone heard the candidate directly; the packet had no GPS fix to measure from: %1$s is a relative time ("3 min. ago"). -->
     <string name="survey_relay_candidate">heard directly %1$s</string>
-    <!-- %1$s is the distance from here to where this phone heard the candidate directly, %2$s a relative time. -->
-    <string name="survey_relay_candidate_at">heard directly %1$s from here · %2$s</string>
-    <!-- %1$s is the distance from here to the position the candidate reports. -->
+    <!-- %1$s is the distance from where the packet was heard to where this phone heard the candidate directly, %2$s a relative time. -->
+    <string name="survey_relay_candidate_at">heard directly %1$s away · %2$s</string>
+    <!-- This phone heard the candidate directly, but has no record of where or when. -->
+    <string name="survey_relay_candidate_heard">heard directly</string>
+    <!-- %1$s is the distance from where the packet was heard to the position the candidate reports. -->
     <string name="survey_relay_candidate_reported_at">%1$s away</string>
     <string name="survey_relay_candidate_reported">within %1$s</string>
-    <!-- %1$s is the distance from here to where SigSleuth's map puts the candidate. -->
+    <!-- %1$s is the distance from where the packet was heard to where SigSleuth's map puts the candidate. -->
     <string name="survey_relay_candidate_mapped_at">%1$s away on SigSleuth\'s map</string>
     <string name="survey_relay_candidate_mapped">within %1$s on SigSleuth\'s map</string>
     <!-- %1$s is a candidate's line, %2$s the longest link SigSleuth trusts it to have sent. -->
@@ -139,7 +162,6 @@
     <string name="survey_distance_km">%1$s km</string>
     <!-- A distance to a position SigSleuth estimated from the node's neighbours. -->
     <string name="survey_distance_about">~%1$s</string>
-    <string name="survey_close">Close</string>
     <!-- Why the last session ended on its own; shown until the next one starts. -->
     <string name="survey_ended_node_changed">The last session ended because another radio connected.</string>
     <string name="survey_ended_lora_changed">The last session ended because the radio\'s LoRa settings changed. Start again to record with the new settings.</string>
@@ -190,6 +212,7 @@
     <string name="survey_uploaded_of">Uploaded %1$d of %2$d</string>
     <string name="survey_uploaded_all">Uploaded</string>
     <string name="survey_server_kept">SigSleuth kept %1$d and skipped %2$d</string>
+    <string name="survey_server_kept_all">SigSleuth kept %1$d</string>
     <string name="survey_server_kept_reasons">SigSleuth kept %1$d and skipped %2$d: %3$s</string>
     <!-- SigSleuth's skip reasons, each after its count. %2$d is SigSleuth's limit, in metres or seconds. -->
     <string name="survey_skip_no_position">%1$d without a position</string>
@@ -201,6 +224,8 @@
     <!-- A reason this version does not know; %2$s is SigSleuth's own name for it. -->
     <string name="survey_skip_other">%1$d %2$s</string>
     <string name="survey_export">Export CSV</string>
+    <!-- The menu on a session card holding Export CSV and Delete. -->
+    <string name="survey_session_actions">Session actions</string>
     <string name="survey_export_saved">CSV saved.</string>
     <string name="survey_export_failed">Could not save the CSV.</string>
     <string name="survey_delete">Delete</string>

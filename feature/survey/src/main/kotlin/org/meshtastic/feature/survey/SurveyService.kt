@@ -136,14 +136,13 @@ class SurveyService : Service() {
             if (state.waitingForRadio) {
                 getString(R.string.survey_waiting_for_radio)
             } else {
+                // The recording card's figures, in its words.
+                val news = state.newToYou
                 getString(
-                    R.string.survey_measurements_direct,
-                    resources.getQuantityString(
-                        R.plurals.survey_measurements,
-                        state.measurementCount,
-                        state.measurementCount,
-                    ),
-                    state.directCount,
+                    R.string.survey_notification_stats,
+                    news?.cells ?: 0,
+                    state.relays.size,
+                    news?.direct ?: 0,
                 )
             }
         // What is new to the phone, and the cells the map gained once SigSleuth has said; what is not uploaded, while

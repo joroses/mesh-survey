@@ -418,7 +418,7 @@ class SurveyRecorder(
                             with(evidence) {
                                 RelayStats(
                                     (known?.packets ?: 0) + 1,
-                                    row.heardAtMs,
+                                    row,
                                     guess,
                                     candidates,
                                     ruledOut,

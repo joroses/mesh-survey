@@ -295,18 +295,21 @@ data class RelayEvidence(
 )
 
 /**
- * One relay byte in this session: its packets, when the last arrived, and the guess made for that packet with all its
+ * One relay byte in this session: its packets, the [last] of them, and the guess made for that packet with all its
  * candidates. A direct packet has none. [server] is SigSleuth's answer for the newest of its packets uploaded so far,
  * which is often an earlier one.
  */
 data class RelayStats(
     val packets: Int,
-    val lastHeardMs: Long,
+    val last: SurveyMeasurement,
     val guess: RelayGuess,
     val candidates: List<RelayCandidate> = emptyList(),
     val ruledOut: List<RuledOut> = emptyList(),
     val server: ServerAnswer? = null,
-)
+) {
+    val lastHeardMs: Long
+        get() = last.heardAtMs
+}
 
 /**
  * The nodes the survey radio has heard directly, by relay byte, with when each was last heard so. Only these are

@@ -49,6 +49,7 @@ import org.meshtastic.proto.Position
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
@@ -414,15 +415,18 @@ class SurveyRecorderTest {
             recorder.start()
             val relays = { recorder.state.value.relays }
 
+            val last = { assertNotNull(recorder.state.value.lastMeasurement) }
+
             hear(from = 0x13F, relay = 0x3F)
-            assertEquals(RelayStats(1, 1_000_000, RelayGuess.Direct(0x13F)), relays()[0x3F])
+            assertEquals(RelayStats(1, last(), RelayGuess.Direct(0x13F)), relays()[0x3F])
             assertEquals(setOf(0x13FL), recorder.state.value.neighbours.keys)
 
             hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
             assertEquals(
-                RelayStats(2, 1_000_000, RelayGuess.Likely(0x13F), listOf(RelayCandidate.Heard(0x13F))),
+                RelayStats(2, last(), RelayGuess.Likely(0x13F), listOf(RelayCandidate.Heard(0x13F))),
                 relays()[0x3F],
             )
+            assertEquals(0x500L, relays()[0x3F]?.last?.senderNodeId)
 
             hear(from = 0x500, hopsUsed = 1, relay = 0x77)
             assertEquals(RelayGuess.Unknown, relays()[0x77]?.guess)
