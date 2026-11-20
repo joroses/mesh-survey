@@ -140,8 +140,9 @@ class SurveyViewModel(
     private val openedId = MutableStateFlow<String?>(null)
 
     /**
-     * The ended session opened from its card ([open]), its relays rebuilt from its saved packets with the node database
-     * and SigSleuth's relay node list as they are now. Null while none is open, or once it is gone.
+     * The ended session opened from its card ([open]), its relays rebuilt from its saved packets and SigSleuth's saved
+     * answers, with the node database and SigSleuth's relay node list as they are now. Null while none is open, or once
+     * it is gone.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val opened: StateFlow<OpenedSession?> =

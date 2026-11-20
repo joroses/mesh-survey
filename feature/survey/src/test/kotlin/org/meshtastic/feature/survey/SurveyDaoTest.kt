@@ -134,7 +134,16 @@ class SurveyDaoTest {
             dao.markNew("s", mapOf(seqs[0] to (cell or node), seqs[3] to 0))
             // The progress and the flags of a batch are saved together.
             val flags = mapOf(seqs[1] to (cell or node), seqs[2] to (node or SurveyNews.NEW_DIRECT))
-            dao.batchUploaded("s", seqs[2], at = 100, kept = 3, skipped = 0, skipReasons = null, flags = flags)
+            dao.batchUploaded(
+                "s",
+                seqs[2],
+                at = 100,
+                kept = 3,
+                skipped = 0,
+                skipReasons = null,
+                flags = flags,
+                answers = emptyList(),
+            )
             assertEquals(seqs[2], dao.sessions().first().single { it.session.id == "s" }.session.uploadedSeq)
             val news = counted.copy(newCells = 1)
             assertEquals(news, dao.recountNews("s"))
@@ -371,6 +380,64 @@ class SurveyDaoTest {
             assertEquals(mapOf(DirectCell(500, 1000) to -100.0), neighbours.all.getValue(0x102).signals)
             assertEquals(emptyMap(), neighbours.all.getValue(0x103).signals)
         }
+    }
+
+    @Test
+    fun `SigSleuth's answers keep the newest per relay byte and read back whole with their packet's time`() = runTest {
+        dao.insertSession(session("s", startedAt = 1))
+        val first = dao.insertMeasurement(measurement("s", 10, hopLimit = 2, relayByte = 0x1a))
+        val second = dao.insertMeasurement(measurement("s", 20, hopLimit = 2, relayByte = 0x1a))
+        val unknown =
+            ServerAnswer(
+                first,
+                10,
+                0x1a,
+                null,
+                "unknown",
+                null,
+                listOf(ServerCandidate(282, "Hill", 1.2), ServerCandidate(794, null, 5.6)),
+            )
+        val link =
+            ServerAnswer(second, 20, 0x1a, 26, "survey_link", "HL", evidence = LinkEvidence(2.3, -2_400_000, true, -97))
+
+        dao.saveAnswers(listOf(unknown.saved("s")))
+        assertEquals(listOf(unknown), dao.answers("s"))
+
+        dao.saveAnswers(listOf(link.saved("s")))
+        assertEquals(listOf(link), dao.answers("s"))
+    }
+
+    @Test
+    fun `saved answers go with their session, and all of them with their server`() = runTest {
+        dao.insertSession(session("s", startedAt = 1))
+        dao.insertSession(session("other", startedAt = 2))
+        val seq = dao.insertMeasurement(measurement("s", 10, hopLimit = 2, relayByte = 0x1a))
+        val otherSeq = dao.insertMeasurement(measurement("other", 20, hopLimit = 2, relayByte = 0x1a))
+        val answer = ServerAnswer(seq, 10, 0x1a, 26, "reported", null)
+        val otherAnswer = ServerAnswer(otherSeq, 20, 0x1a, 26, "reported", null)
+        dao.saveAnswers(listOf(answer.saved("s"), otherAnswer.saved("other")))
+
+        dao.deleteSession("s")
+        assertEquals(emptyList(), dao.answers("s"))
+        assertEquals(listOf(otherAnswer), dao.answers("other"))
+
+        dao.resetUploads()
+        assertEquals(emptyList(), dao.answers("other"))
+    }
+
+    @Test
+    fun `an ended session's replayed relays carry SigSleuth's saved answers`() = runTest {
+        val session = session("s", startedAt = 1)
+        dao.insertSession(session)
+        val seq = dao.insertMeasurement(measurement("s", 10, hopLimit = 2, relayByte = 0x1a))
+        dao.insertMeasurement(measurement("s", 20, hopLimit = 2, relayByte = 0x2b))
+        val answer = ServerAnswer(seq, 10, 0x1a, 26, "survey_link", "HL")
+        dao.saveAnswers(listOf(answer.saved("s")))
+
+        val relays = dao.replayRelays(session, emptyMap(), null).relays
+
+        assertEquals(answer, relays[0x1a]?.server)
+        assertNull(relays.getValue(0x2b).server)
     }
 
     @Test

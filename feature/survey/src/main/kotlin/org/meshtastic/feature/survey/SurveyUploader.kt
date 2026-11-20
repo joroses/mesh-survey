@@ -54,8 +54,9 @@ import kotlin.time.Duration.Companion.seconds
  * A run stops at the first failure and saves its error; the next run tries again. With automatic uploads on, a failed
  * run also queues [SurveyUploadRetry], which tries again once the phone is online. Two runs never overlap.
  *
- * Each reply names the node SigSleuth decided every saved row heard; those of relayed packets go to [answers]. It also
- * says what each row adds to SigSleuth's map, which is saved on the row and counted on its session ([SurveyNews]).
+ * Each reply names the node SigSleuth decided every saved row heard; those of relayed packets go to [answers], and the
+ * newest for each relay byte is saved ([SavedAnswer]). It also says what each row adds to SigSleuth's map, which is
+ * saved on the row and counted on its session ([SurveyNews]).
  */
 @Single
 class SurveyUploader(
@@ -223,6 +224,7 @@ class SurveyUploader(
                 skipReasons[reason] = skipReasons.getOrElse(reason) { 0 } + count
             }
             val lastSeq = response.lastSeq
+            val heard = serverAnswers(rows, response)
             dao.batchUploaded(
                 session.id,
                 lastSeq,
@@ -231,8 +233,10 @@ class SurveyUploader(
                 skipped,
                 skipReasons.takeIf { it.isNotEmpty() }?.let { json.encodeToString(it) },
                 serverNew(response),
+                // Rows go up in seq, so a byte's last answer here is its newest, and newer than any saved before.
+                heard.associateBy { it.relayByte }.values.map { it.saved(session.id) },
             )
-            answers.listener?.invoke(session.id, serverAnswers(rows, response))
+            answers.listener?.invoke(session.id, heard)
             onSaved(kept + skipped)
             // A server that acknowledges less than it was sent would otherwise get the same batch forever.
             if (lastSeq < rows.last().seq) {

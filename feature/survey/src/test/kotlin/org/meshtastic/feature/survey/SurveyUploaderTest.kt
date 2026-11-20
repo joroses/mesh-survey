@@ -203,6 +203,23 @@ class SurveyUploaderTest {
     }
 
     @Test
+    fun `SigSleuth's newest answer for each relay byte is saved, with no recorder listening`() = runTest {
+        record("a", 2)
+        dao.insertMeasurement(dao.measurements.last().copy(relayByte = 0x2b))
+        replyFields =
+            """, "heard": [{"seq": 1, "node_id": null, "how": "unknown"}, """ +
+            """{"seq": 2, "node_id": 26, "how": "survey_link"}, {"seq": 3, "node_id": 43, "how": "reported"}], """ +
+            """"nodes": [{"node_id": 26, "long_name": "Hill", "short_name": "HL"}]"""
+
+        uploader().upload()
+
+        assertEquals(
+            setOf(ServerAnswer(2, 1, 0x1a, 26, "survey_link", "HL"), ServerAnswer(3, 1, 0x2b, 43, "reported", null)),
+            dao.answers("a").toSet(),
+        )
+    }
+
+    @Test
     fun `an unknown relay keeps the server's ordered candidate hints`() = runTest {
         record("a", 1)
         replyFields =

@@ -1123,7 +1123,8 @@ private fun highlighted(text: String, part: String, style: SpanStyle): Annotated
 
 /**
  * An ended session's relays, rebuilt from its saved packets ([SurveyViewModel.opened]), in a sheet under its date and
- * length. The guesses use the node database and SigSleuth's list as they are now, and SigSleuth's answers are not kept.
+ * length. The guesses use the node database and SigSleuth's list as they are now; SigSleuth's answers are the ones
+ * saved with its uploads, the newest per relay byte.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

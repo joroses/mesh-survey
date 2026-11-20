@@ -27,7 +27,7 @@ data class ReplayedRelays(val relays: Map<Int, RelayStats>, val neighbours: Map<
  * Rebuilds [session]'s relays list from its saved packets the way [SurveyRecorder] built it while recording: from what
  * its radio heard directly in the [DIRECT_HISTORY] before it started, each packet is guessed ([evidenceFor]) before it
  * joins them. Today's [nodes] and [mapped] stand in for the ones the session had, so a guess can differ from the one
- * shown then, and SigSleuth's answers are not kept on the phone, so there are none.
+ * shown then. Each relay byte gets SigSleuth's saved answer for its newest uploaded packet ([SurveyDao.answers]).
  */
 suspend fun SurveyDao.replayRelays(
     session: SurveySession,
@@ -50,6 +50,9 @@ suspend fun SurveyDao.replayRelays(
             if (byte != null && evidence != null) relays[byte] = relays[byte].withPacket(row, evidence)
         }
         afterSeq = rows.last().seq
+    }
+    for (answer in answers(session.id)) {
+        relays[answer.relayByte]?.let { relays[answer.relayByte] = it.copy(server = answer) }
     }
     return ReplayedRelays(relays.toMap(), neighbours.all)
 }

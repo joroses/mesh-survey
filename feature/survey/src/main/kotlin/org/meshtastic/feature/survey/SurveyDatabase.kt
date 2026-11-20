@@ -24,12 +24,14 @@ import androidx.room3.Embedded
 import androidx.room3.Entity
 import androidx.room3.Index
 import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
 import androidx.room3.PrimaryKey
 import androidx.room3.Query
 import androidx.room3.RoomDatabase
 import androidx.room3.Transaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 
 /** Why a session is no longer recording. RECORDING is the only live status. */
 enum class SurveyStatus {
@@ -114,6 +116,64 @@ data class SurveyNews(
  */
 @Entity(tableName = "survey_deleted")
 data class SurveyDeleted(@PrimaryKey val id: Int = 0, @ColumnInfo(name = "new_cells") val newCells: Int = 0)
+
+/**
+ * SigSleuth's answer ([ServerAnswer]) for the newest uploaded packet of each relay byte in a session, so an ended
+ * session's relays show it ([replayRelays]). The packet's time is its measurement's, found by [seq]. [candidates] is a
+ * JSON list of [ServerCandidate]s, null when there are none; the `link_` columns are a survey link's [LinkEvidence],
+ * null for other answers and from older servers.
+ */
+@Entity(tableName = "survey_answer", primaryKeys = ["session_id", "relay_byte"])
+data class SavedAnswer(
+    @ColumnInfo(name = "session_id") val sessionId: String,
+    @ColumnInfo(name = "relay_byte") val relayByte: Int,
+    val seq: Long,
+    @ColumnInfo(name = "node_id") val nodeId: Long?,
+    val how: String,
+    @ColumnInfo(name = "short_name") val shortName: String?,
+    val candidates: String?,
+    @ColumnInfo(name = "link_km") val linkKm: Double?,
+    @ColumnInfo(name = "link_offset_ms") val linkOffsetMs: Long?,
+    @ColumnInfo(name = "link_mine") val linkMine: Boolean?,
+    @ColumnInfo(name = "link_rssi") val linkRssi: Int?,
+)
+
+/** A [SavedAnswer] with its packet's time, [heardAtMs], from the measurement it answers. */
+data class SavedAnswerRow(@Embedded val answer: SavedAnswer, @ColumnInfo(name = "heard_at_ms") val heardAtMs: Long) {
+    fun toServerAnswer(): ServerAnswer = with(answer) {
+        ServerAnswer(
+            seq,
+            heardAtMs,
+            relayByte,
+            nodeId,
+            how,
+            shortName,
+            candidates?.let { answerJson.decodeFromString<List<ServerCandidate>>(it) }.orEmpty(),
+            if (linkKm != null && linkOffsetMs != null && linkMine != null) {
+                LinkEvidence(linkKm, linkOffsetMs, linkMine, linkRssi)
+            } else {
+                null
+            },
+        )
+    }
+}
+
+/** This answer as [sessionId]'s [SavedAnswer] for its relay byte. */
+fun ServerAnswer.saved(sessionId: String) = SavedAnswer(
+    sessionId,
+    relayByte,
+    seq,
+    nodeId,
+    how,
+    shortName,
+    candidates.takeIf { it.isNotEmpty() }?.let { answerJson.encodeToString(it) },
+    evidence?.km,
+    evidence?.offsetMs,
+    evidence?.mine,
+    evidence?.rssi,
+)
+
+private val answerJson = Json { ignoreUnknownKeys = true }
 
 /**
  * One packet the survey node heard, with where the phone was. These are the fields of SigSleuth's upload, plus its cell
@@ -385,7 +445,27 @@ interface SurveyDao {
         resetSessionUploads()
         clearServerNew()
         clearDeleted()
+        clearAnswers()
     }
+
+    /** Replaces each answer's session and relay byte's [SavedAnswer]. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveAnswers(answers: List<SavedAnswer>)
+
+    @Query(
+        "SELECT a.*, m.heard_at_ms FROM survey_answer a JOIN survey_measurement m ON m.seq = a.seq " +
+            "WHERE a.session_id = :sessionId",
+    )
+    suspend fun answerRows(sessionId: String): List<SavedAnswerRow>
+
+    /** SigSleuth's answer for the newest uploaded packet of each of [sessionId]'s relay bytes. */
+    suspend fun answers(sessionId: String): List<ServerAnswer> = answerRows(sessionId).map { it.toServerAnswer() }
+
+    @Query("DELETE FROM survey_answer WHERE session_id = :sessionId")
+    suspend fun deleteAnswers(sessionId: String)
+
+    @Query("DELETE FROM survey_answer")
+    suspend fun clearAnswers()
 
     @Query("UPDATE survey_measurement SET server_new = :flags WHERE session_id = :sessionId AND seq = :seq")
     suspend fun setServerNew(sessionId: String, seq: Long, flags: Int)
@@ -397,8 +477,8 @@ interface SurveyDao {
     }
 
     /**
-     * [uploaded] and [markNew] for one batch, together: the next run starts after the batch, so flags saved apart from
-     * the progress would be lost for good by a cancel between the two.
+     * [uploaded], [markNew] and [saveAnswers] for one batch, together: the next run starts after the batch, so flags or
+     * answers saved apart from the progress would be lost for good by a cancel between them.
      */
     @Transaction
     @Suppress("LongParameterList")
@@ -410,9 +490,11 @@ interface SurveyDao {
         skipped: Long,
         skipReasons: String?,
         flags: Map<Long, Int>,
+        answers: List<SavedAnswer>,
     ) {
         uploaded(sessionId, uploadedSeq, at, kept, skipped, skipReasons)
         markNew(sessionId, flags)
+        saveAnswers(answers)
     }
 
     @Query(NEWS)
@@ -511,6 +593,7 @@ interface SurveyDao {
             addDeleted(cells)
         }
         val cells = sessionCells(sessionId)
+        deleteAnswers(sessionId)
         deleteMeasurements(sessionId)
         deleteSessionRow(sessionId)
         recountAfter(session, cells)
@@ -542,14 +625,15 @@ interface SurveyDao {
  * the user picks another radio and migrated often upstream.
  */
 @Database(
-    entities = [SurveySession::class, SurveyMeasurement::class, SurveyDeleted::class],
-    version = 6,
+    entities = [SurveySession::class, SurveyMeasurement::class, SurveyDeleted::class, SavedAnswer::class],
+    version = 7,
     exportSchema = true,
     // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key. 4: whether
     // each session may be uploaded. 5: each measurement's cell, what SigSleuth said it adds and what it adds to the
     // phone's earlier sessions, filled in for older rows, each session's counts of them, and what deleted sessions had
     // added to the map. 6: those counts by cell (distinct relay bytes and direct senders, cells with a new one) rather
     // than by pairs of a cell and a key, and no relay or direct counts from SigSleuth or for deleted sessions.
+    // 7: SigSleuth's answer for each session's relay bytes, empty until the next uploads.
     autoMigrations =
     [
         AutoMigration(from = 1, to = 2),
@@ -557,6 +641,7 @@ interface SurveyDao {
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5, spec = FillNewToYou::class),
         AutoMigration(from = 5, to = 6, spec = CountNewsByCell::class),
+        AutoMigration(from = 6, to = 7),
     ],
 )
 abstract class SurveyDatabase : RoomDatabase() {

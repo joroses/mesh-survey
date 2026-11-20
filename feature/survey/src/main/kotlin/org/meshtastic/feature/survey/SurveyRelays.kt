@@ -16,6 +16,8 @@
  */
 package org.meshtastic.feature.survey
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import org.meshtastic.core.common.util.latLongToMeter
 import org.meshtastic.core.model.Node
 import org.meshtastic.proto.Config
@@ -238,8 +240,11 @@ data class ServerAnswer(
  */
 data class LinkEvidence(val km: Double, val offsetMs: Long, val mine: Boolean, val rssi: Int? = null)
 
-/** A possible relay suggested by SigSleuth, at [km] from the uploaded packet's fix. */
-data class ServerCandidate(val nodeId: Long, val name: String?, val km: Double)
+/**
+ * A possible relay suggested by SigSleuth, at [km] from the uploaded packet's fix. Serializable, as [SavedAnswer] keeps
+ * a list of them as JSON.
+ */
+@Serializable data class ServerCandidate(@SerialName("node_id") val nodeId: Long, val name: String?, val km: Double)
 
 private const val MILLIS_PER_SECOND = 1_000L
 

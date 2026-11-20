@@ -251,6 +251,25 @@ internal class FakeSurveyDao : SurveyDao {
         if (it.seq == seq) it.copy(localNew = bits) else it
     }
 
+    /** Saved answers by session and relay byte. */
+    val savedAnswers = mutableMapOf<Pair<String, Int>, SavedAnswer>()
+
+    override suspend fun saveAnswers(answers: List<SavedAnswer>) = answers.forEach {
+        savedAnswers[it.sessionId to it.relayByte] = it
+    }
+
+    override suspend fun answerRows(sessionId: String) = savedAnswers.values
+        .filter { it.sessionId == sessionId }
+        .mapNotNull { answer ->
+            measurements.find { it.seq == answer.seq }?.let { SavedAnswerRow(answer, it.heardAtMs) }
+        }
+
+    override suspend fun deleteAnswers(sessionId: String) {
+        savedAnswers.keys.removeAll { it.first == sessionId }
+    }
+
+    override suspend fun clearAnswers() = savedAnswers.clear()
+
     val deleted = MutableStateFlow<SurveyDeleted?>(null)
 
     override fun deleted() = deleted
