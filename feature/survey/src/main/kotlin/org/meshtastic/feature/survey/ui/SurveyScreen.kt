@@ -85,8 +85,8 @@ import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -98,6 +98,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
@@ -119,6 +120,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.takeOrElse
 import androidx.core.content.ContextCompat
@@ -249,6 +251,8 @@ fun SurveyScreen(
             if (uri != null && sessionId != null) viewModel.export(sessionId, uri)
         }
     val uploadsOn = uploadSettings?.url?.isNotBlank() == true
+    // The session recording now shows in the recording and upload cards, so the list holds only ended ones.
+    val past = remember(sessions, state.session?.id) { sessions.filter { it.session.id != state.session?.id } }
 
     Scaffold(
         modifier = modifier,
@@ -280,7 +284,6 @@ fun SurveyScreen(
             }
             uploadSettings?.let { current ->
                 item(key = "upload") {
-                    val past = sessions.filter { it.session.id != state.session?.id }
                     UploadCard(
                         current,
                         sessions.firstOrNull { it.session.id == state.session?.id },
@@ -297,14 +300,16 @@ fun SurveyScreen(
             // Under Upload, so recording does not push the Upload card down; the lifetime progress, apart from the
             // list.
             totals?.let { item(key = "totals") { TotalsCard(it) } }
-            item(key = "sessions") {
-                Text(
-                    stringResource(R.string.survey_sessions),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+            if (past.isNotEmpty() || state.session == null) {
+                item(key = "sessions") {
+                    Text(
+                        stringResource(R.string.survey_sessions),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
-            if (sessions.isEmpty()) {
+            if (past.isEmpty() && state.session == null) {
                 item(key = "no_sessions") {
                     EmptyState(
                         icon = MeshtasticIcons.History,
@@ -314,13 +319,12 @@ fun SurveyScreen(
                     )
                 }
             }
-            itemsIndexed(sessions, key = { _, summary -> summary.session.id }) { index, summary ->
+            itemsIndexed(past, key = { _, summary -> summary.session.id }) { index, summary ->
                 // Newest first: a card names its radio when it differs from the session before it, the oldest always.
-                val older = sessions.getOrNull(index + 1)?.session
+                val older = past.getOrNull(index + 1)?.session
                 SessionCard(
                     summary = summary,
-                    recording = summary.session.id == state.session?.id,
-                    waiting = uploadsOn && summary.session.id != state.session?.id && summary.waiting,
+                    waiting = uploadsOn && summary.waiting,
                     deletable = state.session == null,
                     uploadsOn = uploadsOn,
                     uploading = uploading,
@@ -364,13 +368,16 @@ private fun RecordingCard(
     onStop: () -> Unit,
 ) {
     val session = state.session
+    // One clock for the whole card, so its timer and every "ago" tick in step.
+    val clockState = rememberSurveyClock()
+    val clock = clockState::value
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatusHeader(state)
+            StatusHeader(state, clock)
             if (session == null) {
                 IdleDetails(state.lastEnd, radioName)
             } else {
-                RecordingDetails(state, session, relayNames)
+                RecordingDetails(state, session, relayNames, clock)
             }
             state.problem?.let { ProblemBanner(it) }
             if (session == null) {
@@ -429,7 +436,7 @@ private fun KeepScreenOnChip(keepScreenOn: Boolean, onKeepScreenOn: (Boolean) ->
 
 /** A coloured dot and what the survey is doing; while recording, how long it has run. */
 @Composable
-private fun StatusHeader(state: SurveyState) {
+private fun StatusHeader(state: SurveyState, clock: () -> SurveyNow) {
     val session = state.session
     val (title, dot) =
         when {
@@ -442,7 +449,7 @@ private fun StatusHeader(state: SurveyState) {
         Text(stringResource(title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         session?.let {
             Text(
-                clockText(currentTime() - it.startedAt),
+                clockText(clock().wallMs - it.startedAt),
                 style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
             )
         }
@@ -467,7 +474,12 @@ private fun IdleDetails(lastEnd: SurveyStatus?, radioName: String?) {
 }
 
 @Composable
-private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNames: Map<Long, String>) {
+private fun RecordingDetails(
+    state: SurveyState,
+    session: SurveySession,
+    relayNames: Map<Long, String>,
+    clock: () -> SurveyNow,
+) {
     var showRelays by rememberSaveable { mutableStateOf(false) }
     val last = state.lastMeasurement
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -488,12 +500,15 @@ private fun RecordingDetails(state: SurveyState, session: SurveySession, relayNa
             state.newToYou ?: NO_NEWS,
             relays = state.relays.size,
             mapCells = state.news?.newCells,
+            packets = state.measurementCount,
             onRelays = { showRelays = true }.takeIf { state.relays.isNotEmpty() },
         )
         // While the radio is away GPS is off on purpose; the header and the line above say so.
-        if (!state.waitingForRadio) GpsStatus(state.fix)
-        LastPacket(last, session.spreadingFactor, state.relays, relayNames)
-        if (showRelays) RelaysSheet(state, session.spreadingFactor, relayNames, onDismiss = { showRelays = false })
+        if (!state.waitingForRadio) GpsStatus(state.fix, clock)
+        LastPacket(last, session.spreadingFactor, state.relays, relayNames, clock)
+        if (showRelays) {
+            RelaysSheet(state, session.spreadingFactor, relayNames, clock, onDismiss = { showRelays = false })
+        }
     }
 }
 
@@ -506,8 +521,9 @@ private fun LastPacket(
     spreadingFactor: Int,
     relays: Map<Int, RelayStats>,
     names: Map<Long, String>,
+    clock: () -> SurveyNow,
 ) {
-    val now = currentTime()
+    val now = clock().wallMs
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             if (last == null) {
@@ -542,7 +558,8 @@ private fun LastPacket(
 
 /**
  * One figure with its label under it, then the [note] of what was new to this phone in green and the [mapNote] of what
- * SigSleuth's map gained in its colour; with [onClick], tappable and marked so.
+ * SigSleuth's map gained in its colour. With [onClick], the figure and its label are a filled chip; every stat is inset
+ * by [STAT_INSET] so their figures line up whether or not one is a chip.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -555,44 +572,61 @@ private fun Stat(
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
 ) {
-    val action =
+    val colors = MaterialTheme.colorScheme
+    val chip =
         if (onClick == null) {
-            Modifier.semantics(mergeDescendants = true) {}
+            Modifier
         } else {
             Modifier.clip(MaterialTheme.shapes.small)
+                .background(colors.primaryContainer)
                 .clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
         }
-    Column(modifier.then(action).padding(vertical = 4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                value,
-                style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
-                color = if (onClick == null) Color.Unspecified else MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-            )
-            if (onClick != null) {
-                Icon(
-                    MeshtasticIcons.ChevronRight,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+    val content = if (onClick == null) Color.Unspecified else colors.onPrimaryContainer
+    Column(if (onClick == null) modifier.semantics(mergeDescendants = true) {} else modifier) {
+        Column(chip.padding(horizontal = STAT_INSET, vertical = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+                    color = content,
+                    maxLines = 1,
                 )
+                if (onClick != null) {
+                    Icon(MeshtasticIcons.ChevronRight, contentDescription = null, Modifier.size(20.dp), tint = content)
+                }
             }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (onClick == null) colors.onSurfaceVariant else content,
+            )
         }
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        note?.let {
-            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.StatusGreen)
-        }
-        mapNote?.let {
-            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.StatusSky)
-        }
+        val notes = Modifier.padding(horizontal = STAT_INSET)
+        note?.let { Text(it, notes, style = MaterialTheme.typography.labelMedium, color = colors.StatusGreen) }
+        mapNote?.let { Text(it, notes, style = MaterialTheme.typography.labelMedium, color = colors.StatusSky) }
     }
+}
+
+/** How far a [Stat]'s text sits inside its chip, and how far a row of them reaches past its parent on each side. */
+private val STAT_INSET = 8.dp
+
+/** Widens the content by [x] on each side, so text inset by [x] lines up with the parent's. */
+private fun Modifier.bleed(x: Dp) = layout { measurable, constraints ->
+    val extra = (x * 2).roundToPx()
+    val placeable =
+        measurable.measure(
+            constraints.copy(
+                minWidth = (constraints.minWidth + extra).coerceAtMost(constraints.maxWidth + extra),
+                maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth + extra else constraints.maxWidth,
+            ),
+        )
+    layout((placeable.width - extra).coerceAtLeast(0), placeable.height) { placeable.place(-x.roundToPx(), 0) }
 }
 
 /** The fix's accuracy and age, in the error colour when SigSleuth would skip packets heard with it. */
 @Composable
-private fun GpsStatus(fix: SurveyFix?) {
-    val now = currentTime(monotonic = true)
+private fun GpsStatus(fix: SurveyFix?, clock: () -> SurveyNow) {
+    val now = clock().elapsedMs
     val ageMs = fix?.let { (now - it.elapsedRealtimeMs).coerceAtLeast(0) }
     val usable = fix != null && ageMs != null && usableFix(ageMs, fix.accuracyM)
     val color = if (usable) Color.Unspecified else MaterialTheme.colorScheme.error
@@ -876,14 +910,20 @@ private fun highlighted(text: String, part: String, style: SpanStyle): Annotated
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RelaysSheet(state: SurveyState, spreadingFactor: Int, names: Map<Long, String>, onDismiss: () -> Unit) {
+private fun RelaysSheet(
+    state: SurveyState,
+    spreadingFactor: Int,
+    names: Map<Long, String>,
+    clock: () -> SurveyNow,
+    onDismiss: () -> Unit,
+) {
     val sheetState =
         rememberBottomSheetState(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
         )
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        val now = currentTime()
+        val now = clock().wallMs
         LazyColumn(
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1262,18 +1302,24 @@ private fun distanceText(meters: Double): String = if (meters < METERS_PER_KM) {
     stringResource(R.string.survey_distance_km, NumberFormatter.format(meters / METERS_PER_KM, 1))
 }
 
-/** The wall clock, or with [monotonic] the clock GPS fixes are timed on, updated every second. */
+/** The wall clock and the clock GPS fixes are timed on, read together. */
+private data class SurveyNow(val wallMs: Long, val elapsedMs: Long) {
+    companion object {
+        fun read() = SurveyNow(nowMillis, SystemClock.elapsedRealtime())
+    }
+}
+
+/** Both clocks, read together every second. */
 @Composable
-private fun currentTime(monotonic: Boolean = false): Long {
-    fun read() = if (monotonic) SystemClock.elapsedRealtime() else nowMillis
-    var now by remember(monotonic) { mutableLongStateOf(read()) }
-    LaunchedEffect(monotonic) {
+private fun rememberSurveyClock(): State<SurveyNow> {
+    val clock = remember { mutableStateOf(SurveyNow.read()) }
+    LaunchedEffect(clock) {
         while (true) {
-            now = read()
             delay(MILLIS_PER_SECOND)
+            clock.value = SurveyNow.read()
         }
     }
-    return now
+    return clock
 }
 
 /** A duration as h:mm:ss. */
@@ -1454,7 +1500,16 @@ private fun UploadSummary(
 /** Shows Uploading… with a spinner during any run, which may be another session's. */
 @Composable
 private fun UploadButton(@StringRes label: Int, enabled: Boolean, uploading: Boolean, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, enabled = enabled && !uploading, modifier = Modifier.fillMaxWidth()) {
+    // Outlined in the primary colour, so it reads as a button on the card without competing with Stop.
+    val active = enabled && !uploading
+    val colors = MaterialTheme.colorScheme
+    OutlinedButton(
+        onClick = onClick,
+        enabled = active,
+        modifier = Modifier.fillMaxWidth(),
+        border = BorderStroke(1.dp, if (active) colors.primary else colors.outlineVariant),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+    ) {
         if (uploading) {
             CircularProgressIndicator(
                 Modifier.size(ButtonDefaults.IconSize),
@@ -1576,7 +1631,6 @@ private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSett
 @Suppress("LongParameterList")
 private fun SessionCard(
     summary: SurveySessionSummary,
-    recording: Boolean,
     waiting: Boolean,
     deletable: Boolean,
     uploadsOn: Boolean,
@@ -1588,7 +1642,7 @@ private fun SessionCard(
 ) {
     val session = summary.session
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
-    val canUpload = !recording && uploadsOn && summary.pendingCount > 0
+    val canUpload = uploadsOn && summary.pendingCount > 0
     // A waiting session is outlined in the colour of the Upload card's waiting line, so it shows while scrolling.
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1596,7 +1650,7 @@ private fun SessionCard(
     ) {
         // The bottom row's buttons bring their own touch padding, so the card's is smaller under them.
         Column(
-            Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = if (recording) 16.dp else 4.dp),
+            Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1605,7 +1659,7 @@ private fun SessionCard(
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
-                SessionBadge(summary, recording, waiting)
+                SessionBadge(summary, waiting)
             }
             session.news?.takeIf { it.cells > 0 }?.let { NewsStats(it) }
             UploadProgress(summary, uploadsOn)
@@ -1613,7 +1667,7 @@ private fun SessionCard(
             Column {
                 val muted = MaterialTheme.colorScheme.onSurfaceVariant
                 if (showRadio) Text(radioText(session), style = MaterialTheme.typography.bodySmall, color = muted)
-                Text(sessionFacts(summary, recording), style = MaterialTheme.typography.bodySmall, color = muted)
+                Text(sessionFacts(summary), style = MaterialTheme.typography.bodySmall, color = muted)
                 serverText(session)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
             }
             session.lastUploadError?.let {
@@ -1623,23 +1677,20 @@ private fun SessionCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            // A session still recording can be neither exported whole nor deleted, so it has no menu. No session is
-            // deleted while one records ([SurveyViewModel.delete]). The menu sits down here, not beside the date, so
-            // a long badge never pushes the date onto two lines.
-            if (!recording) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (canUpload) {
-                        // Disabled, not spinning, during a run: the run may be another session's.
-                        TextButton(onClick = onUpload, enabled = !uploading) {
-                            Text(stringResource(R.string.survey_upload_session))
-                        }
+            // No session is deleted while one records ([SurveyViewModel.delete]). The menu sits down here, not beside
+            // the date, so a long badge never pushes the date onto two lines.
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (canUpload) {
+                    // Disabled, not spinning, during a run: the run may be another session's.
+                    TextButton(onClick = onUpload, enabled = !uploading) {
+                        Text(stringResource(R.string.survey_upload_session))
                     }
-                    SessionMenu(deletable, onExport, onDelete = { confirmDelete = true })
                 }
+                SessionMenu(deletable, onExport, onDelete = { confirmDelete = true })
             }
         }
         if (confirmDelete) {
@@ -1700,6 +1751,7 @@ private fun NewsStats(
     news: SurveyNews,
     relays: Int = news.relays,
     mapCells: Int? = news.newCells,
+    packets: Int? = null,
     onRelays: (() -> Unit)? = null,
 ) {
     @Composable
@@ -1709,7 +1761,7 @@ private fun NewsStats(
         ?.let {
             pluralStringResource(R.plurals.survey_stat_new_in_cells, it, it)
         }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().bleed(STAT_INSET), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Stat(
             news.cells.toString(),
             stringResource(R.string.survey_stat_cells),
@@ -1731,19 +1783,18 @@ private fun NewsStats(
             Modifier.weight(1f),
             note = newIn(news.localNewDirectCells),
         )
+        packets?.let { Stat(it.toString(), stringResource(R.string.survey_stat_packets), Modifier.weight(1f)) }
     }
 }
 
 /**
- * Where a session stands, beside its date: recording, waiting to upload (blue, as its border), or uploaded (green).
- * Nothing for a session that is private or was never sent.
+ * Where a session stands, beside its date: waiting to upload (blue, as its border) or uploaded (green). Nothing for a
+ * session that is private or was never sent.
  */
 @Composable
-private fun SessionBadge(summary: SurveySessionSummary, recording: Boolean, waiting: Boolean) {
+private fun SessionBadge(summary: SurveySessionSummary, waiting: Boolean) {
     val (icon, text, color) =
         when {
-            recording -> Triple(null, R.string.survey_recording, MaterialTheme.colorScheme.primary)
-
             waiting ->
                 Triple(MeshtasticIcons.CloudUpload, R.string.survey_session_waiting, MaterialTheme.colorScheme.tertiary)
 
@@ -1753,7 +1804,7 @@ private fun SessionBadge(summary: SurveySessionSummary, recording: Boolean, wait
             else -> return
         }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        icon?.let { Icon(it, contentDescription = null, modifier = Modifier.size(INFO_ICON_SIZE), tint = color) }
+        Icon(icon, contentDescription = null, modifier = Modifier.size(INFO_ICON_SIZE), tint = color)
         Text(stringResource(text), style = MaterialTheme.typography.labelLarge, color = color)
     }
 }
@@ -1814,9 +1865,9 @@ private fun sessionTitle(session: SurveySession): String {
 
 /** Size and, when it ended on its own, how: "1234 measurements · Ended: app was closed". A Stop goes unsaid. */
 @Composable
-private fun sessionFacts(summary: SurveySessionSummary, recording: Boolean): String {
+private fun sessionFacts(summary: SurveySessionSummary): String {
     val count = pluralStringResource(R.plurals.survey_measurements, summary.measurementCount, summary.measurementCount)
-    if (recording || summary.session.status == SurveyStatus.STOPPED) return count
+    if (summary.session.status == SurveyStatus.STOPPED) return count
     return "$count · ${stringResource(summary.session.status.label())}"
 }
 

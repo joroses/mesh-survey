@@ -65,7 +65,9 @@
     <!-- A session card's figures: distinct cells, relay bytes and senders heard directly where it had a fix, each with what was new to this phone under it. -->
     <string name="survey_stat_cells">Cells</string>
     <string name="survey_stat_relays_heard">Relays</string>
-    <string name="survey_stat_direct">Heard directly</string>
+    <string name="survey_stat_direct">Direct</string>
+    <!-- Beside Direct while recording: every packet this session has recorded. -->
+    <string name="survey_stat_packets">Packets</string>
     <!-- Under a session's cell count: cells no earlier session on this phone had. -->
     <string name="survey_stat_new">+%1$d new</string>
     <!-- Under a session's cell count, once SigSleuth has answered: the cells its map did not have. -->
