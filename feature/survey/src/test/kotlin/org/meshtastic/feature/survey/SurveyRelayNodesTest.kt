@@ -46,9 +46,9 @@ class SurveyRelayNodesTest {
 
             override suspend fun setAutomatic(automatic: Boolean) = Unit
 
-            override val keepScreenOn = MutableStateFlow(false)
+            override val carMode = MutableStateFlow(false)
 
-            override suspend fun setKeepScreenOn(keepScreenOn: Boolean) = Unit
+            override suspend fun setCarMode(carMode: Boolean) = Unit
         }
     private var now = DIRECT_HISTORY.inWholeMilliseconds
     private val clock =

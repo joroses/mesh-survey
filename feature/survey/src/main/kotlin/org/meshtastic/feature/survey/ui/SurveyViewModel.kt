@@ -59,7 +59,6 @@ import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.publishSurveyShortcut
 import org.meshtastic.feature.survey.replayRelays
-import java.util.Locale
 
 /**
  * An ended session opened from its card: its relays once [replayRelays] has rebuilt them (null while it works), with
@@ -110,7 +109,7 @@ class SurveyViewModel(
         }
             .stateInWhileSubscribed(emptyList())
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
-    val keepScreenOn: StateFlow<Boolean> = settings.keepScreenOn.stateInWhileSubscribed(false)
+    val carMode: StateFlow<Boolean> = settings.carMode.stateInWhileSubscribed(false)
 
     /** What deleted sessions had added to SigSleuth's map, for the Sessions card's total. */
     val deleted: StateFlow<SurveyDeleted?> = dao.deleted().stateInWhileSubscribed(null)
@@ -118,14 +117,12 @@ class SurveyViewModel(
     /** The distinct senders every session heard directly, for the Sessions card's total. */
     val directSenders: StateFlow<Int> = dao.directSenders().stateInWhileSubscribed(0)
 
-    /** The connected radio's name, which Start would survey with; null while no radio is connected. */
-    val radioName: StateFlow<String?> =
+    /** Whether a radio is connected, which Start would survey with. */
+    val radioConnected: StateFlow<Boolean> =
         combine(service.connectionState, nodes.ourNodeInfo) { connection, node ->
-            node
-                ?.takeIf { connection == ConnectionState.Connected }
-                ?.let { it.user.long_name.ifBlank { "!%08x".format(Locale.ROOT, it.num) } }
+            connection == ConnectionState.Connected && node != null
         }
-            .stateInWhileSubscribed(null)
+            .stateInWhileSubscribed(false)
 
     /**
      * Short names of the nodes in this session's relay guesses, candidates, ruled-out nodes and SigSleuth's answers.
@@ -203,8 +200,8 @@ class SurveyViewModel(
         appScope.launch { uploader.setAutomatic(automatic) { state.value.session?.id } }
     }
 
-    fun setKeepScreenOn(keepScreenOn: Boolean) {
-        appScope.launch { settings.setKeepScreenOn(keepScreenOn) }
+    fun setCarMode(carMode: Boolean) {
+        appScope.launch { settings.setCarMode(carMode) }
     }
 
     fun upload(sessionId: String) = uploader.uploadNow(sessionId)

@@ -30,11 +30,13 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,6 +50,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -65,7 +68,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -74,21 +76,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -107,6 +117,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -120,6 +131,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.takeOrElse
@@ -130,6 +142,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.meshtastic.core.common.util.DateFormatter
 import org.meshtastic.core.common.util.NumberFormatter
@@ -155,7 +168,6 @@ import org.meshtastic.core.ui.icon.LinkOff
 import org.meshtastic.core.ui.icon.LocationDisabled
 import org.meshtastic.core.ui.icon.LocationOn
 import org.meshtastic.core.ui.icon.Map
-import org.meshtastic.core.ui.icon.MeshRadio
 import org.meshtastic.core.ui.icon.MeshtasticIcons
 import org.meshtastic.core.ui.icon.More
 import org.meshtastic.core.ui.icon.MyLocation
@@ -209,19 +221,19 @@ fun SurveyScreen(
     viewModel: SurveyViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val radioName by viewModel.radioName.collectAsStateWithLifecycle()
+    val radioConnected by viewModel.radioConnected.collectAsStateWithLifecycle()
     val relayNames by viewModel.relayNames.collectAsStateWithLifecycle()
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val uploadSettings by viewModel.uploadSettings.collectAsStateWithLifecycle()
     val uploading by viewModel.uploading.collectAsStateWithLifecycle()
-    val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
+    val carMode by viewModel.carMode.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
     val directSenders by viewModel.directSenders.collectAsStateWithLifecycle()
     val opened by viewModel.opened.collectAsStateWithLifecycle()
     val totals =
         remember(sessions, deleted, directSenders) { surveyTotals(sessions.map { it.session }, deleted, directSenders) }
     // Only while this screen is in front: Android drops the flag once the app is in the background.
-    KeepScreenOn(keepScreenOn && state.session != null)
+    KeepScreenOn(carMode && state.session != null)
 
     val permissions =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
@@ -253,8 +265,9 @@ fun SurveyScreen(
             if (uri != null && sessionId != null) viewModel.export(sessionId, uri)
         }
     val uploadsOn = uploadSettings?.url?.isNotBlank() == true
-    // The session recording now shows in the recording and upload cards, so the list holds only ended ones.
-    val past = remember(sessions, state.session?.id) { sessions.filter { it.session.id != state.session?.id } }
+    val recording = state.session
+    // The session recording now has the screen to itself, so the list holds only ended ones.
+    val past = remember(sessions, recording?.id) { sessions.filter { it.session.id != recording?.id } }
 
     Scaffold(
         modifier = modifier,
@@ -266,43 +279,58 @@ fun SurveyScreen(
                         Icon(MeshtasticIcons.ArrowBack, contentDescription = stringResource(R.string.survey_back))
                     }
                 },
-                actions = { KeepScreenOnChip(keepScreenOn, viewModel::setKeepScreenOn) },
+                actions = { CarModeChip(carMode, viewModel::setCarMode) },
             )
         },
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "recording") {
-                RecordingCard(
-                    state,
-                    radioName,
-                    relayNames,
-                    onStart = requestStart,
-                    onStop = viewModel::stop,
+        if (recording != null) {
+            val live = sessions.firstOrNull { it.session.id == recording.id }
+            // Per session, so the next one does not open on it.
+            var showUpload by rememberSaveable(recording.id) { mutableStateOf(false) }
+            RecordingView(
+                state,
+                recording,
+                relayNames,
+                car = carMode,
+                upload = uploadSettings?.takeIf { uploadsOn }?.let { uploadMark(it, live) },
+                onUpload = { showUpload = true },
+                onStop = viewModel::stop,
+                modifier = Modifier.padding(padding),
+            )
+            val settings = uploadSettings
+            if (showUpload && settings != null) {
+                UploadSheet(
+                    settings,
+                    live,
+                    pastWaiting = past.count { it.waiting },
+                    uploading = uploading,
+                    onAutomatic = viewModel::setAutomatic,
+                    onUpload = { viewModel.upload(recording.id) },
+                    onDismiss = { showUpload = false },
                 )
             }
-            uploadSettings?.let { current ->
-                item(key = "upload") {
-                    UploadCard(
-                        current,
-                        sessions.firstOrNull { it.session.id == state.session?.id },
-                        pastWaiting = past.count { it.waiting },
-                        anyUploaded = past.any { it.uploadedCount > 0 },
-                        uploading = uploading,
-                        onSave = viewModel::saveServer,
-                        onAutomatic = viewModel::setAutomatic,
-                        onUpload = viewModel::upload,
-                        onUploadAll = viewModel::uploadAll,
-                    )
+        } else {
+            LazyColumn(
+                modifier = Modifier.padding(padding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "idle") { IdleCard(state, radioConnected, onStart = requestStart) }
+                uploadSettings?.let { current ->
+                    item(key = "upload") {
+                        UploadCard(
+                            current,
+                            pastWaiting = past.count { it.waiting },
+                            anyUploaded = past.any { it.uploadedCount > 0 },
+                            uploading = uploading,
+                            onSave = viewModel::saveServer,
+                            onAutomatic = viewModel::setAutomatic,
+                            onUploadAll = viewModel::uploadAll,
+                        )
+                    }
                 }
-            }
-            // Under Upload, so recording does not push the Upload card down; the lifetime progress, apart from the
-            // list.
-            totals?.let { item(key = "totals") { TotalsCard(it) } }
-            if (past.isNotEmpty() || state.session == null) {
+                // The lifetime progress, apart from the list.
+                totals?.let { item(key = "totals") { TotalsCard(it) } }
                 item(key = "sessions") {
                     Text(
                         stringResource(R.string.survey_sessions),
@@ -310,35 +338,35 @@ fun SurveyScreen(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-            }
-            if (past.isEmpty() && state.session == null) {
-                item(key = "no_sessions") {
-                    EmptyState(
-                        icon = MeshtasticIcons.History,
-                        title = stringResource(R.string.survey_no_sessions),
-                        supportingText = stringResource(R.string.survey_no_sessions_hint),
-                        modifier = Modifier.fillMaxWidth(),
+                if (past.isEmpty()) {
+                    item(key = "no_sessions") {
+                        EmptyState(
+                            icon = MeshtasticIcons.History,
+                            title = stringResource(R.string.survey_no_sessions),
+                            supportingText = stringResource(R.string.survey_no_sessions_hint),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                itemsIndexed(past, key = { _, summary -> summary.session.id }) { index, summary ->
+                    // Newest first: a card names its radio when it differs from the session before it, the oldest
+                    // always.
+                    val older = past.getOrNull(index + 1)?.session
+                    SessionCard(
+                        summary = summary,
+                        waiting = uploadsOn && summary.waiting,
+                        uploadsOn = uploadsOn,
+                        uploading = uploading,
+                        showRadio = older == null || radioKey(older) != radioKey(summary.session),
+                        onOpen = { viewModel.open(summary.session.id) }.takeIf { summary.measurementCount > 0 },
+                        onUpload = { viewModel.upload(summary.session.id) },
+                        onExport = {
+                            exportSessionId = summary.session.id
+                            exporter.launch(csvFileName(summary))
+                        },
+                        onDelete = { viewModel.delete(summary.session.id) },
                     )
                 }
-            }
-            itemsIndexed(past, key = { _, summary -> summary.session.id }) { index, summary ->
-                // Newest first: a card names its radio when it differs from the session before it, the oldest always.
-                val older = past.getOrNull(index + 1)?.session
-                SessionCard(
-                    summary = summary,
-                    waiting = uploadsOn && summary.waiting,
-                    deletable = state.session == null,
-                    uploadsOn = uploadsOn,
-                    uploading = uploading,
-                    showRadio = older == null || radioKey(older) != radioKey(summary.session),
-                    onOpen = { viewModel.open(summary.session.id) }.takeIf { summary.measurementCount > 0 },
-                    onUpload = { viewModel.upload(summary.session.id) },
-                    onExport = {
-                        exportSessionId = summary.session.id
-                        exporter.launch(csvFileName(summary))
-                    },
-                    onDelete = { viewModel.delete(summary.session.id) },
-                )
             }
         }
         opened?.let { SessionRelaysSheet(it, onDismiss = viewModel::closeSession) }
@@ -363,68 +391,117 @@ private fun radioKey(session: SurveySession) = listOf(
     session.frequencyMhz,
 )
 
+/** Before a session: what the survey does, a warning while no radio is connected, why the last one ended, and Start. */
 @Composable
-private fun RecordingCard(
-    state: SurveyState,
-    radioName: String?,
-    relayNames: Map<Long, String>,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-) {
-    val session = state.session
-    // One clock for the whole card, so its timer and every "ago" tick in step.
-    val clockState = rememberSurveyClock()
-    val clock = clockState::value
+private fun IdleCard(state: SurveyState, radioConnected: Boolean, onStart: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatusHeader(state, clock)
-            if (session == null) {
-                IdleDetails(state.lastEnd, radioName)
-            } else {
-                RecordingDetails(state, session, relayNames, clock)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusDot(MaterialTheme.colorScheme.outline)
+                Text(stringResource(R.string.survey_not_recording), style = MaterialTheme.typography.titleMedium)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.survey_intro),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!radioConnected) InfoRow(MeshtasticIcons.LinkOff, stringResource(R.string.survey_radio_none))
+                state.lastEnd?.endedNotice()?.let { InfoRow(MeshtasticIcons.Info, it) }
             }
             state.problem?.let { ProblemBanner(it) }
-            if (session == null) {
-                Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
-                    Icon(
-                        MeshtasticIcons.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(ButtonDefaults.IconSize),
-                    )
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.survey_start))
-                }
-            } else {
-                Button(
-                    onClick = onStop,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    ),
-                ) {
-                    Text(stringResource(R.string.survey_stop))
-                }
+            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
+                Icon(
+                    MeshtasticIcons.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                )
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(stringResource(R.string.survey_start))
             }
         }
     }
 }
 
 /**
- * Keep screen on, in the top bar so it stays out of the cards and in view in every state. A chip rather than an icon,
- * so its words say what it does. On, it is filled in the colour of a switch that is on and checked; off, only outlined.
+ * The screen while a session records: its card over its relays, which scroll on their own so the card stays in view.
+ * When the height cannot hold the card and a few rows, as with the phone on its side, the card scrolls with them. In
+ * [car] mode everything is [CAR_SCALE] times bigger and the small text is left out, to read at a glance.
  */
 @Composable
-private fun KeepScreenOnChip(keepScreenOn: Boolean, onKeepScreenOn: (Boolean) -> Unit) {
+@Suppress("LongParameterList")
+private fun RecordingView(
+    state: SurveyState,
+    session: SurveySession,
+    relayNames: Map<Long, String>,
+    car: Boolean,
+    upload: UploadMark?,
+    onUpload: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // One clock for the card and the list, so the timer and every "ago" tick in step.
+    val clockState = rememberSurveyClock()
+    val clock = clockState::value
+    val density = LocalDensity.current
+    // Bigger through the density, so text, icons, gaps and touch targets grow together from the same layout.
+    val scaled = if (car) Density(density.density * CAR_SCALE, density.fontScale) else density
+    // The Scaffold's padding is measured at the screen's own density, outside the scaled part.
+    Box(modifier) {
+        CompositionLocalProvider(LocalDensity provides scaled) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val card: @Composable () -> Unit = {
+                    RecordingCard(state, session, clock, car, upload, onUpload, onStop)
+                }
+                val scrolledCard: @Composable () -> Unit = { Box(Modifier.padding(bottom = 12.dp)) { card() } }
+                val pinned = maxHeight >= PINNED_MIN_HEIGHT
+                Column {
+                    if (pinned) Box(Modifier.padding(16.dp)) { card() }
+                    RelaysList(
+                        state.relays,
+                        state.neighbours,
+                        session.spreadingFactor,
+                        relayNames,
+                        clock,
+                        Modifier.weight(1f),
+                        contentPadding =
+                        PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = if (pinned) 0.dp else 16.dp,
+                            bottom = 16.dp,
+                        ),
+                        lastRelayByte = state.lastMeasurement?.relayByte,
+                        car = car,
+                        header = scrolledCard.takeUnless { pinned },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** How much bigger car mode draws the recording view. */
+private const val CAR_SCALE = 1.4f
+
+/** The height, in the view's own units, below which the recording card scrolls with the relays. */
+private val PINNED_MIN_HEIGHT = 420.dp
+
+/**
+ * Car mode, in the top bar so it stays in view in every state: while recording it keeps the screen on and draws the
+ * recording view bigger, without its small text. A chip rather than an icon, so its words say what it does. On, it is
+ * filled in the colour of a switch that is on and checked; off, only outlined.
+ */
+@Composable
+private fun CarModeChip(carMode: Boolean, onCarMode: (Boolean) -> Unit) {
     val colors = MaterialTheme.colorScheme
     FilterChip(
-        selected = keepScreenOn,
-        onClick = { onKeepScreenOn(!keepScreenOn) },
-        label = { Text(stringResource(R.string.survey_keep_screen_on), maxLines = 1) },
+        selected = carMode,
+        onClick = { onCarMode(!carMode) },
+        label = { Text(stringResource(R.string.survey_car_mode), maxLines = 1) },
         modifier = Modifier.padding(end = 8.dp),
         leadingIcon =
-        if (keepScreenOn) {
+        if (carMode) {
             { Icon(MeshtasticIcons.Check, contentDescription = null, Modifier.size(FilterChipDefaults.IconSize)) }
         } else {
             null
@@ -438,109 +515,122 @@ private fun KeepScreenOnChip(keepScreenOn: Boolean, onKeepScreenOn: (Boolean) ->
     )
 }
 
-/** A coloured dot and what the survey is doing; while recording, how long it has run. */
+/**
+ * The session recording now: what it is doing, then what it found, the last packet and Stop. Its relays are in the list
+ * under it. In [car] mode the small text is left out: Packets, the notes under the figures but the new cells.
+ */
 @Composable
-private fun StatusHeader(state: SurveyState, clock: () -> SurveyNow) {
-    val session = state.session
-    val (title, dot) =
-        when {
-            session == null -> R.string.survey_not_recording to MaterialTheme.colorScheme.outline
-            state.waitingForRadio -> R.string.survey_waiting_title to MaterialTheme.colorScheme.StatusYellow
-            else -> R.string.survey_recording to MaterialTheme.colorScheme.StatusGreen
-        }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.size(10.dp).background(dot, CircleShape))
-        Text(stringResource(title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        session?.let {
-            Text(
-                clockText(clock().wallMs - it.startedAt),
-                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
-            )
-        }
-    }
-}
-
-@Composable
-private fun IdleDetails(lastEnd: SurveyStatus?, radioName: String?) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            stringResource(R.string.survey_intro),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (radioName != null) {
-            InfoRow(MeshtasticIcons.MeshRadio, stringResource(R.string.survey_radio_connected, radioName))
-        } else {
-            InfoRow(MeshtasticIcons.LinkOff, stringResource(R.string.survey_radio_none))
-        }
-        lastEnd?.endedNotice()?.let { InfoRow(MeshtasticIcons.Info, it) }
-    }
-}
-
-@Composable
-private fun RecordingDetails(
+@Suppress("LongParameterList")
+private fun RecordingCard(
     state: SurveyState,
     session: SurveySession,
-    relayNames: Map<Long, String>,
     clock: () -> SurveyNow,
+    car: Boolean,
+    upload: UploadMark?,
+    onUpload: () -> Unit,
+    onStop: () -> Unit,
 ) {
-    var showRelays by rememberSaveable { mutableStateOf(false) }
-    val last = state.lastMeasurement
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            radioText(session),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (state.waitingForRadio) {
-            Text(
-                stringResource(R.string.survey_waiting_explained, SurveyRecorder.RADIO_WAIT.inWholeMinutes.toInt()),
-                style = MaterialTheme.typography.bodyMedium,
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            RecordingHeader(state, session, clock, car, upload, onUpload)
+            if (state.waitingForRadio) {
+                Text(
+                    stringResource(R.string.survey_waiting_explained, SurveyRecorder.RADIO_WAIT.inWholeMinutes.toInt()),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            // The figures its session card shows once it ends. Relays counts every byte heard, as the list under the
+            // card does; the session card counts those heard with a fix.
+            NewsStats(
+                state.newToYou ?: NO_NEWS,
+                relays = state.relays.size,
+                mapCells = state.news?.newCells.takeUnless { car },
+                packets = state.measurementCount.takeUnless { car },
+                car = car,
             )
-        }
-        // The figures its session card shows once it ends. Relays counts every byte heard, as the list it opens does;
-        // the session card counts those heard with a fix.
-        NewsStats(
-            state.newToYou ?: NO_NEWS,
-            relays = state.relays.size,
-            mapCells = state.news?.newCells,
-            packets = state.measurementCount,
-            onRelays = { showRelays = true }.takeIf { state.relays.isNotEmpty() },
-        )
-        // While the radio is away GPS is off on purpose; the header and the line above say so.
-        if (!state.waitingForRadio) GpsStatus(state.fix, clock)
-        LastPacket(last, session.spreadingFactor, state.relays, relayNames, clock)
-        if (showRelays) {
-            RelaysSheet(
-                state.relays,
-                state.neighbours,
-                session.spreadingFactor,
-                relayNames,
-                clock,
-                onDismiss = { showRelays = false },
-            )
+            LastPacket(state.lastMeasurement, session.spreadingFactor, clock, car)
+            state.problem?.let { ProblemBanner(it) }
+            Button(
+                onClick = onStop,
+                modifier = Modifier.fillMaxWidth(),
+                colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ),
+            ) {
+                Text(stringResource(R.string.survey_stop))
+            }
         }
     }
 }
+
+/**
+ * A dot in the colour of what the session is doing and its words, the GPS and upload marks, and how long it has run. In
+ * [car] mode the running time takes the words' place; while the radio is away the words stay and GPS, paused on
+ * purpose, is left out.
+ */
+@Composable
+@Suppress("LongParameterList")
+private fun RecordingHeader(
+    state: SurveyState,
+    session: SurveySession,
+    clock: () -> SurveyNow,
+    car: Boolean,
+    upload: UploadMark?,
+    onUpload: () -> Unit,
+) {
+    val waiting = state.waitingForRadio
+    val colors = MaterialTheme.colorScheme
+    val time = clockText(clock().wallMs - session.startedAt)
+    val timeStyle = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum")
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatusDot(if (waiting) colors.StatusYellow else colors.StatusGreen)
+        if (car && !waiting) {
+            Text(time, Modifier.weight(1f), style = timeStyle, maxLines = 1)
+        } else {
+            Text(
+                stringResource(if (waiting) R.string.survey_waiting_title else R.string.survey_recording),
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (!waiting) GpsMark(state.fix, clock)
+        upload?.let { UploadMarkButton(it, onUpload) }
+        if (!car) Text(time, style = timeStyle, maxLines = 1)
+    }
+}
+
+@Composable private fun StatusDot(color: Color) = Box(Modifier.size(10.dp).background(color, CircleShape))
 
 private val NO_NEWS = SurveyNews(cells = 0, relays = 0, direct = 0)
 
-/** How long ago the last packet came, with its signal and relay under it; until one comes, that none has. */
+/**
+ * The last packet's relay byte and how long ago it came, with its signal under it; until one comes, that none has. The
+ * byte is here too, not only as the tinted row of the list under the card, since that row may be scrolled out of view.
+ */
 @Composable
-private fun LastPacket(
-    last: SurveyMeasurement?,
-    spreadingFactor: Int,
-    relays: Map<Int, RelayStats>,
-    names: Map<Long, String>,
-    clock: () -> SurveyNow,
-) {
+private fun LastPacket(last: SurveyMeasurement?, spreadingFactor: Int, clock: () -> SurveyNow, car: Boolean) {
     val now = clock().wallMs
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            if (last == null) {
-                stringResource(R.string.survey_no_packet)
-            } else {
-                stringResource(R.string.survey_last_packet, agoText(last.heardAtMs, now))
+            when {
+                last == null -> AnnotatedString(stringResource(R.string.survey_no_packet))
+
+                last.relayByte == null ->
+                    AnnotatedString(stringResource(R.string.survey_last_packet, agoText(last.heardAtMs, now)))
+
+                else ->
+                    relayByteMarked(
+                        stringResource(
+                            R.string.survey_last_packet_relay,
+                            relayByteText(last.relayByte),
+                            agoText(last.heardAtMs, now),
+                        ),
+                        last.relayByte,
+                    )
             },
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -550,18 +640,15 @@ private fun LastPacket(
                 val snr = measurement.rxSnr
                 SnrText(
                     stringResource(
-                        R.string.survey_last_signal,
+                        // Shorter in car mode, so the bigger line still fits on one.
+                        if (car) R.string.survey_last_signal_brief else R.string.survey_last_signal,
                         if (snr == null) "–" else SNR_SLOT,
                         measurement.rxRssi?.toString() ?: "–",
                     ),
                     snr,
-                    SNR_DECIMALS_CARD,
+                    if (car) SNR_DECIMALS_LIST else SNR_DECIMALS_CARD,
                     spreadingFactor,
                 )
-            }
-            measurement.relayByte?.let { byte ->
-                val relay = relayText(byte, relays[byte], names)
-                InfoRow(MeshtasticIcons.Route, relayByteMarked(stringResource(R.string.survey_last_relay, relay), byte))
             }
         }
     }
@@ -682,33 +769,69 @@ private fun Modifier.bleed(x: Dp) = layout { measurable, constraints ->
     layout((placeable.width - extra).coerceAtLeast(0), placeable.height) { placeable.place(-x.roundToPx(), 0) }
 }
 
-/** The fix's accuracy and age, in the error colour when SigSleuth would skip packets heard with it. */
+/**
+ * "GPS", ok or not as SigSleuth sees it: ok while the fix is fresh and close enough to place a packet, else crossed out
+ * in the error colour, as packets heard then are skipped. A tap shows the fix's accuracy and age, and SigSleuth's
+ * limits when they are not met.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun GpsStatus(fix: SurveyFix?, clock: () -> SurveyNow) {
-    val now = clock().elapsedMs
-    val ageMs = fix?.let { (now - it.elapsedRealtimeMs).coerceAtLeast(0) }
+private fun GpsMark(fix: SurveyFix?, clock: () -> SurveyNow) {
+    val ageMs = fix?.let { (clock().elapsedMs - it.elapsedRealtimeMs).coerceAtLeast(0) }
     val usable = fix != null && ageMs != null && usableFix(ageMs, fix.accuracyM)
-    val color = if (usable) Color.Unspecified else MaterialTheme.colorScheme.error
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (fix == null || ageMs == null) {
-            InfoRow(MeshtasticIcons.LocationDisabled, stringResource(R.string.survey_gps_none), color)
-        } else {
-            InfoRow(
-                MeshtasticIcons.MyLocation,
-                stringResource(
-                    R.string.survey_gps,
-                    fix.accuracyM?.let { NumberFormatter.format(it, 0) } ?: "?",
-                    (ageMs / MILLIS_PER_SECOND).toString(),
-                ),
-                color,
+    val colors = MaterialTheme.colorScheme
+    val tooltip = rememberTooltipState(isPersistent = true)
+    val scope = rememberCoroutineScope()
+    val stateText = stringResource(if (usable) R.string.survey_gps_usable else R.string.survey_gps_unusable)
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+        tooltip = {
+            RichTooltip {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        if (fix == null || ageMs == null) {
+                            stringResource(R.string.survey_gps_none)
+                        } else {
+                            stringResource(
+                                R.string.survey_gps,
+                                fix.accuracyM?.let { NumberFormatter.format(it, 0) } ?: "?",
+                                (ageMs / MILLIS_PER_SECOND).toString(),
+                            )
+                        },
+                    )
+                    if (!usable) {
+                        Text(
+                            stringResource(
+                                R.string.survey_gps_skipped,
+                                SIGSLEUTH_MAX_FIX_AGE_S,
+                                SIGSLEUTH_MAX_ACCURACY_M,
+                            ),
+                        )
+                    }
+                }
+            }
+        },
+        state = tooltip,
+    ) {
+        Row(
+            Modifier.minimumInteractiveComponentSize()
+                .clip(MaterialTheme.shapes.small)
+                .clickable(role = Role.Button) { scope.launch { tooltip.show() } }
+                .semantics { stateDescription = stateText }
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                if (usable) MeshtasticIcons.MyLocation else MeshtasticIcons.LocationDisabled,
+                contentDescription = null,
+                modifier = Modifier.size(INFO_ICON_SIZE),
+                tint = if (usable) colors.StatusGreen else colors.error,
             )
-        }
-        if (!usable) {
             Text(
-                stringResource(R.string.survey_gps_skipped, SIGSLEUTH_MAX_FIX_AGE_S, SIGSLEUTH_MAX_ACCURACY_M),
-                style = MaterialTheme.typography.bodySmall,
-                color = color,
-                modifier = Modifier.padding(start = INFO_TEXT_INDENT),
+                stringResource(R.string.survey_gps_label),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (usable) colors.onSurfaceVariant else colors.error,
             )
         }
     }
@@ -717,9 +840,45 @@ private fun GpsStatus(fix: SurveyFix?, clock: () -> SurveyNow) {
 private fun usableFix(ageMs: Long, accuracyM: Float?): Boolean =
     ageMs <= SIGSLEUTH_MAX_FIX_AGE_S * MILLIS_PER_SECOND && (accuracyM ?: 0f) <= SIGSLEUTH_MAX_ACCURACY_M
 
+/** What the header's cloud says about uploads while recording, when a server is set. */
+private enum class UploadMark {
+    /** Uploads run by themselves, or nothing waits. */
+    FINE,
+
+    /** Measurements wait, and only Upload now sends them. */
+    WAITING,
+
+    /** Measurements wait, and the last upload failed. */
+    FAILED,
+}
+
+private fun uploadMark(settings: SurveyUploadSettings, recording: SurveySessionSummary?): UploadMark {
+    val pending = recording?.pendingCount ?: 0
+    return when {
+        pending > 0 && recording?.session?.lastUploadError != null -> UploadMark.FAILED
+        pending > 0 && !settings.automatic -> UploadMark.WAITING
+        else -> UploadMark.FINE
+    }
+}
+
+/** The upload card's place while recording: a cloud, a waiting one in the waiting colour, or an error mark. */
+@Composable
+private fun UploadMarkButton(mark: UploadMark, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val (icon, tint, description) =
+        when (mark) {
+            UploadMark.FINE -> Triple(MeshtasticIcons.CloudUpload, colors.onSurfaceVariant, R.string.survey_upload)
+
+            UploadMark.WAITING ->
+                Triple(MeshtasticIcons.CloudUpload, colors.tertiary, R.string.survey_upload_mark_waiting)
+
+            UploadMark.FAILED -> Triple(MeshtasticIcons.ErrorOutline, colors.error, R.string.survey_upload_mark_failed)
+        }
+    IconButton(onClick = onClick) { Icon(icon, contentDescription = stringResource(description), tint = tint) }
+}
+
 private val INFO_ICON_SIZE = 18.dp
 private val INFO_ICON_GAP = 8.dp
-private val INFO_TEXT_INDENT = INFO_ICON_SIZE + INFO_ICON_GAP
 
 /** A small icon and a line of text; the icon takes [iconTint], which defaults to [color], or a muted one. */
 @Composable
@@ -963,53 +1122,54 @@ private fun highlighted(text: String, part: String, style: SpanStyle): Annotated
 }
 
 /**
- * A session's relay bytes in a sheet, [RelaysList]: the recording session's from its card, an ended one's from its own
- * ([SessionRelaysSheet]).
+ * An ended session's relays, rebuilt from its saved packets ([SurveyViewModel.opened]), in a sheet under its date and
+ * length. The guesses use the node database and SigSleuth's list as they are now, and SigSleuth's answers are not kept.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongParameterList")
-private fun RelaysSheet(
-    relays: Map<Int, RelayStats>?,
-    neighbours: Map<Long, DirectSender>,
-    spreadingFactor: Int,
-    names: Map<Long, String>,
-    clock: () -> SurveyNow,
-    onDismiss: () -> Unit,
-    subtitle: String? = null,
-) {
+private fun SessionRelaysSheet(opened: OpenedSession, onDismiss: () -> Unit) {
+    val clock = rememberSurveyClock()
     val sheetState =
         rememberBottomSheetState(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
         )
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        RelaysList(relays, neighbours, spreadingFactor, names, clock().wallMs, subtitle)
+        RelaysList(
+            opened.relays?.relays,
+            opened.relays?.neighbours.orEmpty(),
+            opened.session.spreadingFactor,
+            opened.names,
+            clock::value,
+            // The rows' own inset brings their text in line with the title.
+            contentPadding = PaddingValues(start = SHEET_INSET, end = SHEET_INSET, bottom = 24.dp),
+            header = {
+                Column(
+                    Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 8.dp).semantics(
+                        mergeDescendants = true,
+                    ) {
+                        heading()
+                    },
+                ) {
+                    Text(stringResource(R.string.survey_relays_title), style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        sessionTitle(opened.session),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+        )
     }
 }
 
-/**
- * An ended session's relays, rebuilt from its saved packets ([SurveyViewModel.opened]), under its date and length. The
- * guesses use the node database and SigSleuth's list as they are now, and SigSleuth's answers are not kept.
- */
-@Composable
-private fun SessionRelaysSheet(opened: OpenedSession, onDismiss: () -> Unit) {
-    val clock = rememberSurveyClock()
-    RelaysSheet(
-        opened.relays?.relays,
-        opened.relays?.neighbours.orEmpty(),
-        opened.session.spreadingFactor,
-        opened.names,
-        clock::value,
-        onDismiss,
-        subtitle = sessionTitle(opened.session),
-    )
-}
+/** A sheet's edge to its rows, so with [ROW_INSET] their text sits 24 dp in, as sheet titles do. */
+private val SHEET_INSET = 8.dp
 
 /**
- * Relay bytes, most packets first, each with how sure its guess is, its last packet, and every candidate with how it is
- * known, measured from where that packet was heard: the guess was made there, not where the phone is now. A spinner
- * while [relays] is null, as an ended session's are rebuilt. Times are measured from [now].
+ * Relay bytes, most packets first, so rows keep their places as packets come: one line each, which a tap opens
+ * ([RelayEntry]). The row of [lastRelayByte], the last packet's relay, is tinted. [header] comes first and scrolls with
+ * the rows. A spinner while [relays] is null, as an ended session's are rebuilt.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -1018,26 +1178,17 @@ private fun RelaysList(
     neighbours: Map<Long, DirectSender>,
     spreadingFactor: Int,
     names: Map<Long, String>,
-    now: Long,
-    subtitle: String? = null,
+    clock: () -> SurveyNow,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    lastRelayByte: Int? = null,
+    car: Boolean = false,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val sorted = remember(relays) { relays?.entries?.sortedByDescending { it.value.packets } }
-    LazyColumn(
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Column(Modifier.semantics(mergeDescendants = true) { heading() }) {
-                Text(stringResource(R.string.survey_relays_title), style = MaterialTheme.typography.headlineSmall)
-                subtitle?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
+    var open by remember { mutableStateOf(emptySet<Int>()) }
+    LazyColumn(modifier, contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        header?.let { item(key = "header") { it() } }
         when {
             sorted == null ->
                 item {
@@ -1050,25 +1201,40 @@ private fun RelaysList(
                 item {
                     Text(
                         stringResource(R.string.survey_relays_none),
+                        modifier = Modifier.padding(horizontal = ROW_INSET, vertical = 8.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
             else ->
-                itemsIndexed(sorted, key = { _, entry -> entry.key }) { index, (byte, relay) ->
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (index > 0) HorizontalDivider()
-                        RelayEntry(byte, relay, spreadingFactor, neighbours, names, now)
-                    }
+                items(sorted, key = { it.key }) { (byte, relay) ->
+                    val opened = byte in open
+                    RelayEntry(
+                        byte,
+                        relay,
+                        spreadingFactor,
+                        neighbours,
+                        names,
+                        clock,
+                        opened = opened,
+                        latest = byte == lastRelayByte,
+                        car = car,
+                        onToggle = { open = if (opened) open - byte else open + byte },
+                    )
                 }
         }
     }
 }
 
+/** How far a relay row's text sits inside its tint. */
+private val ROW_INSET = 16.dp
+private const val LATEST_TINT_ALPHA = 0.16f
+
 /**
- * One relay byte: how sure, who, and when its last packet came, then that packet's signal, SigSleuth's answer and the
- * candidates under the name. The guessed candidates stand out; the rest are muted. Times are measured from [now].
+ * One relay byte on a line: how sure, who, the last packet's SNR and when it came. A tap [opened] it on that packet's
+ * count and RSSI, SigSleuth's answer and the candidates, the guessed ones standing out and the rest muted. Tinted while
+ * it is the [latest] packet's relay. In [car] mode it leaves out the time and does not open.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -1078,85 +1244,123 @@ private fun RelayEntry(
     spreadingFactor: Int,
     neighbours: Map<Long, DirectSender>,
     names: Map<Long, String>,
-    now: Long,
+    clock: () -> SurveyNow,
+    opened: Boolean,
+    latest: Boolean,
+    car: Boolean,
+    onToggle: () -> Unit,
 ) {
-    val packet = relay.last
-    val guessed = relay.guess.nodeIds.toSet()
-    fun tone(nodeId: Long) = if (nodeId in guessed) LineTone.GUESS else LineTone.OTHER
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    val colors = MaterialTheme.colorScheme
+    // A faint wash of the primary colour: a grey one looked like another card.
+    val tint by
+        animateColorAsState(
+            if (latest) colors.primary.copy(alpha = LATEST_TINT_ALPHA) else Color.Transparent,
+            label = "latest",
+        )
+    val latestText = stringResource(R.string.survey_relay_latest)
+    val toggleLabel = stringResource(if (opened) R.string.survey_relay_hide else R.string.survey_relay_show)
+    val showDetails = opened && !car
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(tint)
+            .then(if (car) Modifier else Modifier.clickable(onClickLabel = toggleLabel, onClick = onToggle))
+            .semantics { if (latest) stateDescription = latestText }
+            .padding(horizontal = ROW_INSET, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MARK_GAP)) {
             ConfidenceMark(relay)
             Text(
                 relayByteMarked(relayText(relayByte, relay, names), relayByte),
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
+                maxLines = if (showDetails) Int.MAX_VALUE else 1,
+                overflow = TextOverflow.Ellipsis,
             )
+            relay.last.rxSnr?.let { SnrText(SNR_SLOT, it, SNR_DECIMALS_LIST, spreadingFactor) }
+            if (!car) {
+                Text(
+                    agoText(relay.lastHeardMs, clock().wallMs),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+        if (showDetails) RelayDetails(relay, neighbours, names, clock().wallMs)
+    }
+}
+
+/**
+ * An opened [RelayEntry]: its packet count and the last packet's RSSI, SigSleuth's answer, every candidate with how it
+ * is known, measured from where that packet was heard (the guess was made there, not where the phone is now), and the
+ * nodes its signal ruled out. Times are measured from [now].
+ */
+@Composable
+private fun RelayDetails(relay: RelayStats, neighbours: Map<Long, DirectSender>, names: Map<Long, String>, now: Long) {
+    val packet = relay.last
+    val guessed = relay.guess.nodeIds.toSet()
+    fun tone(nodeId: Long) = if (nodeId in guessed) LineTone.GUESS else LineTone.OTHER
+    Column(Modifier.padding(start = MARK_SIZE + MARK_GAP), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        PacketLine(relay)
+        relay.server?.let { answer ->
+            val sameAsHeader = answer.nodeId != null && answer.nodeId == relay.shownNode
             Text(
-                agoText(relay.lastHeardMs, now),
+                sigSleuthLabelled(serverText(answer, names, sameAsHeader, now)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Column(Modifier.padding(start = MARK_SIZE + MARK_GAP), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PacketLine(relay, spreadingFactor)
-            relay.server?.let { answer ->
-                val sameAsHeader = answer.nodeId != null && answer.nodeId == relay.shownNode
-                Text(
-                    sigSleuthLabelled(serverText(answer, names, sameAsHeader, now)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            // Every candidate, not just the guessed tier, so the list shows how unsure the guess is.
-            relay.candidates.forEach { candidate ->
-                val name = nodeName(candidate.nodeId, names)
-                val tone = tone(candidate.nodeId)
-                when (candidate) {
-                    is RelayCandidate.Heard ->
-                        CandidateLine(
-                            MeshtasticIcons.Rssi,
-                            MaterialTheme.colorScheme.tertiary,
-                            name,
-                            neighbours[candidate.nodeId]?.let { candidateText(it, packet, now) }
-                                ?: stringResource(R.string.survey_relay_candidate_heard),
-                            tone,
-                        )
+        // Every candidate, not just the guessed tier, so the list shows how unsure the guess is.
+        relay.candidates.forEach { candidate ->
+            val name = nodeName(candidate.nodeId, names)
+            val tone = tone(candidate.nodeId)
+            when (candidate) {
+                is RelayCandidate.Heard ->
+                    CandidateLine(
+                        MeshtasticIcons.Rssi,
+                        MaterialTheme.colorScheme.tertiary,
+                        name,
+                        neighbours[candidate.nodeId]?.let { candidateText(it, packet, now) }
+                            ?: stringResource(R.string.survey_relay_candidate_heard),
+                        tone,
+                    )
 
-                    // Its text gives only a distance, so the icon says where the position comes from.
-                    is RelayCandidate.Reported ->
-                        CandidateLine(
-                            MeshtasticIcons.LocationOn,
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                            name,
-                            placedText(candidate, packet),
-                            tone,
-                            stringResource(R.string.survey_relay_reported_position),
-                        )
+                // Its text gives only a distance, so the icon says where the position comes from.
+                is RelayCandidate.Reported ->
+                    CandidateLine(
+                        MeshtasticIcons.LocationOn,
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                        name,
+                        placedText(candidate, packet),
+                        tone,
+                        stringResource(R.string.survey_relay_reported_position),
+                    )
 
-                    is RelayCandidate.Mapped ->
-                        CandidateLine(
-                            MeshtasticIcons.Map,
-                            MaterialTheme.colorScheme.StatusSky,
-                            name,
-                            placedText(candidate, packet),
-                            tone,
-                        )
-                }
+                is RelayCandidate.Mapped ->
+                    CandidateLine(
+                        MeshtasticIcons.Map,
+                        MaterialTheme.colorScheme.StatusSky,
+                        name,
+                        placedText(candidate, packet),
+                        tone,
+                    )
             }
-            // Nodes heard here too weakly to have sent this packet, so the list says why they left.
-            relay.ruledOut.forEach { node ->
-                CandidateLine(
-                    MeshtasticIcons.DoDisturb,
-                    MaterialTheme.colorScheme.StatusRed,
-                    nodeName(node.nodeId, names),
-                    stringResource(
-                        R.string.survey_relay_ruled_out,
-                        node.packetSignal.roundToInt(),
-                        node.strongestHere.roundToInt(),
-                    ),
-                    LineTone.RULED_OUT,
-                )
-            }
+        }
+        // Nodes heard here too weakly to have sent this packet, so the list says why they left.
+        relay.ruledOut.forEach { node ->
+            CandidateLine(
+                MeshtasticIcons.DoDisturb,
+                MaterialTheme.colorScheme.StatusRed,
+                nodeName(node.nodeId, names),
+                stringResource(
+                    R.string.survey_relay_ruled_out,
+                    node.packetSignal.roundToInt(),
+                    node.strongestHere.roundToInt(),
+                ),
+                LineTone.RULED_OUT,
+            )
         }
     }
 }
@@ -1200,27 +1404,15 @@ private fun ConfidenceMark(relay: RelayStats) {
     }
 }
 
-/**
- * The packet count, then the last packet's RSSI and SNR when the radio gave them, the SNR as a chip like the "Last
- * packet" line's.
- */
+/** The packet count, then the last packet's RSSI when the radio gave it; its SNR is on the row above. */
 @Composable
-private fun PacketLine(relay: RelayStats, spreadingFactor: Int) {
+private fun PacketLine(relay: RelayStats) {
     val count = pluralStringResource(R.plurals.survey_relay_packets, relay.packets, relay.packets)
     val rssi = relay.last.rxRssi?.takeIf { it != 0 }
-    val snr = relay.last.rxSnr
-    val text =
-        when {
-            rssi == null -> count
-            snr == null -> stringResource(R.string.survey_relay_rssi, count, rssi)
-            else -> stringResource(R.string.survey_relay_signal, count, rssi, SNR_SLOT)
-        }
-    SnrText(
-        text,
-        snr.takeIf { rssi != null },
-        SNR_DECIMALS_LIST,
-        spreadingFactor,
-        MaterialTheme.colorScheme.onSurfaceVariant,
+    Text(
+        if (rssi == null) count else stringResource(R.string.survey_relay_rssi, count, rssi),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -1478,21 +1670,19 @@ private fun agoText(timeMs: Long, now: Long): String {
 
 /**
  * Where uploads go, folded to one line once set: a server is entered once, so the form only opens on Set up or Edit.
- * Its status and Upload now are about [recording], the session recording now; a line counts the [pastWaiting] ended
- * sessions SigSleuth may have but lacks rows of, which Upload all sends while nothing records. [anyUploaded] says
- * whether an ended session was sent, so "Everything is uploaded" is not said of private sessions alone.
+ * Shown while nothing records; a line counts the [pastWaiting] ended sessions SigSleuth may have but lacks rows of,
+ * which Upload all sends. [anyUploaded] says whether an ended session was sent, so "Everything is uploaded" is not said
+ * of private sessions alone.
  */
 @Composable
 @Suppress("LongParameterList")
 private fun UploadCard(
     settings: SurveyUploadSettings,
-    recording: SurveySessionSummary?,
     pastWaiting: Int,
     anyUploaded: Boolean,
     uploading: Boolean,
     onSave: (SurveyUploadSettings) -> Unit,
     onAutomatic: (Boolean) -> Unit,
-    onUpload: (String) -> Unit,
     onUploadAll: () -> Unit,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -1530,22 +1720,56 @@ private fun UploadCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
+                // Upload all sends only sessions already allowed; a private one is sent from its own card, so nothing
+                // goes that the user did not pick.
                 else ->
-                    UploadSummary(
-                        settings,
-                        recording,
-                        pastWaiting,
-                        anyUploaded,
-                        uploading,
-                        onAutomatic,
-                        onUpload,
-                        onUploadAll,
-                    )
+                    UploadSummary(settings, recording = null, pastWaiting, anyUploaded, onAutomatic) {
+                        if (pastWaiting > 0) {
+                            UploadButton(R.string.survey_upload_all, enabled = true, uploading, onUploadAll)
+                        }
+                    }
             }
         }
     }
 }
 
+/**
+ * The upload card's status, switch and Upload now while [recording] records, in a sheet the header's cloud opens. The
+ * server is edited while nothing records.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+@Suppress("LongParameterList")
+private fun UploadSheet(
+    settings: SurveyUploadSettings,
+    recording: SurveySessionSummary?,
+    pastWaiting: Int,
+    uploading: Boolean,
+    onAutomatic: (Boolean) -> Unit,
+    onUpload: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                stringResource(R.string.survey_upload),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            UploadSummary(settings, recording, pastWaiting, anyUploaded = false, onAutomatic) {
+                UploadButton(R.string.survey_upload_now, (recording?.pendingCount ?: 0) > 0, uploading, onUpload)
+            }
+        }
+    }
+}
+
+/**
+ * The server, then what [recording] has waiting or why its last upload failed, the [pastWaiting] ended sessions, the
+ * automatic switch and [button].
+ */
 @Composable
 @Suppress("LongParameterList")
 private fun UploadSummary(
@@ -1553,10 +1777,8 @@ private fun UploadSummary(
     recording: SurveySessionSummary?,
     pastWaiting: Int,
     anyUploaded: Boolean,
-    uploading: Boolean,
     onAutomatic: (Boolean) -> Unit,
-    onUpload: (String) -> Unit,
-    onUploadAll: () -> Unit,
+    button: @Composable () -> Unit,
 ) {
     val pending = recording?.pendingCount ?: 0
     val error = recording?.session?.lastUploadError?.takeIf { pending > 0 }
@@ -1606,14 +1828,7 @@ private fun UploadSummary(
             )
             Switch(checked = settings.automatic, onCheckedChange = null)
         }
-        // Upload all sends only sessions already allowed; a private one is sent from its own card, so nothing goes
-        // that the user did not pick.
-        when {
-            recording != null ->
-                UploadButton(R.string.survey_upload_now, pending > 0, uploading) { onUpload(recording.session.id) }
-
-            pastWaiting > 0 -> UploadButton(R.string.survey_upload_all, enabled = true, uploading, onUploadAll)
-        }
+        button()
     }
 }
 
@@ -1752,7 +1967,6 @@ private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSett
 private fun SessionCard(
     summary: SurveySessionSummary,
     waiting: Boolean,
-    deletable: Boolean,
     uploadsOn: Boolean,
     uploading: Boolean,
     showRadio: Boolean,
@@ -1796,8 +2010,7 @@ private fun SessionCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            // No session is deleted while one records ([SurveyViewModel.delete]). The menu sits down here, not beside
-            // the date, so a long badge never pushes the date onto two lines.
+            // The menu sits down here, not beside the date, so a long badge never pushes the date onto two lines.
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -1809,7 +2022,7 @@ private fun SessionCard(
                         Text(stringResource(R.string.survey_upload_session))
                     }
                 }
-                SessionMenu(deletable, onExport, onDelete = { confirmDelete = true })
+                SessionMenu(onExport, onDelete = { confirmDelete = true })
             }
         }
         if (confirmDelete) {
@@ -1830,9 +2043,12 @@ private fun SessionCard(
     }
 }
 
-/** Export and, while nothing records, Delete: every ended session has them, so they wait behind ⋮. */
+/**
+ * Export and Delete: every ended session has them, so they wait behind ⋮. Sessions show only while nothing records, as
+ * a delete recounts later sessions ([SurveyViewModel.delete]).
+ */
 @Composable
-private fun SessionMenu(deletable: Boolean, onExport: () -> Unit, onDelete: () -> Unit) {
+private fun SessionMenu(onExport: () -> Unit, onDelete: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     // Pulled right by the button's own padding, so the icon lines up with the card's text.
     Box(Modifier.offset(x = MENU_BUTTON_INSET)) {
@@ -1848,17 +2064,15 @@ private fun SessionMenu(deletable: Boolean, onExport: () -> Unit, onDelete: () -
                 },
                 leadingIcon = { Icon(MeshtasticIcons.FileDownload, contentDescription = null) },
             )
-            if (deletable) {
-                val error = MaterialTheme.colorScheme.error
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.survey_delete), color = error) },
-                    onClick = {
-                        open = false
-                        onDelete()
-                    },
-                    leadingIcon = { Icon(MeshtasticIcons.Delete, contentDescription = null, tint = error) },
-                )
-            }
+            val error = MaterialTheme.colorScheme.error
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.survey_delete), color = error) },
+                onClick = {
+                    open = false
+                    onDelete()
+                },
+                leadingIcon = { Icon(MeshtasticIcons.Delete, contentDescription = null, tint = error) },
+            )
         }
     }
 }
@@ -1868,7 +2082,7 @@ private val MENU_BUTTON_INSET = 12.dp
 /**
  * Relays, cells and senders heard directly, each with what was new to this phone under it in green, and under the
  * cells, once SigSleuth has answered, the [mapCells] its map gained. With [onRelays], the relays figure opens their
- * list; it comes first, where a button is easy to find.
+ * list; it comes first, where a button is easy to find. In [car] mode only the new cells keep their note.
  */
 @Composable
 private fun NewsStats(
@@ -1877,11 +2091,12 @@ private fun NewsStats(
     mapCells: Int? = news.newCells,
     packets: Int? = null,
     onRelays: (() -> Unit)? = null,
+    car: Boolean = false,
 ) {
     @Composable
     @ReadOnlyComposable
     fun newIn(cells: Int) = cells
-        .takeIf { it > 0 }
+        .takeIf { it > 0 && !car }
         ?.let {
             pluralStringResource(R.plurals.survey_stat_new_in_cells, it, it)
         }

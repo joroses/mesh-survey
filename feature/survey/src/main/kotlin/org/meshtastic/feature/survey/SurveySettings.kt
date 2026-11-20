@@ -76,10 +76,13 @@ interface SurveySettings {
      */
     suspend fun setAutomatic(automatic: Boolean)
 
-    /** Whether the survey screen keeps the display on while recording, as in a car. Off unless the user turns it on. */
-    val keepScreenOn: Flow<Boolean>
+    /**
+     * Car mode: while recording, the survey screen keeps the display on and shows its figures in big type, to read at a
+     * glance. Off unless the user turns it on.
+     */
+    val carMode: Flow<Boolean>
 
-    suspend fun setKeepScreenOn(keepScreenOn: Boolean)
+    suspend fun setCarMode(carMode: Boolean)
 }
 
 @Single
@@ -117,10 +120,10 @@ class DataStoreSurveySettings(context: Application) : SurveySettings {
         store.edit { it[AUTOMATIC] = automatic }
     }
 
-    override val keepScreenOn: Flow<Boolean> = store.data.map { it[KEEP_SCREEN_ON] ?: false }
+    override val carMode: Flow<Boolean> = store.data.map { it[CAR_MODE] ?: false }
 
-    override suspend fun setKeepScreenOn(keepScreenOn: Boolean) {
-        store.edit { it[KEEP_SCREEN_ON] = keepScreenOn }
+    override suspend fun setCarMode(carMode: Boolean) {
+        store.edit { it[CAR_MODE] = carMode }
     }
 
     private companion object {
@@ -128,6 +131,8 @@ class DataStoreSurveySettings(context: Application) : SurveySettings {
         val USER = stringPreferencesKey("user")
         val PASSWORD = stringPreferencesKey("password")
         val AUTOMATIC = booleanPreferencesKey("automatic")
-        val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+
+        // Named when it only kept the screen on; car mode took the setting over with its choice.
+        val CAR_MODE = booleanPreferencesKey("keep_screen_on")
     }
 }
