@@ -646,7 +646,7 @@ private fun LastPacket(last: SurveyMeasurement?, spreadingFactor: Int, clock: ()
                         measurement.rxRssi?.toString() ?: "–",
                     ),
                     snr,
-                    if (car) SNR_DECIMALS_LIST else SNR_DECIMALS_CARD,
+                    SNR_DECIMALS,
                     spreadingFactor,
                 )
             }
@@ -955,8 +955,7 @@ private fun contentOn(fill: Color): Color {
 /** Where [SnrText] puts the chip: a character no string resource contains. */
 private const val SNR_SLOT = "￼"
 private const val SNR_CHIP = "snr"
-private const val SNR_DECIMALS_CARD = 2
-private const val SNR_DECIMALS_LIST = 1
+private const val SNR_DECIMALS = 1
 private const val SNR_CHIP_LINE_HEIGHT = 1.4f
 private const val LUMINANCE_FLARE = 0.05f
 private val SNR_CHIP_PADDING = 4.dp
@@ -1279,7 +1278,7 @@ private fun RelayEntry(
                 maxLines = if (showDetails) Int.MAX_VALUE else 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            relay.last.rxSnr?.let { SnrText(SNR_SLOT, it, SNR_DECIMALS_LIST, spreadingFactor) }
+            relay.last.rxSnr?.let { SnrText(SNR_SLOT, it, SNR_DECIMALS, spreadingFactor) }
             if (!car) {
                 Text(
                     agoText(relay.lastHeardMs, clock().wallMs),
@@ -1868,13 +1867,20 @@ private val SurveySessionSummary.pendingCount: Int
 private val SurveySessionSummary.waiting: Boolean
     get() = session.upload && pendingCount > 0
 
-/** A refused password is the one failure the user fixes here; [SurveyUploader] words it "HTTP 401" or "HTTP 403". */
+/**
+ * A refused password, which [SurveyUploader] words "HTTP 401" or "HTTP 403", is the one failure the user fixes here; no
+ * connection ([SurveyUploader.NO_CONNECTION]) is said in words rather than as the lookup error.
+ */
 @Composable
 @ReadOnlyComposable
-private fun uploadErrorText(error: String): String = if (error == "HTTP 401" || error == "HTTP 403") {
-    stringResource(R.string.survey_upload_failed_password, error)
-} else {
-    stringResource(R.string.survey_upload_failed, error)
+private fun uploadErrorText(error: String): String = when (error) {
+    "HTTP 401",
+    "HTTP 403",
+    -> stringResource(R.string.survey_upload_failed_password, error)
+
+    SurveyUploader.NO_CONNECTION -> stringResource(R.string.survey_upload_failed_offline)
+
+    else -> stringResource(R.string.survey_upload_failed, error)
 }
 
 @Composable
@@ -2216,40 +2222,15 @@ private fun UploadProgress(summary: SurveySessionSummary, uploadsOn: Boolean) {
     }
 }
 
-/** What SigSleuth kept and, if any, what it skipped and why. */
+/** How many packets SigSleuth kept and skipped; the reasons stay out, as a list of them crowded the card. */
 @Composable
 private fun serverText(session: SurveySession): String? {
     if (session.serverKept + session.serverSkipped == 0L) return null
-    val reasons =
-        SurveyUploader.decodeSkipReasons(session.serverSkipReasons).entries.map { (reason, count) ->
-            skipReasonText(reason, count)
-        }
-    return when {
-        session.serverSkipped == 0L -> stringResource(R.string.survey_server_kept_all, session.serverKept)
-
-        reasons.isEmpty() -> stringResource(R.string.survey_server_kept, session.serverKept, session.serverSkipped)
-
-        else ->
-            stringResource(
-                R.string.survey_server_kept_reasons,
-                session.serverKept,
-                session.serverSkipped,
-                reasons.joinToString(),
-            )
+    return if (session.serverSkipped == 0L) {
+        stringResource(R.string.survey_server_kept_all, session.serverKept)
+    } else {
+        stringResource(R.string.survey_server_kept, session.serverKept, session.serverSkipped)
     }
-}
-
-/** SigSleuth's reason names (coverage.py `skip_reason`) in words. */
-@Composable
-@ReadOnlyComposable
-private fun skipReasonText(reason: String, count: Long): String = when (reason) {
-    "no_position" -> stringResource(R.string.survey_skip_no_position, count)
-    "inaccurate" -> stringResource(R.string.survey_skip_inaccurate, count, SIGSLEUTH_MAX_ACCURACY_M)
-    "old_fix" -> stringResource(R.string.survey_skip_old_fix, count, SIGSLEUTH_MAX_FIX_AGE_S)
-    "too_old" -> stringResource(R.string.survey_skip_too_old, count)
-    "in_future" -> stringResource(R.string.survey_skip_in_future, count)
-    "no_sender" -> stringResource(R.string.survey_skip_no_sender, count)
-    else -> stringResource(R.string.survey_skip_other, count, reason.replace('_', ' '))
 }
 
 @Composable

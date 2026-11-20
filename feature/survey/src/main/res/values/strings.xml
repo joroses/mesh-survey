@@ -227,6 +227,8 @@
     <string name="survey_upload_all">Upload all</string>
     <string name="survey_upload_failed">Last upload failed: %1$s</string>
     <string name="survey_upload_failed_password">Last upload failed: %1$s. Check the password.</string>
+    <!-- The server's name could not be looked up, which is how having no internet shows. -->
+    <string name="survey_upload_failed_offline">Last upload failed: no internet connection, or the server name is wrong.</string>
     <string name="survey_sessions">Sessions</string>
     <string name="survey_no_sessions">No sessions yet</string>
     <string name="survey_no_sessions_hint">Each recording appears here, ready to upload or export.</string>
@@ -234,16 +236,6 @@
     <string name="survey_uploaded_all">Uploaded</string>
     <string name="survey_server_kept">SigSleuth kept %1$d and skipped %2$d</string>
     <string name="survey_server_kept_all">SigSleuth kept %1$d</string>
-    <string name="survey_server_kept_reasons">SigSleuth kept %1$d and skipped %2$d: %3$s</string>
-    <!-- SigSleuth's skip reasons, each after its count. %2$d is SigSleuth's limit, in metres or seconds. -->
-    <string name="survey_skip_no_position">%1$d without a position</string>
-    <string name="survey_skip_inaccurate">%1$d with a fix worse than %2$d m</string>
-    <string name="survey_skip_old_fix">%1$d with a fix older than %2$d s</string>
-    <string name="survey_skip_too_old">%1$d older than SigSleuth keeps</string>
-    <string name="survey_skip_in_future">%1$d timed in the future</string>
-    <string name="survey_skip_no_sender">%1$d without a sender</string>
-    <!-- A reason this version does not know; %2$s is SigSleuth's own name for it. -->
-    <string name="survey_skip_other">%1$d %2$s</string>
     <string name="survey_export">Export CSV</string>
     <!-- The menu on a session card holding Export CSV and Delete. -->
     <string name="survey_session_actions">Session actions</string>

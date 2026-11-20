@@ -41,6 +41,7 @@ import kotlinx.serialization.json.Json
 import org.koin.core.annotation.Single
 import org.meshtastic.core.common.di.ApplicationCoroutineScope
 import org.meshtastic.core.common.util.safeCatching
+import java.net.UnknownHostException
 import kotlin.concurrent.Volatile
 import kotlin.io.encoding.Base64
 import kotlin.time.Duration.Companion.seconds
@@ -210,10 +211,7 @@ class SurveyUploader(
             if (rows.isEmpty()) return true
             val ack = post(target, UploadRequest(session.toUpload(), rows.map { it.toUpload() }))
             val response = ack.getOrElse { error ->
-                dao.uploadFailed(
-                    session.id,
-                    (error.message ?: error::class.simpleName.orEmpty()).take(MAX_ERROR_LENGTH),
-                )
+                dao.uploadFailed(session.id, errorText(error))
                 Logger.w { "Signal survey upload failed: ${error.message}" }
                 return false
             }
@@ -263,8 +261,10 @@ class SurveyUploader(
     companion object {
         const val UPLOAD_PATH = "/api/v1/coverage/uploads"
         const val BATCH_SIZE = 500
-        private const val MAX_ERROR_LENGTH = 120
         private const val INVALID_URL = "The SigSleuth URL must start with https://"
+
+        /** The saved error when the server's name could not be looked up: no internet, or a wrong server name. */
+        const val NO_CONNECTION = "No connection"
         val RECORDING_INTERVAL = 60.seconds
 
         /** A session's saved skip reasons; an unreadable value counts as none. */
@@ -305,6 +305,19 @@ data class SurveyUploadProgress(val acknowledged: Long, val news: SurveyNews?, v
 internal fun serverNew(response: UploadResponse): Map<Long, Int> = response.heard
     .mapNotNull { heard -> heard.newCell?.let { heard.seq to if (it) SurveyNews.NEW_CELL else 0 } }
     .toMap()
+
+/**
+ * [SurveyUploader.NO_CONNECTION] when the server's name could not be looked up, which is what having no internet looks
+ * like, so the screen can say so in words; else the error's own message.
+ */
+private fun errorText(error: Throwable): String =
+    if (generateSequence(error) { it.cause }.any { it is UnknownHostException }) {
+        SurveyUploader.NO_CONNECTION
+    } else {
+        (error.message ?: error::class.simpleName.orEmpty()).take(MAX_ERROR_LENGTH)
+    }
+
+private const val MAX_ERROR_LENGTH = 120
 
 /** The upload password as HTTP Basic. SigSleuth ignores the user name, so a password alone must still be sent. */
 internal fun HttpRequestBuilder.authorize(target: SurveyUploadSettings) {

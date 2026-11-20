@@ -38,6 +38,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.meshtastic.core.common.di.ApplicationCoroutineScope
 import java.io.IOException
+import java.net.UnknownHostException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -80,6 +81,9 @@ class SurveyUploaderTest {
     /** Bodies the server received, and what it answers: it saves every batch unless [fail] is set. */
     private val received = mutableListOf<JsonObject>()
     private var fail = false
+
+    /** Thrown by the client instead of an answer, as the network layer throws when the phone is offline. */
+    private var thrown: Throwable? = null
     private var authorization: String? = null
 
     /** How many times a background retry was queued. */
@@ -99,6 +103,7 @@ class SurveyUploaderTest {
     private fun TestScope.uploader(): SurveyUploader {
         val engine = MockEngine { request ->
             authorization = request.headers[HttpHeaders.Authorization]
+            thrown?.let { throw it }
             if (fail) return@MockEngine respondError(HttpStatusCode.ServiceUnavailable)
             val body = Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject
             received += body
@@ -588,6 +593,18 @@ class SurveyUploaderTest {
 
         assertEquals(3L, dao.sessions.single().uploadedSeq)
         assertNull(dao.sessions.single().lastUploadError)
+    }
+
+    @Test
+    fun `a server name that cannot be looked up is saved as no connection, not as the lookup error`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        thrown = UnknownHostException("Unable to resolve host \"example.org\": No address associated with hostname")
+
+        uploader.upload()
+
+        assertEquals(SurveyUploader.NO_CONNECTION, dao.sessions.single().lastUploadError)
+        assertEquals(0L, dao.sessions.single().uploadedSeq)
     }
 
     @Test
