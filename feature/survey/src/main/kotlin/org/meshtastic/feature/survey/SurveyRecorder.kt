@@ -376,31 +376,8 @@ class SurveyRecorder(
             }
             current.newToYou.count(row)
             val relayByte = row.relayByte
-            val evidence = relayByte?.let { byte ->
-                if (row.isDirect()) {
-                    RelayEvidence(RelayGuess.Direct(row.senderNodeId), emptyList())
-                } else {
-                    val db = nodes.nodeDBbyNum.value
-                    // Positions only count from a packet fix, so a fixless packet skips the scan.
-                    val placed =
-                        if (row.latitude == null) {
-                            emptyList()
-                        } else {
-                            val sinceMs = row.heardAtMs - DIRECT_HISTORY.inWholeMilliseconds
-                            placedWith(byte, db.values, current.mapped, sinceMs, current.surveyNode)
-                        }
-                    current.neighbours.weigh(
-                        byte,
-                        row.heardAtMs,
-                        row.senderNodeId,
-                        row.latitude,
-                        row.longitude,
-                        roleOf = { id -> db[id.toInt()]?.user?.role },
-                        placed = placed,
-                        signal = row.signal(),
-                    )
-                }
-            }
+            val evidence =
+                current.neighbours.evidenceFor(row, nodes.nodeDBbyNum.value, current.mapped, current.surveyNode)
             // After the guess, so a packet is never its own evidence.
             current.neighbours.record(row)
             mutableState.update {
@@ -413,18 +390,8 @@ class SurveyRecorder(
                     if (relayByte == null || evidence == null) {
                         it.relays
                     } else {
-                        val known = it.relays[relayByte]
                         val stats =
-                            with(evidence) {
-                                RelayStats(
-                                    (known?.packets ?: 0) + 1,
-                                    row,
-                                    guess,
-                                    candidates,
-                                    ruledOut,
-                                    known?.server ?: it.pendingServerAnswers[relayByte],
-                                )
-                            }
+                            it.relays[relayByte].withPacket(row, evidence, it.pendingServerAnswers[relayByte])
                         it.relays + (relayByte to stats)
                     },
                     pendingServerAnswers =

@@ -312,9 +312,54 @@ data class RelayStats(
 }
 
 /**
+ * These stats with one more packet, [row], and the guess made for it ([evidenceFor]). SigSleuth's answer stays;
+ * [server] is the one to take when there is none yet.
+ */
+fun RelayStats?.withPacket(row: SurveyMeasurement, evidence: RelayEvidence, server: ServerAnswer? = null) = RelayStats(
+    (this?.packets ?: 0) + 1,
+    row,
+    evidence.guess,
+    evidence.candidates,
+    evidence.ruledOut,
+    this?.server ?: server,
+)
+
+/**
+ * The guess for [row]'s relay byte, made before [row] is [DirectNeighbours.record]ed so a packet is never its own
+ * evidence: its sender for a direct packet, else [DirectNeighbours.weigh] with the roles in [nodes], the survey radio's
+ * node database, and the nodes [placedWith] places. Null without a relay byte.
+ */
+fun DirectNeighbours.evidenceFor(
+    row: SurveyMeasurement,
+    nodes: Map<Int, Node>,
+    mapped: MappedNodes?,
+    surveyNode: Int,
+): RelayEvidence? {
+    val byte = row.relayByte ?: return null
+    return if (row.isDirect()) {
+        RelayEvidence(RelayGuess.Direct(row.senderNodeId), emptyList())
+    } else {
+        // Positions only count from a packet fix, so a fixless packet skips the scan.
+        val sinceMs = row.heardAtMs - DIRECT_HISTORY.inWholeMilliseconds
+        val placed = row.latitude?.let { placedWith(byte, nodes.values, mapped, sinceMs, surveyNode) }.orEmpty()
+        weigh(
+            byte,
+            row.heardAtMs,
+            row.senderNodeId,
+            row.latitude,
+            row.longitude,
+            roleOf = { id -> nodes[id.toInt()]?.user?.role },
+            placed = placed,
+            signal = row.signal(),
+        )
+    }
+}
+
+/**
  * The nodes the survey radio has heard directly, by relay byte, with when each was last heard so. Only these are
  * candidates for a relay: a node anywhere in the node database could share the byte, which is why upstream dropped its
- * whole-database guess (meshtastic/Meshtastic-Android#3773). Not thread-safe; only the recorder's writer uses it.
+ * whole-database guess (meshtastic/Meshtastic-Android#3773). Not thread-safe: one writer each, the recorder's or a
+ * replay's ([replayRelays]).
  */
 class DirectNeighbours(history: List<DirectSender> = emptyList()) {
     private val byByte = mutableMapOf<Int, MutableSet<Long>>()

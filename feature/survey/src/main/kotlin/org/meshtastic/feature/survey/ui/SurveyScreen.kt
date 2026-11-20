@@ -36,6 +36,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,7 +59,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -140,6 +140,7 @@ import org.meshtastic.core.resources.survey_relay_server_candidate
 import org.meshtastic.core.resources.survey_relay_server_candidates
 import org.meshtastic.core.ui.component.EmptyState
 import org.meshtastic.core.ui.icon.ArrowBack
+import org.meshtastic.core.ui.icon.BarChart
 import org.meshtastic.core.ui.icon.Check
 import org.meshtastic.core.ui.icon.CheckCircle
 import org.meshtastic.core.ui.icon.ChevronRight
@@ -216,6 +217,7 @@ fun SurveyScreen(
     val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
     val directSenders by viewModel.directSenders.collectAsStateWithLifecycle()
+    val opened by viewModel.opened.collectAsStateWithLifecycle()
     val totals =
         remember(sessions, deleted, directSenders) { surveyTotals(sessions.map { it.session }, deleted, directSenders) }
     // Only while this screen is in front: Android drops the flag once the app is in the background.
@@ -329,6 +331,7 @@ fun SurveyScreen(
                     uploadsOn = uploadsOn,
                     uploading = uploading,
                     showRadio = older == null || radioKey(older) != radioKey(summary.session),
+                    onOpen = { viewModel.open(summary.session.id) }.takeIf { summary.measurementCount > 0 },
                     onUpload = { viewModel.upload(summary.session.id) },
                     onExport = {
                         exportSessionId = summary.session.id
@@ -338,6 +341,7 @@ fun SurveyScreen(
                 )
             }
         }
+        opened?.let { SessionRelaysSheet(it, onDismiss = viewModel::closeSession) }
     }
 }
 
@@ -507,7 +511,14 @@ private fun RecordingDetails(
         if (!state.waitingForRadio) GpsStatus(state.fix, clock)
         LastPacket(last, session.spreadingFactor, state.relays, relayNames, clock)
         if (showRelays) {
-            RelaysSheet(state, session.spreadingFactor, relayNames, clock, onDismiss = { showRelays = false })
+            RelaysSheet(
+                state.relays,
+                state.neighbours,
+                session.spreadingFactor,
+                relayNames,
+                clock,
+                onDismiss = { showRelays = false },
+            )
         }
     }
 }
@@ -557,15 +568,15 @@ private fun LastPacket(
 }
 
 /**
- * One figure with its label under it, then the [note] of what was new to this phone in green and the [mapNote] of what
- * SigSleuth's map gained in its colour. With [onClick], the figure and its label are a filled chip; every stat is inset
- * by [STAT_INSET] so their figures line up whether or not one is a chip.
+ * One figure with its [FigureLabel] under it, then the [note] of what was new to this phone in green and the [mapNote]
+ * of what SigSleuth's map gained in its colour. With [onClick], the figure and its label are a filled chip; every stat
+ * is inset by [STAT_INSET] so their figures line up whether or not one is a chip.
  */
 @Composable
 @Suppress("LongParameterList")
 private fun Stat(
     value: String,
-    label: String,
+    figure: Figure,
     modifier: Modifier = Modifier,
     note: String? = null,
     mapNote: String? = null,
@@ -595,11 +606,8 @@ private fun Stat(
                     Icon(MeshtasticIcons.ChevronRight, contentDescription = null, Modifier.size(20.dp), tint = content)
                 }
             }
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (onClick == null) colors.onSurfaceVariant else content,
-            )
+            // In the chip, its icon takes the chip's colour: the figure's own has too little contrast on it.
+            if (onClick == null) FigureLabel(figure) else FigureLabel(figure, content, content)
         }
         val notes = Modifier.padding(horizontal = STAT_INSET)
         note?.let { Text(it, notes, style = MaterialTheme.typography.labelMedium, color = colors.StatusGreen) }
@@ -609,6 +617,57 @@ private fun Stat(
 
 /** How far a [Stat]'s text sits inside its chip, and how far a row of them reaches past its parent on each side. */
 private val STAT_INSET = 8.dp
+
+/**
+ * What a card's figure counts, with its label and the icon and colour it has on every card: cells in a grid, relays in
+ * the relay byte's orange, senders heard directly in the colour of what your radio heard (as in the relays list), and
+ * what SigSleuth's map gained in SigSleuth's.
+ */
+private enum class Figure(@StringRes val label: Int) {
+    CELLS(R.string.survey_stat_cells),
+    RELAYS(R.string.survey_stat_relays_heard),
+    DIRECT(R.string.survey_stat_direct),
+    PACKETS(R.string.survey_stat_packets),
+    MAP(R.string.survey_totals_map),
+}
+
+@Composable
+private fun Figure.icon(): ImageVector = when (this) {
+    Figure.CELLS -> ImageVector.vectorResource(R.drawable.survey_ic_grid)
+    Figure.RELAYS -> MeshtasticIcons.Route
+    Figure.DIRECT -> MeshtasticIcons.Rssi
+    Figure.PACKETS -> MeshtasticIcons.BarChart
+    Figure.MAP -> MeshtasticIcons.Map
+}
+
+@Composable
+@ReadOnlyComposable
+private fun Figure.color(): Color = when (this) {
+    Figure.RELAYS -> MaterialTheme.colorScheme.StatusOrange
+
+    Figure.DIRECT -> MaterialTheme.colorScheme.tertiary
+
+    Figure.MAP -> MaterialTheme.colorScheme.StatusSky
+
+    Figure.CELLS,
+    Figure.PACKETS,
+    -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+/** A figure's label after its icon, the icon in [iconTint] (the figure's colour) and the words in [color]. */
+@Composable
+private fun FigureLabel(
+    figure: Figure,
+    iconTint: Color = figure.color(),
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(figure.icon(), contentDescription = null, Modifier.size(FIGURE_ICON_SIZE), tint = iconTint)
+        Text(stringResource(figure.label), style = MaterialTheme.typography.labelMedium, color = color)
+    }
+}
+
+private val FIGURE_ICON_SIZE = 14.dp
 
 /** Widens the content by [x] on each side, so text inset by [x] lines up with the parent's. */
 private fun Modifier.bleed(x: Dp) = layout { measurable, constraints ->
@@ -904,18 +963,20 @@ private fun highlighted(text: String, part: String, style: SpanStyle): Annotated
 }
 
 /**
- * This session's relay bytes, most packets first, each with how sure its guess is, its last packet, and every candidate
- * with how it is known, measured from where that packet was heard: the guess was made there, not where the phone is
- * now.
+ * A session's relay bytes in a sheet, [RelaysList]: the recording session's from its card, an ended one's from its own
+ * ([SessionRelaysSheet]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongParameterList")
 private fun RelaysSheet(
-    state: SurveyState,
+    relays: Map<Int, RelayStats>?,
+    neighbours: Map<Long, DirectSender>,
     spreadingFactor: Int,
     names: Map<Long, String>,
     clock: () -> SurveyNow,
     onDismiss: () -> Unit,
+    subtitle: String? = null,
 ) {
     val sheetState =
         rememberBottomSheetState(
@@ -923,25 +984,84 @@ private fun RelaysSheet(
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
         )
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        val now = clock().wallMs
-        LazyColumn(
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item {
-                Text(
-                    stringResource(R.string.survey_relays_title),
-                    Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-            }
-            val relays = state.relays.entries.sortedByDescending { it.value.packets }
-            itemsIndexed(relays, key = { _, entry -> entry.key }) { index, (byte, relay) ->
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (index > 0) HorizontalDivider()
-                    RelayEntry(byte, relay, spreadingFactor, state.neighbours, names, now)
+        RelaysList(relays, neighbours, spreadingFactor, names, clock().wallMs, subtitle)
+    }
+}
+
+/**
+ * An ended session's relays, rebuilt from its saved packets ([SurveyViewModel.opened]), under its date and length. The
+ * guesses use the node database and SigSleuth's list as they are now, and SigSleuth's answers are not kept.
+ */
+@Composable
+private fun SessionRelaysSheet(opened: OpenedSession, onDismiss: () -> Unit) {
+    val clock = rememberSurveyClock()
+    RelaysSheet(
+        opened.relays?.relays,
+        opened.relays?.neighbours.orEmpty(),
+        opened.session.spreadingFactor,
+        opened.names,
+        clock::value,
+        onDismiss,
+        subtitle = sessionTitle(opened.session),
+    )
+}
+
+/**
+ * Relay bytes, most packets first, each with how sure its guess is, its last packet, and every candidate with how it is
+ * known, measured from where that packet was heard: the guess was made there, not where the phone is now. A spinner
+ * while [relays] is null, as an ended session's are rebuilt. Times are measured from [now].
+ */
+@Composable
+@Suppress("LongParameterList")
+private fun RelaysList(
+    relays: Map<Int, RelayStats>?,
+    neighbours: Map<Long, DirectSender>,
+    spreadingFactor: Int,
+    names: Map<Long, String>,
+    now: Long,
+    subtitle: String? = null,
+) {
+    val sorted = remember(relays) { relays?.entries?.sortedByDescending { it.value.packets } }
+    LazyColumn(
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Column(Modifier.semantics(mergeDescendants = true) { heading() }) {
+                Text(stringResource(R.string.survey_relays_title), style = MaterialTheme.typography.headlineSmall)
+                subtitle?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
+        }
+        when {
+            sorted == null ->
+                item {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+            sorted.isEmpty() ->
+                item {
+                    Text(
+                        stringResource(R.string.survey_relays_none),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+            else ->
+                itemsIndexed(sorted, key = { _, entry -> entry.key }) { index, (byte, relay) ->
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (index > 0) HorizontalDivider()
+                        RelayEntry(byte, relay, spreadingFactor, neighbours, names, now)
+                    }
+                }
         }
     }
 }
@@ -1624,8 +1744,8 @@ private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSett
 
 /**
  * A session: when, its upload state, what it found, then small details. Its radio is named only when [showRadio], so a
- * list of sessions on one radio does not repeat it. Export and Delete wait in a menu; Upload shows while rows are
- * missing.
+ * list of sessions on one radio does not repeat it. A tap, or its Relays chip as on the recording card, opens its
+ * relays ([onOpen], null without packets). Export and Delete wait in a menu; Upload shows while rows are missing.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -1636,6 +1756,7 @@ private fun SessionCard(
     uploadsOn: Boolean,
     uploading: Boolean,
     showRadio: Boolean,
+    onOpen: (() -> Unit)?,
     onUpload: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
@@ -1644,10 +1765,8 @@ private fun SessionCard(
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val canUpload = uploadsOn && summary.pendingCount > 0
     // A waiting session is outlined in the colour of the Upload card's waiting line, so it shows while scrolling.
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        border = if (waiting) BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary) else null,
-    ) {
+    val border = if (waiting) BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary) else null
+    val content: @Composable ColumnScope.() -> Unit = {
         // The bottom row's buttons bring their own touch padding, so the card's is smaller under them.
         Column(
             Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
@@ -1661,7 +1780,7 @@ private fun SessionCard(
                 )
                 SessionBadge(summary, waiting)
             }
-            session.news?.takeIf { it.cells > 0 }?.let { NewsStats(it) }
+            session.news?.takeIf { it.cells > 0 }?.let { NewsStats(it, onRelays = onOpen) }
             UploadProgress(summary, uploadsOn)
             // The details, small and muted under what the session found.
             Column {
@@ -1704,6 +1823,11 @@ private fun SessionCard(
             )
         }
     }
+    if (onOpen == null) {
+        Card(Modifier.fillMaxWidth(), border = border, content = content)
+    } else {
+        Card(onClick = onOpen, Modifier.fillMaxWidth(), border = border, content = content)
+    }
 }
 
 /** Export and, while nothing records, Delete: every ended session has them, so they wait behind ⋮. */
@@ -1742,9 +1866,9 @@ private fun SessionMenu(deletable: Boolean, onExport: () -> Unit, onDelete: () -
 private val MENU_BUTTON_INSET = 12.dp
 
 /**
- * Cells, relays and senders heard directly, each with what was new to this phone under it in green, and under the
+ * Relays, cells and senders heard directly, each with what was new to this phone under it in green, and under the
  * cells, once SigSleuth has answered, the [mapCells] its map gained. With [onRelays], the relays figure opens their
- * list.
+ * list; it comes first, where a button is easy to find.
  */
 @Composable
 private fun NewsStats(
@@ -1763,27 +1887,27 @@ private fun NewsStats(
         }
     Row(Modifier.fillMaxWidth().bleed(STAT_INSET), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Stat(
-            news.cells.toString(),
-            stringResource(R.string.survey_stat_cells),
-            Modifier.weight(1f),
-            note = news.localNewCells.takeIf { it > 0 }?.let { stringResource(R.string.survey_stat_new, it) },
-            mapNote = mapCells?.let { stringResource(R.string.survey_stat_added, it) },
-        )
-        Stat(
             relays.toString(),
-            stringResource(R.string.survey_stat_relays_heard),
+            Figure.RELAYS,
             Modifier.weight(1f),
             note = newIn(news.localNewRelayCells),
             onClick = onRelays,
             onClickLabel = stringResource(R.string.survey_relays_open),
         )
         Stat(
+            news.cells.toString(),
+            Figure.CELLS,
+            Modifier.weight(1f),
+            note = news.localNewCells.takeIf { it > 0 }?.let { stringResource(R.string.survey_stat_new, it) },
+            mapNote = mapCells?.let { stringResource(R.string.survey_stat_added, it) },
+        )
+        Stat(
             news.direct.toString(),
-            stringResource(R.string.survey_stat_direct),
+            Figure.DIRECT,
             Modifier.weight(1f),
             note = newIn(news.localNewDirectCells),
         )
-        packets?.let { Stat(it.toString(), stringResource(R.string.survey_stat_packets), Modifier.weight(1f)) }
+        packets?.let { Stat(it.toString(), Figure.PACKETS, Modifier.weight(1f)) }
     }
 }
 
@@ -1809,52 +1933,40 @@ private fun SessionBadge(summary: SurveySessionSummary, waiting: Boolean) {
     }
 }
 
-/** The cells, the senders heard directly and the cells added to the map of every session on this phone. */
+/**
+ * The cells, the senders heard directly and the cells added to the map of every session on this phone, in the cards'
+ * colours, so the status colours keep their contrast; the biggest numbers on the screen set it apart.
+ */
 @Composable
 private fun TotalsCard(totals: SurveyTotals) {
-    // The one card in the container colour, with the screen's biggest numbers: the progress across every session.
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors =
-        CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        ),
-    ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(MeshtasticIcons.Map, contentDescription = null)
-                Text(stringResource(R.string.survey_totals), style = MaterialTheme.typography.titleMedium)
-            }
+            Text(stringResource(R.string.survey_totals), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TotalStat(totals.cells, stringResource(R.string.survey_stat_cells), Modifier.weight(1f))
-                TotalStat(totals.direct, stringResource(R.string.survey_stat_direct), Modifier.weight(1f))
-                totals.mapCells?.let {
-                    TotalStat(it, stringResource(R.string.survey_totals_map), Modifier.weight(1f))
-                }
+                TotalStat(totals.cells, Figure.CELLS, Modifier.weight(1f))
+                TotalStat(totals.direct, Figure.DIRECT, Modifier.weight(1f))
+                totals.mapCells?.let { TotalStat(it, Figure.MAP, Modifier.weight(1f)) }
             }
         }
     }
 }
 
-/** A [TotalsCard] figure: [Stat]'s layout, larger, in the card's content colour. */
+/**
+ * A [TotalsCard] figure: [Stat]'s layout, larger. The cells added to the map are in SigSleuth's colour, as under a
+ * session's cells.
+ */
 @Composable
-private fun TotalStat(value: Int, label: String, modifier: Modifier = Modifier) {
+private fun TotalStat(value: Int, figure: Figure, modifier: Modifier = Modifier) {
     Column(modifier.semantics(mergeDescendants = true) {}.padding(vertical = 4.dp)) {
         Text(
             value.toString(),
             style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
+            color = if (figure == Figure.MAP) figure.color() else Color.Unspecified,
             maxLines = 1,
         )
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = LocalContentColor.current.copy(alpha = SECONDARY_ALPHA),
-        )
+        FigureLabel(figure)
     }
 }
-
-private const val SECONDARY_ALPHA = 0.8f
 
 /** When it started and, once ended, how long it ran: "16 Nov 2026 10:02 · 0:07:25". */
 private fun sessionTitle(session: SurveySession): String {

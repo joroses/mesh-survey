@@ -79,7 +79,8 @@
     </plurals>
     <!-- The card under Sessions: every session on this phone together. Cells count once per LoRa settings; direct nodes once. -->
     <string name="survey_totals">Surveyed so far</string>
-    <string name="survey_totals_map">Added to the map</string>
+    <!-- Beside the totals' cells and direct nodes: the cells SigSleuth's map gained, worded like survey_stat_added. -->
+    <string name="survey_totals_map">Added to map</string>
     <!-- A session's upload state, beside its date. -->
     <string name="survey_session_waiting">Waiting to upload</string>
     <!-- Over the last packet's signal and relay: %1$s is how long ago it came ("12 s ago"). -->
@@ -106,6 +107,10 @@
     <string name="survey_relay_or">%1$s or %2$s</string>
     <string name="survey_relays_open">Show relays</string>
     <string name="survey_relays_title">Relays</string>
+    <!-- An ended session's relays list when none of its packets carried a relay byte. -->
+    <string name="survey_relays_none">No relays heard</string>
+    <!-- An ended session's relays could not be read from the phone's storage. -->
+    <string name="survey_relays_failed">Could not read this session</string>
     <!-- Marks beside a relay byte, read out by screen readers. -->
     <string name="survey_relay_confirmed">Confirmed by SigSleuth</string>
     <string name="survey_relay_likely">Likely guess</string>

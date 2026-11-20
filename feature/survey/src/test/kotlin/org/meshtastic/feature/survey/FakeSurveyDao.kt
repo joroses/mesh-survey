@@ -70,6 +70,7 @@ internal class FakeSurveyDao : SurveyDao {
         bandwidthKhz: Float,
         frequencyMhz: Float?,
         sinceMs: Long,
+        beforeMs: Long,
     ): List<DirectPlace> {
         val network = SurveyNetwork(spreadingFactor, bandwidthKhz, frequencyMhz)
         val sessionIds =
@@ -81,7 +82,7 @@ internal class FakeSurveyDao : SurveyDao {
                 .map { it.id }
                 .toSet()
         return measurements
-            .filter { it.sessionId in sessionIds && it.heardAtMs >= sinceMs && it.isDirect() }
+            .filter { it.sessionId in sessionIds && it.heardAtMs in sinceMs..<beforeMs && it.isDirect() }
             .groupBy { row ->
                 row.senderNodeId to row.latitude?.let { lat -> row.longitude?.let { lon -> DirectCell.of(lat, lon) } }
             }

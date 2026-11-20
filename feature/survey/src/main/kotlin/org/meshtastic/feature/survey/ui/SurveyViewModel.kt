@@ -20,26 +20,37 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 import org.meshtastic.core.common.di.ApplicationCoroutineScope
+import org.meshtastic.core.common.util.ioDispatcher
 import org.meshtastic.core.common.util.safeCatching
 import org.meshtastic.core.model.ConnectionState
+import org.meshtastic.core.model.Node
 import org.meshtastic.core.repository.NodeRepository
 import org.meshtastic.core.repository.ServiceRepository
 import org.meshtastic.core.ui.util.SnackbarManager
 import org.meshtastic.core.ui.viewmodel.stateInWhileSubscribed
+import org.meshtastic.feature.survey.MappedNodes
 import org.meshtastic.feature.survey.R
+import org.meshtastic.feature.survey.RelayStats
+import org.meshtastic.feature.survey.ReplayedRelays
 import org.meshtastic.feature.survey.SurveyCsv
 import org.meshtastic.feature.survey.SurveyDao
 import org.meshtastic.feature.survey.SurveyDeleted
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveyRecorder
+import org.meshtastic.feature.survey.SurveyRelayNodes
 import org.meshtastic.feature.survey.SurveyService
+import org.meshtastic.feature.survey.SurveySession
 import org.meshtastic.feature.survey.SurveySessionSummary
 import org.meshtastic.feature.survey.SurveySettings
 import org.meshtastic.feature.survey.SurveyStartRequest
@@ -47,9 +58,20 @@ import org.meshtastic.feature.survey.SurveyState
 import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.publishSurveyShortcut
+import org.meshtastic.feature.survey.replayRelays
 import java.util.Locale
 
-@Suppress("LongParameterList")
+/**
+ * An ended session opened from its card: its relays once [replayRelays] has rebuilt them (null while it works), with
+ * the short names of the nodes in them.
+ */
+data class OpenedSession(
+    val session: SurveySession,
+    val relays: ReplayedRelays? = null,
+    val names: Map<Long, String> = emptyMap(),
+)
+
+@Suppress("LongParameterList", "TooManyFunctions")
 @KoinViewModel
 class SurveyViewModel(
     private val app: Application,
@@ -58,6 +80,7 @@ class SurveyViewModel(
     private val settings: SurveySettings,
     private val dao: SurveyDao,
     private val startRequest: SurveyStartRequest,
+    relayNodes: SurveyRelayNodes,
     nodes: NodeRepository,
     service: ServiceRepository,
     private val snackbars: SnackbarManager,
@@ -110,33 +133,53 @@ class SurveyViewModel(
      */
     val relayNames: StateFlow<Map<Long, String>> =
         combine(
-            state
-                .map { current ->
-                    val sigSleuth = mutableMapOf<Long, String>()
-                    val ids =
-                        current.relays.values.flatMapTo(mutableSetOf()) { relay ->
-                            relay.server?.let { answer ->
-                                answer.nodeId?.let { id -> answer.shortName?.let { sigSleuth[id] = it } }
-                            }
-                            relay.guess.nodeIds +
-                                relay.candidates.map { it.nodeId } +
-                                relay.ruledOut.map { it.nodeId } +
-                                listOfNotNull(relay.server?.nodeId)
-                        }
-                    ids.forEach { id -> current.mapped?.names?.get(id)?.let { sigSleuth.putIfAbsent(id, it) } }
-                    ids to sigSleuth.toMap()
-                }
-                .distinctUntilChanged(),
+            state.map { relayNodeIds(it.relays.values, it.mapped) }.distinctUntilChanged(),
             nodes.nodeDBbyNum,
         ) { (ids, sigSleuth), db ->
-            ids.mapNotNull { id ->
-                (db[id.toInt()]?.user?.short_name?.takeIf { it.isNotBlank() } ?: sigSleuth[id])?.let {
-                    id to it
-                }
-            }
-                .toMap()
+            shortNames(ids, sigSleuth, db)
         }
             .stateInWhileSubscribed(emptyMap())
+
+    private val openedId = MutableStateFlow<String?>(null)
+
+    /**
+     * The ended session opened from its card ([open]), its relays rebuilt from its saved packets with the node database
+     * and SigSleuth's relay node list as they are now. Null while none is open, or once it is gone.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val opened: StateFlow<OpenedSession?> =
+        openedId
+            .transformLatest { id ->
+                val session = id?.let { safeCatching { dao.session(it) }.getOrNull() }
+                emit(session?.let { OpenedSession(it) })
+                if (session == null) return@transformLatest
+                val db = nodes.nodeDBbyNum.value
+                safeCatching {
+                    withContext(ioDispatcher) {
+                        val mapped =
+                            relayNodes.saved(session.spreadingFactor, session.bandwidthKhz, session.frequencyMhz)
+                        val replayed = dao.replayRelays(session, db, mapped)
+                        val (ids, sigSleuth) = relayNodeIds(replayed.relays.values, mapped)
+                        OpenedSession(session, replayed, shortNames(ids, sigSleuth, db))
+                    }
+                }
+                    .onSuccess { emit(it) }
+                    .onFailure { error ->
+                        Logger.w { "Survey session relays not rebuilt: ${error::class.simpleName}" }
+                        snackbars.showSnackbar(app.getString(R.string.survey_relays_failed))
+                        openedId.value = null
+                    }
+            }
+            .stateInWhileSubscribed(null)
+
+    /** Opens an ended session's relays ([opened]). */
+    fun open(sessionId: String) {
+        openedId.value = sessionId
+    }
+
+    fun closeSession() {
+        openedId.value = null
+    }
 
     /** Call once location (and, on Android 13+, notification) permission is granted. */
     fun start() = SurveyService.start(app)
@@ -192,3 +235,28 @@ class SurveyViewModel(
         }
     }
 }
+
+/**
+ * The nodes in [relays]' guesses, candidates, ruled-out nodes and SigSleuth's answers, with the short names SigSleuth
+ * gave them in its answers or on its map ([mapped]).
+ */
+private fun relayNodeIds(relays: Collection<RelayStats>, mapped: MappedNodes?): Pair<Set<Long>, Map<Long, String>> {
+    val sigSleuth = mutableMapOf<Long, String>()
+    val ids =
+        relays.flatMapTo(mutableSetOf()) { relay ->
+            relay.server?.let { answer -> answer.nodeId?.let { id -> answer.shortName?.let { sigSleuth[id] = it } } }
+            relay.guess.nodeIds +
+                relay.candidates.map { it.nodeId } +
+                relay.ruledOut.map { it.nodeId } +
+                listOfNotNull(relay.server?.nodeId)
+        }
+    ids.forEach { id -> mapped?.names?.get(id)?.let { sigSleuth.putIfAbsent(id, it) } }
+    return ids to sigSleuth.toMap()
+}
+
+/** The short names of [ids] in the node database ([db]), else in [sigSleuth]'s; a node in neither is left out. */
+private fun shortNames(ids: Set<Long>, sigSleuth: Map<Long, String>, db: Map<Int, Node>): Map<Long, String> =
+    ids.mapNotNull { id ->
+        (db[id.toInt()]?.user?.short_name?.takeIf { it.isNotBlank() } ?: sigSleuth[id])?.let { id to it }
+    }
+        .toMap()

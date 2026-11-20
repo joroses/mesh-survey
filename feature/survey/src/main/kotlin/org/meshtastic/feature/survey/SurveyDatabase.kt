@@ -273,16 +273,17 @@ interface SurveyDao {
     suspend fun measurementsAfter(sessionId: String, afterSeq: Long, limit: Int): List<SurveyMeasurement>
 
     /**
-     * Each cell where [receiverNodeId] heard a sender directly since [sinceMs], across sessions on the same network
-     * ([SAME_NETWORK]), with its latest direct time and strongest signal. Fixless receptions share a null-cell row.
-     * Another network surveyed with the same radio adds no candidates. The `direct` WHERE clause repeats [isDirect],
-     * with [relayByteOf]'s `00` → `FF` mapping as the CASE; the signal CASE repeats [signalOf] (aggregate MAX skips its
-     * NULLs; two-argument MIN is the scalar one).
+     * Each cell where [receiverNodeId] heard a sender directly from [sinceMs] until before [beforeMs], across sessions
+     * on the same network ([SAME_NETWORK]), with its latest direct time and strongest signal. Fixless receptions share
+     * a null-cell row. Another network surveyed with the same radio adds no candidates. The `direct` WHERE clause
+     * repeats [isDirect], with [relayByteOf]'s `00` → `FF` mapping as the CASE; the signal CASE repeats [signalOf]
+     * (aggregate MAX skips its NULLs; two-argument MIN is the scalar one).
      */
     @Query(
         "WITH direct AS (SELECT m.sender_node_id, m.heard_at_ms, m.latitude, m.longitude, m.rx_rssi, m.rx_snr " +
             "FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
-            "WHERE s.receiver_node_id = :receiverNodeId AND $SAME_NETWORK AND m.heard_at_ms >= :sinceMs " +
+            "WHERE s.receiver_node_id = :receiverNodeId AND $SAME_NETWORK " +
+            "AND m.heard_at_ms >= :sinceMs AND m.heard_at_ms < :beforeMs " +
             "AND m.hop_start = m.hop_limit " +
             "AND m.relay_byte = CASE WHEN m.sender_node_id % 256 = 0 THEN 255 ELSE m.sender_node_id % 256 END) " +
             "SELECT d.sender_node_id AS nodeId, MAX(d.heard_at_ms) AS lastDirectMs, " +
@@ -298,6 +299,7 @@ interface SurveyDao {
         bandwidthKhz: Float,
         frequencyMhz: Float?,
         sinceMs: Long,
+        beforeMs: Long,
     ): List<DirectPlace>
 
     /**
@@ -323,9 +325,12 @@ interface SurveyDao {
     }
 
     /** [directPlaces] for [session]'s radio and settings. */
-    suspend fun directPlaces(session: SurveySession, sinceMs: Long): List<DirectPlace> = with(session) {
-        directPlaces(receiverNodeId, spreadingFactor, bandwidthKhz, frequencyMhz, sinceMs)
-    }
+    suspend fun directPlaces(
+        session: SurveySession,
+        sinceMs: Long,
+        beforeMs: Long = Long.MAX_VALUE,
+    ): List<DirectPlace> =
+        with(session) { directPlaces(receiverNodeId, spreadingFactor, bandwidthKhz, frequencyMhz, sinceMs, beforeMs) }
 
     @Query("UPDATE survey_session SET status = :status, ended_at = :endedAt WHERE id = :sessionId")
     suspend fun endSession(sessionId: String, status: SurveyStatus, endedAt: Long)

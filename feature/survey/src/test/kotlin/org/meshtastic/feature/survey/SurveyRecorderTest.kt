@@ -806,6 +806,75 @@ class SurveyRecorderTest {
         }
 
     @Test
+    fun `an ended session's relays replay as they were guessed while it recorded`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // Heard directly in an earlier session on the same radio and settings, without a fix.
+            dao.insertSession(
+                SurveySession(
+                    id = "earlier",
+                    startedAt = 0,
+                    status = SurveyStatus.STOPPED,
+                    receiverNodeId = 1,
+                    receiverName = "",
+                    modemPreset = "LONG_FAST",
+                    spreadingFactor = 11,
+                    bandwidthKhz = 250f,
+                    frequencyMhz = 869.525f,
+                    appVersion = "test",
+                ),
+            )
+            dao.insertMeasurement(
+                SurveyMeasurement(
+                    sessionId = "earlier",
+                    heardAtMs = 999_000,
+                    latitude = null,
+                    longitude = null,
+                    accuracyM = null,
+                    fixAgeMs = null,
+                    senderNodeId = 0x13F,
+                    recipientNodeId = 0xFFFFFFFF,
+                    packetId = 1,
+                    rxSnr = null,
+                    rxRssi = null,
+                    hopStart = HOP_START,
+                    hopLimit = HOP_START,
+                    relayByte = 0x3F,
+                ),
+            )
+            nodes.setNodes(
+                listOf(
+                    TestDataFactory.createTestNode(num = 0x355, lastHeard = 1_000)
+                        .copy(position = position(10_000, 10_000)),
+                ),
+            )
+            savedMapped = MappedNodes(0, listOf(MappedNode(0x466, "MAP", 0.01, 0.0, estimated = true, null)))
+            val recorder = recorder()
+            recorder.start()
+            location.send(SurveyFix(5_000, 0.0, 0.0, 10f))
+            hear(from = 0x23F, relay = 0x3F)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x55)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x66)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x77)
+            hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+            val live = recorder.state.value
+            recorder.stop()
+
+            val session = dao.sessions.single { it.id == live.session?.id }
+            val replayed = dao.replayRelays(session, nodes.nodeDBbyNum.value, savedMapped)
+
+            assertEquals(
+                mapOf(0x3F to 3, 0x55 to 1, 0x66 to 1, 0x77 to 1),
+                replayed.relays.mapValues { it.value.packets },
+            )
+            assertEquals(RelayGuess.Ambiguous(listOf(0x23F, 0x13F)), replayed.relays[0x3F]?.guess)
+            assertEquals(RelayGuess.Possible(0x355), replayed.relays[0x55]?.guess)
+            assertEquals(RelayGuess.Possible(0x466), replayed.relays[0x66]?.guess)
+            assertEquals(live.relays, replayed.relays)
+            assertEquals(live.neighbours, replayed.neighbours)
+        }
+
+    @Test
     fun `a problem met while recording ends with the session`() = runTest(UnconfinedTestDispatcher()) {
         val recorder = recorder()
         recorder.start()

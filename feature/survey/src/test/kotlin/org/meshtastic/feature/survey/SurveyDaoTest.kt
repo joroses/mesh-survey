@@ -320,6 +320,11 @@ class SurveyDaoTest {
                     places.toSet(),
                 )
                 assertEquals(6, places.size)
+                // An ended session's history stops where it started, as the recorder's did.
+                assertEquals(
+                    setOf(DirectPlace(0x102, 10, 500, 1000), DirectPlace(0x102, 54, -1, 1000)),
+                    subject.directPlaces(session("new", startedAt = 50), sinceMs = 10, beforeMs = 55).toSet(),
+                )
                 val neighbours = DirectNeighbours(places.map { it.toDirectSender() })
                 assertEquals(
                     DirectSender(0x102, 60, mapOf(DirectCell(500, 1000) to 55L, DirectCell(-1, 1000) to 54L)),
