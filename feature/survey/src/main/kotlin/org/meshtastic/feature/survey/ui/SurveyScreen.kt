@@ -104,6 +104,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.takeOrElse
@@ -115,6 +116,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -160,6 +162,7 @@ import org.meshtastic.core.ui.icon.ChevronRight
 import org.meshtastic.core.ui.icon.CloudUpload
 import org.meshtastic.core.ui.icon.Delete
 import org.meshtastic.core.ui.icon.DoDisturb
+import org.meshtastic.core.ui.icon.Edit
 import org.meshtastic.core.ui.icon.ErrorOutline
 import org.meshtastic.core.ui.icon.FileDownload
 import org.meshtastic.core.ui.icon.History
@@ -170,6 +173,7 @@ import org.meshtastic.core.ui.icon.LocationOn
 import org.meshtastic.core.ui.icon.Map
 import org.meshtastic.core.ui.icon.MeshtasticIcons
 import org.meshtastic.core.ui.icon.More
+import org.meshtastic.core.ui.icon.MqttDelivered
 import org.meshtastic.core.ui.icon.MyLocation
 import org.meshtastic.core.ui.icon.PlayArrow
 import org.meshtastic.core.ui.icon.Route
@@ -209,6 +213,8 @@ import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.isUploadUrl
 import org.meshtastic.feature.survey.surveyTotals
+import org.meshtastic.feature.survey.uploadUrlFrom
+import org.meshtastic.feature.survey.uploadUrlTyped
 import java.util.Locale
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource as sharedStringResource
@@ -1669,10 +1675,10 @@ private fun agoText(timeMs: Long, now: Long): String {
 }
 
 /**
- * Where uploads go, folded to one line once set: a server is entered once, so the form only opens on Set up or Edit.
- * Shown while nothing records; a line counts the [pastWaiting] ended sessions SigSleuth may have but lacks rows of,
- * which Upload all sends. [anyUploaded] says whether an ended session was sent, so "Everything is uploaded" is not said
- * of private sessions alone.
+ * Where uploads go, folded to one row once set: the server's host, which opens the form on a tap, and a small automatic
+ * switch. Before setup it says uploads need a SigSleuth server. A line under the host counts the [pastWaiting] ended
+ * sessions SigSleuth may have but lacks rows of, and a tap on it sends them. The cloud turns green when nothing waits
+ * and [anyUploaded], so private sessions alone don't read as uploaded.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -1686,24 +1692,11 @@ private fun UploadCard(
     onUploadAll: () -> Unit,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.survey_upload),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                if (!editing) {
-                    TextButton(onClick = { editing = true }) {
-                        val action =
-                            if (settings.url.isBlank()) R.string.survey_upload_set_up else R.string.survey_upload_edit
-                        Text(stringResource(action))
-                    }
-                }
-            }
-            when {
-                editing ->
+        when {
+            editing ->
+                Box(Modifier.padding(16.dp)) {
                     ServerForm(
                         settings,
                         onSave = { edited ->
@@ -1712,26 +1705,126 @@ private fun UploadCard(
                         },
                         onCancel = { editing = false },
                     )
+                }
 
-                settings.url.isBlank() ->
-                    Text(
-                        stringResource(R.string.survey_upload_off),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            settings.url.isBlank() ->
+                Row(
+                    Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(UPLOAD_ICON_GAP),
+                ) {
+                    Icon(
+                        MeshtasticIcons.CloudUpload,
+                        contentDescription = null,
+                        modifier = Modifier.size(UPLOAD_ICON_SIZE),
+                        tint = colors.onSurfaceVariant,
                     )
+                    Text(
+                        stringResource(R.string.survey_upload_set_up_prompt),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { editing = true }) { Text(stringResource(R.string.survey_upload_set_up)) }
+                }
 
-                // Upload all sends only sessions already allowed; a private one is sent from its own card, so nothing
-                // goes that the user did not pick.
-                else ->
-                    UploadSummary(settings, recording = null, pastWaiting, anyUploaded, onAutomatic) {
-                        if (pastWaiting > 0) {
-                            UploadButton(R.string.survey_upload_all, enabled = true, uploading, onUploadAll)
+            else ->
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val done = pastWaiting == 0 && anyUploaded
+                        Row(
+                            Modifier.weight(1f)
+                                .clickable(onClickLabel = stringResource(R.string.survey_upload_edit)) {
+                                    editing = true
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(UPLOAD_ICON_GAP),
+                        ) {
+                            Icon(
+                                if (done) MeshtasticIcons.MqttDelivered else MeshtasticIcons.CloudUpload,
+                                contentDescription = if (done) stringResource(R.string.survey_upload_done) else null,
+                                modifier = Modifier.size(UPLOAD_ICON_SIZE),
+                                tint = if (done) colors.StatusGreen else colors.onSurfaceVariant,
+                            )
+                            Text(
+                                uploadUrlTyped(settings.url).trimEnd('/'),
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            Icon(
+                                MeshtasticIcons.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(INFO_ICON_SIZE),
+                                tint = colors.onSurfaceVariant,
+                            )
+                        }
+                        // The label and switch toggle together; the label reads as the full name.
+                        val automatic = stringResource(R.string.survey_upload_automatic)
+                        Row(
+                            Modifier.toggleable(
+                                value = settings.automatic,
+                                role = Role.Switch,
+                                onValueChange = onAutomatic,
+                            )
+                                .padding(start = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.survey_upload_auto),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.onSurfaceVariant,
+                                modifier = Modifier.semantics { contentDescription = automatic },
+                            )
+                            Switch(
+                                checked = settings.automatic,
+                                onCheckedChange = null,
+                                modifier = Modifier.scale(SMALL_SWITCH_SCALE),
+                            )
                         }
                     }
-            }
+                    // Sends only sessions already allowed; a private one is sent from its own card, so nothing goes
+                    // that the user did not pick.
+                    if (pastWaiting > 0) {
+                        PastWaitingLine(pastWaiting, uploading, onUploadAll)
+                    }
+                }
         }
     }
 }
+
+/** The upload card's tertiary line under the host, in the waiting sessions' outline colour; a tap uploads them. */
+@Composable
+private fun PastWaitingLine(pastWaiting: Int, uploading: Boolean, onUploadAll: () -> Unit) {
+    val color = MaterialTheme.colorScheme.tertiary
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable(enabled = !uploading, onClickLabel = stringResource(R.string.survey_upload_all)) {
+                onUploadAll()
+            }
+            .padding(start = UPLOAD_ICON_SIZE + UPLOAD_ICON_GAP, top = 4.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(INFO_ICON_GAP),
+    ) {
+        if (uploading) {
+            CircularProgressIndicator(Modifier.size(INFO_ICON_SIZE), color = color, strokeWidth = 2.dp)
+            Text(stringResource(R.string.survey_uploading), style = MaterialTheme.typography.bodyMedium, color = color)
+        } else {
+            Text(
+                pluralStringResource(R.plurals.survey_upload_past_waiting_tap, pastWaiting, pastWaiting),
+                style = MaterialTheme.typography.bodyMedium,
+                color = color,
+            )
+        }
+    }
+}
+
+private val UPLOAD_ICON_SIZE = 20.dp
+private val UPLOAD_ICON_GAP = 12.dp
+
+/** The upload card's automatic switch, smaller than a settings row's so it sits beside the host. */
+private const val SMALL_SWITCH_SCALE = 0.75f
 
 /**
  * The upload card's status, switch and Upload now while [recording] records, in a sheet the header's cloud opens. The
@@ -1759,7 +1852,7 @@ private fun UploadSheet(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() },
             )
-            UploadSummary(settings, recording, pastWaiting, anyUploaded = false, onAutomatic) {
+            UploadSummary(settings, recording, pastWaiting, onAutomatic) {
                 UploadButton(R.string.survey_upload_now, (recording?.pendingCount ?: 0) > 0, uploading, onUpload)
             }
         }
@@ -1776,7 +1869,6 @@ private fun UploadSummary(
     settings: SurveyUploadSettings,
     recording: SurveySessionSummary?,
     pastWaiting: Int,
-    anyUploaded: Boolean,
     onAutomatic: (Boolean) -> Unit,
     button: @Composable () -> Unit,
 ) {
@@ -1800,7 +1892,7 @@ private fun UploadSummary(
                     pluralStringResource(R.plurals.survey_upload_pending, pending, pending),
                 )
 
-            pastWaiting == 0 && (recording != null || anyUploaded) ->
+            pastWaiting == 0 && recording != null ->
                 InfoRow(
                     MeshtasticIcons.CheckCircle,
                     stringResource(R.string.survey_upload_done),
@@ -1885,11 +1977,11 @@ private fun uploadErrorText(error: String): String = when (error) {
 
 @Composable
 private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSettings) -> Unit, onCancel: () -> Unit) {
-    var url by rememberSaveable { mutableStateOf(settings.url) }
+    var url by rememberSaveable { mutableStateOf(uploadUrlTyped(settings.url)) }
     var user by rememberSaveable { mutableStateOf(settings.user) }
     var password by rememberSaveable { mutableStateOf(settings.password) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
-    val edited = SurveyUploadSettings(url.trim(), user.trim(), password, settings.automatic)
+    val edited = SurveyUploadSettings(uploadUrlFrom(url), user.trim(), password, settings.automatic)
     val urlInvalid = edited.url.isNotEmpty() && !isUploadUrl(edited.url)
     val save = { if (!urlInvalid) onSave(edited) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1897,14 +1989,13 @@ private fun ServerForm(settings: SurveyUploadSettings, onSave: (SurveyUploadSett
             value = url,
             onValueChange = { url = it },
             label = { Text(stringResource(R.string.survey_upload_url)) },
-            placeholder = { Text("https://sigsleuth.example.org") },
+            placeholder = { Text("sigsleuth.example.org") },
             isError = urlInvalid,
-            supportingText = {
-                Text(
-                    stringResource(
-                        if (urlInvalid) R.string.survey_upload_url_invalid else R.string.survey_upload_url_hint,
-                    ),
-                )
+            supportingText =
+            if (urlInvalid) {
+                { Text(stringResource(R.string.survey_upload_url_invalid)) }
+            } else {
+                null
             },
             singleLine = true,
             keyboardOptions =

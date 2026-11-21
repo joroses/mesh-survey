@@ -59,6 +59,20 @@ fun isUploadUrl(url: String): Boolean {
     }
 }
 
+private const val HTTPS = "https://"
+
+/**
+ * The URL to save for what was typed in the server field: a host alone gets https://, so nobody types it. A typed
+ * scheme stays, for [isUploadUrl] to judge.
+ */
+fun uploadUrlFrom(typed: String): String {
+    val url = typed.trim()
+    return if (url.isEmpty() || "://" in url) url else HTTPS + url
+}
+
+/** [url] as the server field and the upload card show it: without https://, which [uploadUrlFrom] adds back. */
+fun uploadUrlTyped(url: String): String = if (url.startsWith(HTTPS, ignoreCase = true)) url.drop(HTTPS.length) else url
+
 interface SurveySettings {
     val settings: Flow<SurveyUploadSettings>
 

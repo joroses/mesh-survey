@@ -477,6 +477,17 @@ class SurveyUploaderTest {
     }
 
     @Test
+    fun `a host alone gets https, a typed scheme stays, and the field shows it back without https`() {
+        assertEquals("https://sigsleuth.example.org", uploadUrlFrom("  sigsleuth.example.org "))
+        assertEquals("http://localhost:8001", uploadUrlFrom("http://localhost:8001"))
+        assertEquals("", uploadUrlFrom("  "))
+        assertEquals("sigsleuth.example.org/", uploadUrlTyped("HTTPS://sigsleuth.example.org/"))
+        assertEquals("http://localhost:8001", uploadUrlTyped("http://localhost:8001"))
+        val saved = "https://sigsleuth.example.org"
+        assertEquals(saved, uploadUrlFrom(uploadUrlTyped(saved)))
+    }
+
+    @Test
     fun `what SigSleuth says each row adds is saved and counted, and reaches the recorder`() = runTest {
         record("a", 2)
         dao.measurements.replaceAll { it.copy(cellX = 5, cellY = 5) }

@@ -21,7 +21,7 @@
     <!-- The launcher shortcut's short label, under its icon on the home screen. -->
     <string name="survey_shortcut">Survey</string>
     <string name="survey_back">Back</string>
-    <string name="survey_intro">Record where your radio hears the mesh, then upload to SigSleuth or export as CSV.</string>
+    <string name="survey_intro">Track which nodes are relaying packets to your radio.</string>
     <string name="survey_not_recording">Not recording</string>
     <string name="survey_recording">Recording</string>
     <!-- The notification's text while the radio is away; the screen uses the two strings after it. -->
@@ -197,17 +197,20 @@
     <string name="survey_status_radio_lost">Ended: radio did not come back</string>
     <string name="survey_status_interrupted">Ended: app was closed</string>
     <string name="survey_upload">Upload to SigSleuth</string>
-    <string name="survey_upload_off">Off. Measurements stay on this phone, and each session can still be exported as CSV.</string>
+    <!-- The upload card before a server is set: uploads need a SigSleuth server. -->
+    <string name="survey_upload_set_up_prompt">Send surveys to a SigSleuth server</string>
     <string name="survey_upload_set_up">Set up</string>
     <string name="survey_upload_edit">Edit</string>
-    <string name="survey_upload_url">SigSleuth URL</string>
-    <string name="survey_upload_url_hint">Leave it empty to turn uploads off.</string>
-    <string name="survey_upload_url_invalid">Enter the full address, starting with https://</string>
-    <string name="survey_upload_user">User (optional)</string>
-    <string name="survey_upload_password">Password (optional)</string>
+    <string name="survey_upload_url">SigSleuth server</string>
+    <!-- https:// is added when no scheme is typed, so this shows for a typed http:// to another host, or a bad address. -->
+    <string name="survey_upload_url_invalid">Not a server address. http:// works only for localhost.</string>
+    <string name="survey_upload_user">User</string>
+    <string name="survey_upload_password">Password</string>
     <string name="survey_upload_show_password">Show password</string>
     <string name="survey_upload_hide_password">Hide password</string>
     <string name="survey_upload_automatic">Upload automatically</string>
+    <!-- The short label beside the upload card's small automatic-upload switch. -->
+    <string name="survey_upload_auto">Auto</string>
     <string name="survey_save">Save</string>
     <string name="survey_upload_now">Upload now</string>
     <string name="survey_upload_session">Upload</string>
@@ -223,6 +226,11 @@
     <plurals name="survey_upload_past_waiting">
         <item quantity="one">%1$d past session waiting to upload</item>
         <item quantity="other">%1$d past sessions waiting to upload</item>
+    </plurals>
+    <!-- The upload card's waiting line, which uploads those sessions when tapped. -->
+    <plurals name="survey_upload_past_waiting_tap">
+        <item quantity="one">%1$d past session waiting · tap to upload</item>
+        <item quantity="other">%1$d past sessions waiting · tap to upload</item>
     </plurals>
     <string name="survey_upload_all">Upload all</string>
     <string name="survey_upload_failed">Last upload failed: %1$s</string>
