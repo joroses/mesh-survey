@@ -2291,7 +2291,7 @@ private fun sessionTitle(session: SurveySession): String {
 /** Size and, when it ended on its own, how: "1234 measurements · Ended: app was closed". A Stop goes unsaid. */
 @Composable
 private fun sessionFacts(summary: SurveySessionSummary): String {
-    val count = pluralStringResource(R.plurals.survey_measurements, summary.measurementCount, summary.measurementCount)
+    val count = pluralStringResource(R.plurals.survey_packets, summary.measurementCount, summary.measurementCount)
     if (summary.session.status == SurveyStatus.STOPPED) return count
     return "$count · ${stringResource(summary.session.status.label())}"
 }

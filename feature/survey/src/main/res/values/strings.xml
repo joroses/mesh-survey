@@ -36,9 +36,9 @@
     <!-- %1$s is the radio's name, %2$s its preset (LongFast) or spreading factor (SF11), %3$s the frequency. -->
     <string name="survey_node">%1$s · %2$s</string>
     <string name="survey_node_frequency">%1$s · %2$s · %3$s MHz</string>
-    <plurals name="survey_measurements">
-        <item quantity="one">%1$d measurement</item>
-        <item quantity="other">%1$d measurements</item>
+    <plurals name="survey_packets">
+        <item quantity="one">%1$d packet</item>
+        <item quantity="other">%1$d packets</item>
     </plurals>
     <!-- The notification's text, the recording card's three figures: distinct cells, relay bytes and senders heard directly. -->
     <string name="survey_notification_stats">Cells %1$d · Relays %2$d · Heard directly %3$d</string>
@@ -216,12 +216,12 @@
     <string name="survey_upload_session">Upload</string>
     <string name="survey_uploading">Uploading…</string>
     <plurals name="survey_upload_pending">
-        <item quantity="one">%1$d measurement waiting to upload</item>
-        <item quantity="other">%1$d measurements waiting to upload</item>
+        <item quantity="one">%1$d packet waiting to upload</item>
+        <item quantity="other">%1$d packets waiting to upload</item>
     </plurals>
     <string name="survey_upload_done">Everything is uploaded.</string>
-    <!-- The recording header's upload button, read by screen readers when measurements wait or the last upload failed. -->
-    <string name="survey_upload_mark_waiting">Upload to SigSleuth: measurements waiting</string>
+    <!-- The recording header's upload button, read by screen readers when packets wait or the last upload failed. -->
+    <string name="survey_upload_mark_waiting">Upload to SigSleuth: packets waiting</string>
     <string name="survey_upload_mark_failed">Upload to SigSleuth: the last upload failed</string>
     <plurals name="survey_upload_past_waiting">
         <item quantity="one">%1$d past session waiting to upload</item>
@@ -251,11 +251,11 @@
     <string name="survey_export_failed">Could not save the CSV.</string>
     <string name="survey_delete">Delete</string>
     <string name="survey_delete_title">Delete this session?</string>
-    <string name="survey_delete_text">%1$d of its %2$d measurements are uploaded. The rest are lost unless you export them first.</string>
-    <string name="survey_delete_text_uploaded">All %1$d measurements are uploaded. Export them first if you want a copy.</string>
+    <string name="survey_delete_text">%1$d of its %2$d packets are uploaded. The rest are lost unless you export them first.</string>
+    <string name="survey_delete_text_uploaded">All %1$d packets are uploaded. Export them first if you want a copy.</string>
     <!-- SigSleuth answered for rows it skipped (no position, old fix) without storing them. -->
-    <string name="survey_delete_text_kept">SigSleuth kept %1$d of its %2$d measurements. The rest are only on this phone and are lost unless you export them first.</string>
-    <string name="survey_delete_text_empty">It has no measurements.</string>
+    <string name="survey_delete_text_kept">SigSleuth kept %1$d of its %2$d packets. The rest are only on this phone and are lost unless you export them first.</string>
+    <string name="survey_delete_text_empty">It has no packets.</string>
     <string name="survey_deleted">Session deleted.</string>
     <string name="survey_delete_failed">Could not delete the session.</string>
     <string name="survey_cancel">Cancel</string>
