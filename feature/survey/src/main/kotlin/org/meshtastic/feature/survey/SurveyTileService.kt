@@ -17,6 +17,7 @@
 package org.meshtastic.feature.survey
 
 import android.app.PendingIntent
+import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -74,10 +75,14 @@ class SurveyTileService : TileService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
         } else {
-            @Suppress("DEPRECATION") // The PendingIntent form exists only from Android 14.
-            startActivityAndCollapse(intent)
+            collapseAndStart(intent)
         }
     }
+
+    // The PendingIntent form exists only from Android 14, and the Intent one throws only from there, which openScreen
+    // keeps it away from. Lint can't see the version check through its own rule's ID.
+    @Suppress("DEPRECATION", "StartActivityAndCollapseDeprecated")
+    private fun collapseAndStart(intent: Intent) = startActivityAndCollapse(intent)
 
     private fun show(recording: Boolean) {
         val tile = qsTile ?: return

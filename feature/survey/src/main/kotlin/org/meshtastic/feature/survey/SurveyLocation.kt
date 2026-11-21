@@ -91,6 +91,8 @@ class AndroidSurveyLocation(private val context: Application) : SurveyLocation {
         )
     }
 
+    // Removing a listener needs no permission, though the compat method is annotated as if it did.
+    @Suppress("MissingPermission")
     @Synchronized
     override fun stop() {
         listener?.let { LocationManagerCompat.removeUpdates(manager, it) }
