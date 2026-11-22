@@ -21,6 +21,8 @@ plugins {
     alias(libs.plugins.meshtastic.koin)
     alias(libs.plugins.meshtastic.android.room)
     alias(libs.plugins.meshtastic.kotlinx.serialization)
+    alias(libs.plugins.compose.screenshot)
+    alias(libs.plugins.meshtastic.android.screenshot)
 }
 
 android {

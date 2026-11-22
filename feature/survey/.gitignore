@@ -1,0 +1,3 @@
+# Screenshot pictures: make them with updateDebugScreenshotTest before a change, compare with
+# validateDebugScreenshotTest after (src/screenshotTest/.../SurveyScreenshots.kt).
+/src/screenshotTestDebug/

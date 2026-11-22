@@ -264,6 +264,8 @@ internal class SurveyActions(
  */
 internal data class SurveySnapshot(val now: SurveyNow, val openRelays: Set<Int> = emptySet())
 
+// A composition local so the clocks deep in the cards and rows stop without threading a parameter through them all.
+@Suppress("CompositionLocalAllowlist")
 internal val LocalSurveySnapshot = staticCompositionLocalOf<SurveySnapshot?> { null }
 
 @Composable
