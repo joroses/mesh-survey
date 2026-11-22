@@ -70,6 +70,8 @@
     <string name="survey_stat_packets">Packets</string>
     <!-- Under a session's cell count: cells no earlier session on this phone had. -->
     <string name="survey_stat_new">+%1$d new</string>
+    <!-- Inline green delta beside a car-mode stat figure. -->
+    <string name="survey_stat_plus">+%1$d</string>
     <!-- Under a session's cell count, once SigSleuth has answered: the cells its map did not have. -->
     <string name="survey_stat_added">%1$d added to map</string>
     <!-- Under a session's relay or direct count: the cells where one was heard there for the first time on this phone. -->
@@ -83,10 +85,12 @@
     <string name="survey_totals_map">Added to map</string>
     <!-- A session's upload state, beside its date. -->
     <string name="survey_session_waiting">Waiting to upload</string>
-    <!-- Over the last packet's signal when its relay byte is unknown: %1$s is how long ago it came ("12 s ago"). -->
-    <string name="survey_last_packet">Last packet · %1$s</string>
-    <!-- Over the last packet's signal: %1$s is its relay byte ("0x3f"), %2$s how long ago it came ("12 s ago"). -->
-    <string name="survey_last_packet_relay">Last packet: %1$s · %2$s</string>
+    <!-- Fallback label when the last packet carries no relay byte, and screen-reader context for the last-packet box. -->
+    <string name="survey_last_packet">Last packet</string>
+    <!-- Compact car-mode relay label: %1$s is the relay byte ("0x3f"), %2$s the resolved node's short name. -->
+    <string name="survey_last_packet_car_relay">%1$s · %2$s</string>
+    <!-- Screen-reader label for the muted no-GPS mark on the last packet when it could not be placed on the map. -->
+    <string name="survey_last_no_gps">No GPS fix for this packet</string>
     <string name="survey_no_packet">No packet yet</string>
     <!-- %1$s is a duration ("12 s", "3 min", "2 h"). -->
     <string name="survey_ago">%1$s ago</string>
@@ -102,10 +106,11 @@
     <string name="survey_gps_unusable">Not good enough to place packets</string>
     <!-- %1$d and %2$d are SigSleuth's limits, in seconds and metres. -->
     <string name="survey_gps_skipped">SigSleuth skips packets heard now: it needs a fix at most %1$d s old and within %2$d m.</string>
-    <!-- The last packet's signal: %1$s is the SNR with its unit ("-6.00 dB"), drawn as a chip in its fade margin's colour, or "–"; %2$s the RSSI. -->
-    <string name="survey_last_signal">SNR %1$s, RSSI %2$s dBm</string>
-    <!-- survey_last_signal in car mode, where the text is bigger: the chip's colour and unit say it is the SNR. -->
-    <string name="survey_last_signal_brief">%1$s · RSSI %2$s dBm</string>
+    <!-- Metric labels on the last-packet readout in normal mode. -->
+    <string name="survey_snr_label">SNR</string>
+    <string name="survey_rssi_label">RSSI</string>
+    <!-- An RSSI reading in dBm: %1$d is the negative integer value. -->
+    <string name="survey_rssi_value">%1$d dBm</string>
     <!-- An SNR value: %1$s is the number. -->
     <string name="survey_snr">%1$s dB</string>
     <!-- The packet was not relayed: %1$s is the relay byte, which is the sender's own ("0x3f"), %2$s the sender's short name. -->

@@ -31,6 +31,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +47,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,10 +58,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -72,6 +74,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -103,9 +106,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -121,9 +127,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -131,12 +136,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.takeOrElse
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -154,6 +157,10 @@ import org.meshtastic.core.resources.Res
 import org.meshtastic.core.resources.survey_relay_server_candidate
 import org.meshtastic.core.resources.survey_relay_server_candidates
 import org.meshtastic.core.ui.component.EmptyState
+import org.meshtastic.core.ui.component.Quality
+import org.meshtastic.core.ui.component.RSSI_BAD_THRESHOLD
+import org.meshtastic.core.ui.component.RSSI_FAIR_THRESHOLD
+import org.meshtastic.core.ui.component.RSSI_GOOD_THRESHOLD
 import org.meshtastic.core.ui.icon.ArrowBack
 import org.meshtastic.core.ui.icon.BarChart
 import org.meshtastic.core.ui.icon.Check
@@ -178,7 +185,6 @@ import org.meshtastic.core.ui.icon.MyLocation
 import org.meshtastic.core.ui.icon.PlayArrow
 import org.meshtastic.core.ui.icon.Route
 import org.meshtastic.core.ui.icon.Rssi
-import org.meshtastic.core.ui.icon.Snr
 import org.meshtastic.core.ui.icon.Verified
 import org.meshtastic.core.ui.icon.Visibility
 import org.meshtastic.core.ui.icon.VisibilityOff
@@ -452,17 +458,28 @@ private fun RecordingView(
     val density = LocalDensity.current
     // Bigger through the density, so text, icons, gaps and touch targets grow together from the same layout.
     val scaled = if (car) Density(density.density * CAR_SCALE, density.fontScale) else density
+    // At CAR_SCALE, 34 dp is already ~48 real dp; keep touch targets compliant without inflating header/button air.
+    val minTouch = if (car) CAR_TOUCH_TARGET else LocalMinimumInteractiveComponentSize.current
+    val horizontalEdge = if (car) 12.dp else 16.dp
+    val verticalEdge = if (car) 8.dp else 16.dp
     // The Scaffold's padding is measured at the screen's own density, outside the scaled part.
     Box(modifier) {
-        CompositionLocalProvider(LocalDensity provides scaled) {
+        CompositionLocalProvider(
+            LocalDensity provides scaled,
+            LocalMinimumInteractiveComponentSize provides minTouch,
+        ) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val card: @Composable () -> Unit = {
-                    RecordingCard(state, session, clock, car, upload, onUpload, onStop)
+                    RecordingCard(state, session, relayNames, clock, car, upload, onUpload, onStop)
                 }
-                val scrolledCard: @Composable () -> Unit = { Box(Modifier.padding(bottom = 12.dp)) { card() } }
+                val scrolledCard: @Composable () -> Unit = {
+                    Box(Modifier.padding(bottom = if (car) 8.dp else 12.dp)) { card() }
+                }
                 val pinned = maxHeight >= PINNED_MIN_HEIGHT
                 Column {
-                    if (pinned) Box(Modifier.padding(16.dp)) { card() }
+                    if (pinned) {
+                        Box(Modifier.padding(horizontal = horizontalEdge, vertical = verticalEdge)) { card() }
+                    }
                     RelaysList(
                         state.relays,
                         state.neighbours,
@@ -472,10 +489,10 @@ private fun RecordingView(
                         Modifier.weight(1f),
                         contentPadding =
                         PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = if (pinned) 0.dp else 16.dp,
-                            bottom = 16.dp,
+                            start = horizontalEdge,
+                            end = horizontalEdge,
+                            top = if (pinned) 0.dp else verticalEdge,
+                            bottom = if (car) 12.dp else 16.dp,
                         ),
                         lastRelayByte = state.lastMeasurement?.relayByte,
                         car = car,
@@ -489,6 +506,10 @@ private fun RecordingView(
 
 /** How much bigger car mode draws the recording view. */
 private const val CAR_SCALE = 1.4f
+
+/** Scaled touch target in car mode: 34 dp × 1.4 = 47.6 real dp, meeting M3's 48 dp target without 67 dp dead air. */
+private val CAR_TOUCH_TARGET = 34.dp
+private val CAR_STOP_HEIGHT = 36.dp
 
 /** The height, in the view's own units, below which the recording card scrolls with the relays. */
 private val PINNED_MIN_HEIGHT = 420.dp
@@ -530,6 +551,7 @@ private fun CarModeChip(carMode: Boolean, onCarMode: (Boolean) -> Unit) {
 private fun RecordingCard(
     state: SurveyState,
     session: SurveySession,
+    relayNames: Map<Long, String>,
     clock: () -> SurveyNow,
     car: Boolean,
     upload: UploadMark?,
@@ -537,7 +559,10 @@ private fun RecordingCard(
     onStop: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            Modifier.padding(if (car) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (car) 8.dp else 12.dp),
+        ) {
             RecordingHeader(state, session, clock, car, upload, onUpload)
             if (state.waitingForRadio) {
                 Text(
@@ -554,11 +579,20 @@ private fun RecordingCard(
                 packets = state.measurementCount.takeUnless { car },
                 car = car,
             )
-            LastPacket(state.lastMeasurement, session.spreadingFactor, clock, car)
+            LastPacket(
+                last = state.lastMeasurement,
+                relay = state.lastMeasurement?.relayByte?.let(state.relays::get),
+                relayNames = relayNames,
+                spreadingFactor = session.spreadingFactor,
+                clock = clock,
+                car = car,
+            )
             state.problem?.let { ProblemBanner(it) }
             Button(
                 onClick = onStop,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = if (car) Modifier.fillMaxWidth().height(CAR_STOP_HEIGHT) else Modifier.fillMaxWidth(),
+                contentPadding =
+                if (car) PaddingValues(horizontal = 16.dp, vertical = 0.dp) else ButtonDefaults.ContentPadding,
                 colors =
                 ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -604,7 +638,7 @@ private fun RecordingHeader(
             )
         }
         if (!waiting) GpsMark(state.fix, clock)
-        upload?.let { UploadMarkButton(it, onUpload) }
+        upload?.let { UploadMarkButton(it, onUpload, car) }
         if (!car) Text(time, style = timeStyle, maxLines = 1)
     }
 }
@@ -614,51 +648,219 @@ private fun RecordingHeader(
 private val NO_NEWS = SurveyNews(cells = 0, relays = 0, direct = 0)
 
 /**
- * The last packet's relay byte and how long ago it came, with its signal under it; until one comes, that none has. The
- * byte is here too, not only as the tinted row of the list under the card, since that row may be scrolled out of view.
+ * The last packet in an inset surface so it reads apart from the session's running totals: it pulses briefly in the
+ * packet's fade-margin colour whenever a newer packet arrives, and dims its signal figures once it goes stale.
+ *
+ * Normal mode shows the resolved relay (matching the list below) with its age on the right, then SNR chip, RSSI and a
+ * muted no-GPS mark when the packet could not be placed. Car mode strips labels and promotes the SNR chip so neither
+ * line wraps at [CAR_SCALE].
  */
 @Composable
-private fun LastPacket(last: SurveyMeasurement?, spreadingFactor: Int, clock: () -> SurveyNow, car: Boolean) {
+@Suppress("LongParameterList")
+private fun LastPacket(
+    last: SurveyMeasurement?,
+    relay: RelayStats?,
+    relayNames: Map<Long, String>,
+    spreadingFactor: Int,
+    clock: () -> SurveyNow,
+    car: Boolean,
+) {
+    val colors = MaterialTheme.colorScheme
     val now = clock().wallMs
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            when {
-                last == null -> AnnotatedString(stringResource(R.string.survey_no_packet))
+    val ageMs = last?.let { (now - it.heardAtMs).coerceAtLeast(0L) }
+    val stale = ageMs != null && ageMs >= STALE_PACKET_MS
+    val signalAlpha by animateFloatAsState(if (stale) STALE_SIGNAL_ALPHA else 1f, label = "stale")
 
-                last.relayByte == null ->
-                    AnnotatedString(stringResource(R.string.survey_last_packet, agoText(last.heardAtMs, now)))
+    // Pulse once when a newer packet arrives, never on first composition or a car-mode toggle.
+    val pulse = remember { Animatable(0f) }
+    var seenSeq by remember { mutableStateOf(last?.seq) }
+    LaunchedEffect(last?.seq) {
+        val seq = last?.seq ?: return@LaunchedEffect
+        if (seq != seenSeq) {
+            seenSeq = seq
+            pulse.snapTo(1f)
+            pulse.animateTo(0f, tween(durationMillis = if (car) CAR_PULSE_MS else PACKET_PULSE_MS))
+        }
+    }
 
-                else ->
-                    relayByteMarked(
-                        stringResource(
-                            R.string.survey_last_packet_relay,
-                            relayByteText(last.relayByte),
-                            agoText(last.heardAtMs, now),
-                        ),
-                        last.relayByte,
-                    )
+    val pulseTint = last?.rxSnr?.let { marginColor(fadeMargin(it, spreadingFactor)) } ?: colors.primary
+    val fillAlpha = if (car) CAR_PULSE_FILL_ALPHA else PACKET_PULSE_FILL_ALPHA
+    val containerColor = lerp(colors.surfaceContainerLow, pulseTint, pulse.value * fillAlpha)
+    val borderColor =
+        lerp(colors.outlineVariant.copy(alpha = REST_BORDER_ALPHA), pulseTint, pulse.value * PULSE_BORDER_ALPHA)
+    val lastPacketPrefix = stringResource(R.string.survey_last_packet)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
+    ) {
+        val verticalPadding = if (car) 8.dp else 10.dp
+        if (last == null) {
+            Text(
+                stringResource(R.string.survey_no_packet),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = verticalPadding),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant,
+            )
+            return@Surface
+        }
+        Column(
+            modifier =
+            Modifier.padding(horizontal = 12.dp, vertical = verticalPadding).semantics(mergeDescendants = true) {
+                if (last.relayByte != null) stateDescription = lastPacketPrefix
             },
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            verticalArrangement = Arrangement.spacedBy(if (car) 4.dp else 6.dp),
+        ) {
+            LastPacketHeader(last, relay, relayNames, now, car)
+            LastPacketSignal(last, spreadingFactor, car, Modifier.alpha(signalAlpha))
+        }
+    }
+}
+
+@Composable
+private fun LastPacketHeader(
+    last: SurveyMeasurement,
+    relay: RelayStats?,
+    relayNames: Map<Long, String>,
+    now: Long,
+    car: Boolean,
+) {
+    val colors = MaterialTheme.colorScheme
+    val relayByte = last.relayByte
+    val age = if (car) shortAgeText(last.heardAtMs, now) else agoText(last.heardAtMs, now)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (!car && relay != null) ConfidenceMark(relay, size = LAST_PACKET_MARK_SIZE)
+        val label =
+            when {
+                relayByte == null -> AnnotatedString(stringResource(R.string.survey_last_packet))
+                car -> relayByteMarked(carRelayText(relayByte, relay, relayNames), relayByte)
+                else -> relayByteMarked(relayText(relayByte, relay, relayNames), relayByte)
+            }
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleSmall,
+            color = if (relayByte == null) colors.onSurfaceVariant else colors.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        last?.let { measurement ->
-            InfoRow(MeshtasticIcons.Snr) {
-                val snr = measurement.rxSnr
-                SnrText(
-                    stringResource(
-                        // Shorter in car mode, so the bigger line still fits on one.
-                        if (car) R.string.survey_last_signal_brief else R.string.survey_last_signal,
-                        if (snr == null) "–" else SNR_SLOT,
-                        measurement.rxRssi?.toString() ?: "–",
-                    ),
-                    snr,
-                    SNR_DECIMALS,
-                    spreadingFactor,
+        Text(
+            age,
+            style =
+            (if (car) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium).copy(
+                fontFeatureSettings = "tnum",
+            ),
+            color = colors.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun LastPacketSignal(
+    last: SurveyMeasurement,
+    spreadingFactor: Int,
+    car: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val snr = last.rxSnr
+    val rssi = last.rxRssi?.takeIf { it != 0 }
+    if (car) {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            if (snr != null) {
+                SnrChip(
+                    snr = snr,
+                    spreadingFactor = spreadingFactor,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    padding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
+                    shape = MaterialTheme.shapes.small,
+                )
+            } else {
+                Text("–", style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant)
+            }
+            RssiReading(rssi, style = MaterialTheme.typography.titleSmall)
+        }
+    } else {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    stringResource(R.string.survey_snr_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurfaceVariant,
+                )
+                if (snr != null) {
+                    SnrChip(snr, spreadingFactor, style = MaterialTheme.typography.labelLarge)
+                } else {
+                    Text("–", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                }
+                Text("·", style = MaterialTheme.typography.bodyMedium, color = colors.outline)
+                Text(
+                    stringResource(R.string.survey_rssi_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurfaceVariant,
+                )
+                RssiReading(rssi, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (last.cellX == null) {
+                Icon(
+                    MeshtasticIcons.LocationDisabled,
+                    contentDescription = stringResource(R.string.survey_last_no_gps),
+                    modifier = Modifier.size(LINE_ICON_SIZE),
+                    tint = colors.onSurfaceVariant,
                 )
             }
         }
     }
 }
+
+/** An RSSI reading in tabular figures beside a dot in its quality band, keeping high contrast on tonal surfaces. */
+@Composable
+private fun RssiReading(rssi: Int?, style: TextStyle) {
+    val colors = MaterialTheme.colorScheme
+    if (rssi == null) {
+        Text("–", style = style, color = colors.onSurfaceVariant, maxLines = 1)
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.size(RSSI_DOT_SIZE).background(rssiQuality(rssi).color(), CircleShape))
+        Text(
+            stringResource(R.string.survey_rssi_value, rssi),
+            style = style.copy(fontFeatureSettings = "tnum"),
+            color = colors.onSurface,
+            maxLines = 1,
+        )
+    }
+}
+
+private const val STALE_PACKET_MS = 60_000L
+private const val STALE_SIGNAL_ALPHA = 0.55f
+private const val PACKET_PULSE_MS = 700
+private const val CAR_PULSE_MS = 900
+private const val PACKET_PULSE_FILL_ALPHA = 0.18f
+private const val CAR_PULSE_FILL_ALPHA = 0.28f
+private const val REST_BORDER_ALPHA = 0.5f
+private const val PULSE_BORDER_ALPHA = 0.85f
+private val LAST_PACKET_MARK_SIZE = 18.dp
+private val RSSI_DOT_SIZE = 7.dp
 
 /**
  * One figure with its [FigureLabel] under it, then the [note] of what was new to this phone in green and the [mapNote]
@@ -671,6 +873,7 @@ private fun Stat(
     value: String,
     figure: Figure,
     modifier: Modifier = Modifier,
+    inlineNote: String? = null,
     note: String? = null,
     mapNote: String? = null,
     onClick: (() -> Unit)? = null,
@@ -687,14 +890,29 @@ private fun Stat(
         }
     val content = if (onClick == null) Color.Unspecified else colors.onPrimaryContainer
     Column(if (onClick == null) modifier.semantics(mergeDescendants = true) {} else modifier) {
-        Column(chip.padding(horizontal = STAT_INSET, vertical = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(chip.padding(horizontal = STAT_INSET, vertical = if (onClick == null) 2.dp else 4.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
                 Text(
                     value,
                     style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
                     color = content,
                     maxLines = 1,
+                    modifier = if (inlineNote != null) Modifier.alignByBaseline() else Modifier,
                 )
+                inlineNote?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                        color = colors.StatusGreen,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.alignByBaseline(),
+                    )
+                }
                 if (onClick != null) {
                     Icon(MeshtasticIcons.ChevronRight, contentDescription = null, Modifier.size(20.dp), tint = content)
                 }
@@ -869,7 +1087,7 @@ private fun uploadMark(settings: SurveyUploadSettings, recording: SurveySessionS
 
 /** The upload card's place while recording: a cloud, a waiting one in the waiting colour, or an error mark. */
 @Composable
-private fun UploadMarkButton(mark: UploadMark, onClick: () -> Unit) {
+private fun UploadMarkButton(mark: UploadMark, onClick: () -> Unit, car: Boolean) {
     val colors = MaterialTheme.colorScheme
     val (icon, tint, description) =
         when (mark) {
@@ -880,7 +1098,16 @@ private fun UploadMarkButton(mark: UploadMark, onClick: () -> Unit) {
 
             UploadMark.FAILED -> Triple(MeshtasticIcons.ErrorOutline, colors.error, R.string.survey_upload_mark_failed)
         }
-    IconButton(onClick = onClick) { Icon(icon, contentDescription = stringResource(description), tint = tint) }
+    if (car) {
+        Box(
+            Modifier.size(CAR_TOUCH_TARGET).clip(CircleShape).clickable(role = Role.Button, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = stringResource(description), tint = tint)
+        }
+    } else {
+        IconButton(onClick = onClick) { Icon(icon, contentDescription = stringResource(description), tint = tint) }
+    }
 }
 
 private val INFO_ICON_SIZE = 18.dp
@@ -915,40 +1142,51 @@ private fun InfoRow(icon: ImageVector, iconTint: Color = Color.Unspecified, text
 }
 
 /**
- * [text] with [snr] drawn as a chip where [SNR_SLOT] stands in it: the SNR and its unit on roughly the colour
- * SigSleuth's map will give this spot (its fade margin), in black or white, whichever reads better. The chip sits in
- * the text, so it wraps with it, and a translation can put it anywhere. Without an SNR, [text] as it is.
+ * [snr] and its unit drawn as a chip on roughly the colour SigSleuth's map gives this spot (its fade margin), in black
+ * or white, whichever reads better.
  */
 @Composable
-private fun SnrText(text: String, snr: Float?, decimals: Int, spreadingFactor: Int, color: Color = Color.Unspecified) {
-    val style = MaterialTheme.typography.bodyMedium
-    val at = text.indexOf(SNR_SLOT)
-    if (snr == null || at < 0) {
-        Text(text, style = style, color = color)
-        return
-    }
-    val label = stringResource(R.string.survey_snr, NumberFormatter.format(snr, decimals))
+private fun SnrChip(
+    snr: Float,
+    spreadingFactor: Int,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    padding: PaddingValues = PaddingValues(horizontal = SNR_CHIP_PADDING, vertical = 2.dp),
+    shape: Shape = MaterialTheme.shapes.extraSmall,
+) {
+    val label = stringResource(R.string.survey_snr, NumberFormatter.format(snr, SNR_DECIMALS))
     val fill = marginColor(fadeMargin(snr, spreadingFactor))
-    val chipStyle = style.copy(fontFeatureSettings = "tnum")
-    // A placeholder needs its size up front: the label's width plus the chip's padding, one line high.
-    val labelWidth = rememberTextMeasurer().measure(label, chipStyle, maxLines = 1).size.width
-    val width = with(LocalDensity.current) { (labelWidth + 2 * SNR_CHIP_PADDING.roundToPx()).toSp() }
-    val height = style.lineHeight.takeOrElse { style.fontSize * SNR_CHIP_LINE_HEIGHT }
-    val chip =
-        InlineTextContent(Placeholder(width, height, PlaceholderVerticalAlign.TextCenter)) {
-            Box(
-                Modifier.fillMaxSize().background(fill, MaterialTheme.shapes.extraSmall),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, style = chipStyle, color = contentOn(fill), maxLines = 1)
-            }
-        }
-    val annotated = buildAnnotatedString {
-        append(text.substring(0, at))
-        appendInlineContent(SNR_CHIP, label)
-        append(text.substring(at + SNR_SLOT.length))
+    Box(modifier.background(fill, shape).padding(padding), contentAlignment = Alignment.Center) {
+        Text(
+            label,
+            style = style.copy(fontFeatureSettings = "tnum"),
+            color = contentOn(fill),
+            maxLines = 1,
+        )
     }
-    Text(annotated, style = style, color = color, inlineContent = mapOf(SNR_CHIP to chip))
+}
+
+/**
+ * [text] with [rssi]'s number in the colour Meshtastic's node list gives it, so a weak packet stands out. The last
+ * match is taken, since the number follows any count; 0 is no reading and stays plain.
+ */
+@Composable
+private fun rssiColoured(text: String, rssi: Int?): AnnotatedString {
+    val number = rssi?.takeIf { it != 0 }?.toString()
+    val at = number?.let(text::lastIndexOf) ?: -1
+    val color = rssi?.let { rssiQuality(it).color() }
+    return buildAnnotatedString {
+        append(text)
+        if (number != null && color != null && at >= 0) addStyle(SpanStyle(color = color), at, at + number.length)
+    }
+}
+
+/** The band core/ui's `Rssi` draws [rssi] (dBm) in: its thresholds, kept here so core/ui stays as upstream has it. */
+private fun rssiQuality(rssi: Int): Quality = when {
+    rssi > RSSI_GOOD_THRESHOLD -> Quality.GOOD
+    rssi > RSSI_FAIR_THRESHOLD -> Quality.FAIR
+    rssi > RSSI_BAD_THRESHOLD -> Quality.BAD
+    else -> Quality.NONE
 }
 
 /** Black or white, whichever has more contrast on [fill]. */
@@ -958,13 +1196,9 @@ private fun contentOn(fill: Color): Color {
     return if (shifted * shifted > (1 + LUMINANCE_FLARE) * LUMINANCE_FLARE) Color.Black else Color.White
 }
 
-/** Where [SnrText] puts the chip: a character no string resource contains. */
-private const val SNR_SLOT = "￼"
-private const val SNR_CHIP = "snr"
 private const val SNR_DECIMALS = 1
-private const val SNR_CHIP_LINE_HEIGHT = 1.4f
 private const val LUMINANCE_FLARE = 0.05f
-private val SNR_CHIP_PADDING = 4.dp
+private val SNR_CHIP_PADDING = 5.dp
 
 /** The problem, and for location the way to fix it, since a refused permission is never asked again. */
 @Composable
@@ -1085,6 +1319,14 @@ private fun relayText(relayByte: Int, relay: RelayStats?, names: Map<Long, Strin
         null,
         -> byte
     }
+}
+
+/** Compact relay label for car mode: the byte and single resolved node name when known, else just the byte. */
+@Composable
+private fun carRelayText(relayByte: Int, relay: RelayStats?, names: Map<Long, String>): String {
+    val byte = relayByteText(relayByte)
+    val node = relay?.shownNode ?: return byte
+    return stringResource(R.string.survey_last_packet_car_relay, byte, nodeName(node, names))
 }
 
 /** The node SigSleuth named as this byte's relay, unless the packet came straight from its sender. */
@@ -1272,7 +1514,7 @@ private fun RelayEntry(
             .background(tint)
             .then(if (car) Modifier else Modifier.clickable(onClickLabel = toggleLabel, onClick = onToggle))
             .semantics { if (latest) stateDescription = latestText }
-            .padding(horizontal = ROW_INSET, vertical = 12.dp),
+            .padding(horizontal = if (car) 12.dp else ROW_INSET, vertical = if (car) 8.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MARK_GAP)) {
@@ -1284,7 +1526,7 @@ private fun RelayEntry(
                 maxLines = if (showDetails) Int.MAX_VALUE else 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            relay.last.rxSnr?.let { SnrText(SNR_SLOT, it, SNR_DECIMALS, spreadingFactor) }
+            relay.last.rxSnr?.let { SnrChip(it, spreadingFactor) }
             if (!car) {
                 Text(
                     agoText(relay.lastHeardMs, clock().wallMs),
@@ -1377,8 +1619,8 @@ private fun RelayDetails(relay: RelayStats, neighbours: Map<Long, DirectSender>,
  * one when no candidate is left. The question mark is the module's own: MeshtasticIcons.HelpOutline draws an "i".
  */
 @Composable
-private fun ConfidenceMark(relay: RelayStats) {
-    val modifier = Modifier.size(MARK_SIZE)
+private fun ConfidenceMark(relay: RelayStats, size: Dp = MARK_SIZE) {
+    val modifier = Modifier.size(size)
     val colors = MaterialTheme.colorScheme
     val guess = relay.guess
     val unsure = ImageVector.vectorResource(R.drawable.survey_ic_help)
@@ -1410,13 +1652,17 @@ private fun ConfidenceMark(relay: RelayStats) {
     }
 }
 
-/** The packet count, then the last packet's RSSI when the radio gave it; its SNR is on the row above. */
+/** The packet count, then the last packet's RSSI in its colour when the radio gave it; its SNR is on the row above. */
 @Composable
 private fun PacketLine(relay: RelayStats) {
     val count = pluralStringResource(R.plurals.survey_relay_packets, relay.packets, relay.packets)
     val rssi = relay.last.rxRssi?.takeIf { it != 0 }
     Text(
-        if (rssi == null) count else stringResource(R.string.survey_relay_rssi, count, rssi),
+        if (rssi == null) {
+            AnnotatedString(count)
+        } else {
+            rssiColoured(stringResource(R.string.survey_relay_rssi, count, rssi), rssi)
+        },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -1653,6 +1899,22 @@ private fun clockText(millis: Long): String {
 }
 
 /**
+ * How long before [now] [timeMs] was, without "ago" ("12 s", "3 min", "2 h"), for compact car-mode headers; beyond a
+ * day it falls back to the system's relative time.
+ */
+@Composable
+@ReadOnlyComposable
+private fun shortAgeText(timeMs: Long, now: Long): String {
+    val seconds = ((now - timeMs) / MILLIS_PER_SECOND).coerceAtLeast(0)
+    return when {
+        seconds < SECONDS_PER_MINUTE -> stringResource(R.string.survey_seconds, seconds.toInt())
+        seconds < SECONDS_PER_HOUR -> stringResource(R.string.survey_minutes, (seconds / SECONDS_PER_MINUTE).toInt())
+        seconds < SECONDS_PER_DAY -> stringResource(R.string.survey_hours, (seconds / SECONDS_PER_HOUR).toInt())
+        else -> DateFormatter.formatRelativeTime(timeMs)
+    }
+}
+
+/**
  * How long before [now] [timeMs] was, coarsely: "12 s ago", "3 min ago", "2 h ago", then the system's words ("3 days
  * ago"). The system's alone counts whole minutes, which says "0 min. ago" for the packet just heard.
  */
@@ -1660,18 +1922,8 @@ private fun clockText(millis: Long): String {
 @ReadOnlyComposable
 private fun agoText(timeMs: Long, now: Long): String {
     val seconds = ((now - timeMs) / MILLIS_PER_SECOND).coerceAtLeast(0)
-    val duration =
-        when {
-            seconds < SECONDS_PER_MINUTE -> stringResource(R.string.survey_seconds, seconds.toInt())
-
-            seconds < SECONDS_PER_HOUR ->
-                stringResource(R.string.survey_minutes, (seconds / SECONDS_PER_MINUTE).toInt())
-
-            seconds < SECONDS_PER_DAY -> stringResource(R.string.survey_hours, (seconds / SECONDS_PER_HOUR).toInt())
-
-            else -> return DateFormatter.formatRelativeTime(timeMs)
-        }
-    return stringResource(R.string.survey_ago, duration)
+    if (seconds >= SECONDS_PER_DAY) return DateFormatter.formatRelativeTime(timeMs)
+    return stringResource(R.string.survey_ago, shortAgeText(timeMs, now))
 }
 
 /**
@@ -2198,11 +2450,17 @@ private fun NewsStats(
         ?.let {
             pluralStringResource(R.plurals.survey_stat_new_in_cells, it, it)
         }
+
+    @Composable
+    @ReadOnlyComposable
+    fun plus(count: Int) = count.takeIf { it > 0 && car }?.let { stringResource(R.string.survey_stat_plus, it) }
+
     Row(Modifier.fillMaxWidth().bleed(STAT_INSET), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Stat(
             relays.toString(),
             Figure.RELAYS,
             Modifier.weight(1f),
+            inlineNote = plus(news.localNewRelayCells),
             note = newIn(news.localNewRelayCells),
             onClick = onRelays,
             onClickLabel = stringResource(R.string.survey_relays_open),
@@ -2211,13 +2469,15 @@ private fun NewsStats(
             news.cells.toString(),
             Figure.CELLS,
             Modifier.weight(1f),
-            note = news.localNewCells.takeIf { it > 0 }?.let { stringResource(R.string.survey_stat_new, it) },
+            inlineNote = plus(news.localNewCells),
+            note = news.localNewCells.takeIf { it > 0 && !car }?.let { stringResource(R.string.survey_stat_new, it) },
             mapNote = mapCells?.let { stringResource(R.string.survey_stat_added, it) },
         )
         Stat(
             news.direct.toString(),
             Figure.DIRECT,
             Modifier.weight(1f),
+            inlineNote = plus(news.localNewDirectCells),
             note = newIn(news.localNewDirectCells),
         )
         packets?.let { Stat(it.toString(), Figure.PACKETS, Modifier.weight(1f)) }
