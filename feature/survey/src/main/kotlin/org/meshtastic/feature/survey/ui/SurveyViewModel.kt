@@ -141,16 +141,28 @@ class SurveyViewModel(
 
     /**
      * The ended session opened from its card ([open]), its relays rebuilt from its saved packets and SigSleuth's saved
-     * answers, with the node database and SigSleuth's relay node list as they are now. Null while none is open, or once
-     * it is gone.
+     * answers, with the node database and SigSleuth's relay node list as they are now. The session is read once when
+     * opened. Null while none is open; a session that can't be read closes again with a snackbar.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val opened: StateFlow<OpenedSession?> =
         openedId
             .transformLatest { id ->
-                val session = id?.let { safeCatching { dao.session(it) }.getOrNull() }
-                emit(session?.let { OpenedSession(it) })
-                if (session == null) return@transformLatest
+                if (id == null) {
+                    emit(null)
+                    return@transformLatest
+                }
+                val result = safeCatching { dao.session(id) }
+                val session = result.getOrNull()
+                if (session == null) {
+                    emit(null)
+                    val reason = result.exceptionOrNull()?.let { it::class.simpleName } ?: "not found"
+                    Logger.w { "Survey session not read: $reason" }
+                    snackbars.showSnackbar(app.getString(R.string.survey_relays_failed))
+                    openedId.value = null
+                    return@transformLatest
+                }
+                emit(OpenedSession(session))
                 val db = nodes.nodeDBbyNum.value
                 safeCatching {
                     withContext(ioDispatcher) {
