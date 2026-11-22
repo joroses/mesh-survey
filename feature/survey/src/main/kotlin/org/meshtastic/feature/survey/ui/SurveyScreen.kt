@@ -656,8 +656,8 @@ private fun RecordingCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            // The figures its session card shows once it ends. Relays counts every byte heard, as the list under the
-            // card does; the session card counts those heard with a fix.
+            // The figures its session card shows once it ends. Relays counts every byte heard, fix or not, matching
+            // the list under the card and the ended session's sheet.
             NewsStats(
                 state.newToYou ?: NO_NEWS,
                 relays = state.relays.size,
@@ -2468,7 +2468,10 @@ private fun SessionCard(
                 )
                 SessionBadge(summary, waiting)
             }
-            session.news?.takeIf { it.cells > 0 }?.let { NewsStats(it, onRelays = onOpen) }
+            val news = session.news ?: NO_NEWS
+            if (news.cells > 0 || summary.relayCount > 0) {
+                NewsStats(news, relays = summary.relayCount, onRelays = onOpen)
+            }
             UploadProgress(summary, uploadsOn)
             // The details, small and muted under what the session found.
             Column {
@@ -2561,7 +2564,7 @@ private val MENU_BUTTON_INSET = 12.dp
 @Composable
 private fun NewsStats(
     news: SurveyNews,
-    relays: Int = news.relays,
+    relays: Int,
     mapCells: Int? = news.newCells,
     packets: Int? = null,
     onRelays: (() -> Unit)? = null,

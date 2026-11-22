@@ -228,12 +228,16 @@ data class SurveyMeasurement(
     override fun toString(): String = "SurveyMeasurement(seq=$seq, location redacted)"
 }
 
-/** A session with its measurement counts and newest measurement seq, for the session list and uploads. */
+/**
+ * A session with its measurement counts, distinct relay bytes (fix or not, matching [replayRelays]), and newest
+ * measurement seq, for the session list and uploads.
+ */
 data class SurveySessionSummary(
     @Embedded val session: SurveySession,
     @ColumnInfo(name = "measurement_count") val measurementCount: Int,
     @ColumnInfo(name = "uploaded_count") val uploadedCount: Int,
     @ColumnInfo(name = "last_seq") val lastSeq: Long,
+    @ColumnInfo(name = "relay_count") val relayCount: Int = 0,
 )
 
 /**
@@ -301,7 +305,8 @@ internal const val START_ORDER = " ORDER BY s.started_at, s.id, m.seq"
 
 private const val SUMMARY =
     "SELECT s.*, COUNT(m.seq) AS measurement_count, COALESCE(MAX(m.seq), 0) AS last_seq, " +
-        "COALESCE(SUM(m.seq <= s.uploaded_seq), 0) AS uploaded_count " +
+        "COALESCE(SUM(m.seq <= s.uploaded_seq), 0) AS uploaded_count, " +
+        "COUNT(DISTINCT m.relay_byte) AS relay_count " +
         "FROM survey_session s LEFT JOIN survey_measurement m ON m.session_id = s.id"
 
 @Dao

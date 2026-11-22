@@ -69,8 +69,14 @@ internal fun session(
     news = news,
 )
 
-internal fun SurveySession.summary(packets: Int, uploaded: Int = 0) =
-    SurveySessionSummary(this, measurementCount = packets, uploadedCount = uploaded, lastSeq = packets.toLong())
+internal fun SurveySession.summary(packets: Int, uploaded: Int = 0, relays: Int = news?.relays ?: 0) =
+    SurveySessionSummary(
+        this,
+        measurementCount = packets,
+        uploadedCount = uploaded,
+        lastSeq = packets.toLong(),
+        relayCount = relays,
+    )
 
 /**
  * The survey screen's states, from made-up data at [SNAPSHOT_NOW]. Each is one [SurveyUi]; the busy ones come from

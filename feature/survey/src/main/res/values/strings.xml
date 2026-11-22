@@ -62,7 +62,7 @@
         <item quantity="one">%1$d cell added to the map</item>
         <item quantity="other">%1$d cells added to the map</item>
     </plurals>
-    <!-- A session card's figures: distinct cells, relay bytes and senders heard directly where it had a fix, each with what was new to this phone under it. -->
+    <!-- A session card's figures: distinct relay bytes heard, plus cells and senders heard directly where it had a fix, each with what was new to this phone under it. -->
     <string name="survey_stat_cells">Cells</string>
     <string name="survey_stat_relays_heard">Relays</string>
     <string name="survey_stat_direct">Direct</string>

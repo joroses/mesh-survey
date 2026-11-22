@@ -445,6 +445,39 @@ class SurveyDaoTest {
     }
 
     @Test
+    fun `session summary relay count includes fixless packets and matches replayed relays`() = runTest {
+        for (subject in listOf(dao, FakeSurveyDao())) {
+            val mixed = session("mixed", startedAt = 1)
+            val fixless = session("fixless", startedAt = 2)
+            val empty = session("empty", startedAt = 3)
+            subject.insertSession(mixed)
+            subject.insertSession(fixless)
+            subject.insertSession(empty)
+            // With cell, duplicate with cell, fixless with new byte, fixless without relay byte.
+            subject.insertMeasurement(
+                measurement("mixed", 10, hopLimit = 2, relayByte = 0x1a).copy(cellX = 1, cellY = 1),
+            )
+            subject.insertMeasurement(
+                measurement("mixed", 20, hopLimit = 2, relayByte = 0x1a).copy(cellX = 2, cellY = 2),
+            )
+            subject.insertMeasurement(measurement("mixed", 30, hopLimit = 2, relayByte = 0x2b))
+            subject.insertMeasurement(measurement("mixed", 40, hopLimit = 2, relayByte = null))
+            subject.insertMeasurement(measurement("fixless", 50, hopLimit = 2, relayByte = 0x3c))
+
+            val byId = subject.summaries().associateBy { it.session.id }
+            assertEquals(2, byId.getValue("mixed").relayCount)
+            assertEquals(subject.replayRelays(mixed, emptyMap(), null).relays.size, byId.getValue("mixed").relayCount)
+            assertEquals(1, byId.getValue("fixless").relayCount)
+            assertEquals(
+                subject.replayRelays(fixless, emptyMap(), null).relays.size,
+                byId.getValue("fixless").relayCount,
+            )
+            assertEquals(0, byId.getValue("empty").relayCount)
+            assertEquals(subject.replayRelays(empty, emptyMap(), null).relays.size, byId.getValue("empty").relayCount)
+        }
+    }
+
+    @Test
     fun `deleting a session deletes its measurements`() = runTest {
         dao.insertSession(session("s", startedAt = 1))
         dao.insertMeasurement(measurement("s", 1))

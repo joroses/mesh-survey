@@ -34,6 +34,7 @@ internal class FakeSurveyDao : SurveyDao {
             measurementCount = rows.size,
             uploadedCount = rows.count { it.seq <= session.uploadedSeq },
             lastSeq = rows.maxOfOrNull { it.seq } ?: 0,
+            relayCount = rows.mapNotNull { it.relayByte }.distinct().size,
         )
     }
 
