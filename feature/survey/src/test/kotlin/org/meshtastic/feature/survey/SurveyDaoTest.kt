@@ -405,6 +405,10 @@ class SurveyDaoTest {
 
         dao.saveAnswers(listOf(link.saved("s")))
         assertEquals(listOf(link), dao.answers("s"))
+
+        val near = ServerAnswer(second, 20, 0x1a, 26, "near_link", "PK", near = NearEvidence(282, "HL", 6.8))
+        dao.saveAnswers(listOf(near.saved("s")))
+        assertEquals(listOf(near), dao.answers("s"))
     }
 
     @Test

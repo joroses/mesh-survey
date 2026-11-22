@@ -357,6 +357,7 @@ internal fun serverAnswers(rows: List<SurveyMeasurement>, response: UploadRespon
                 )
             },
             answer.evidence(),
+            answer.nearNodeId?.let { node -> answer.nearKm?.let { km -> NearEvidence(node, names[node], km) } },
         )
     }
 }
@@ -426,6 +427,9 @@ internal data class UploadHeard(
     @SerialName("link_offset_ms") val linkOffsetMs: Long? = null,
     @SerialName("link_mine") val linkMine: Boolean? = null,
     @SerialName("link_rssi") val linkRssi: Int? = null,
+    /** A near link's evidence (see [NearEvidence]); null for other answers, and older servers send none. */
+    @SerialName("near_node_id") val nearNodeId: Long? = null,
+    @SerialName("near_km") val nearKm: Double? = null,
     /** Whether the row adds a cell to the map; older servers do not say. */
     @SerialName("new_cell") val newCell: Boolean? = null,
 )

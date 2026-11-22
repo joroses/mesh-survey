@@ -218,9 +218,9 @@ class MappedNodes(val fetchedAtMs: Long, nodes: List<MappedNode>) {
 
 /**
  * SigSleuth's answer for one uploaded packet this phone thought relayed: the node it heard, or null when it could not
- * tell, and [how] it decided, in its own words (`survey_link`, `gateway_link`, `sender_link`, `reported`,
+ * tell, and [how] it decided, in its own words (`survey_link`, `gateway_link`, `near_link`, `sender_link`, `reported`,
  * `only_candidate`, `direct`, `unknown`). Unknown relays may have [candidates], which remain possibilities. A survey
- * link may have its [evidence]; older servers send none.
+ * link may have its [evidence], a near link its [near]; older servers send neither.
  */
 data class ServerAnswer(
     val seq: Long,
@@ -231,6 +231,7 @@ data class ServerAnswer(
     val shortName: String?,
     val candidates: List<ServerCandidate> = emptyList(),
     val evidence: LinkEvidence? = null,
+    val near: NearEvidence? = null,
 )
 
 /**
@@ -239,6 +240,12 @@ data class ServerAnswer(
  * survey's, and its [rssi] in dBm (null when not recorded, or from an older server).
  */
 data class LinkEvidence(val km: Double, val offsetMs: Long, val mine: Boolean, val rssi: Int? = null)
+
+/**
+ * The node behind a near link: the one near the packet's fix that SigSleuth most often saw linked directly with the
+ * relay, [km] from the fix, with the [name] SigSleuth gave (null when it has none).
+ */
+data class NearEvidence(val nodeId: Long, val name: String?, val km: Double)
 
 /**
  * A possible relay suggested by SigSleuth, at [km] from the uploaded packet's fix. Serializable, as [SavedAnswer] keeps

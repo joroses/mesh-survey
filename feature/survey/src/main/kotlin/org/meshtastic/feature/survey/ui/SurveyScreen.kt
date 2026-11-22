@@ -1898,10 +1898,11 @@ private fun serverText(answer: ServerAnswer, names: Map<Long, String>, sameAsHea
     }
     val evidence = answer.evidence
     return when {
-        evidence == null && sameAsHeader -> stringResource(R.string.survey_relay_server_same, howText(answer.how), time)
+        evidence == null && sameAsHeader ->
+            stringResource(R.string.survey_relay_server_same, answerHowText(answer, names), time)
 
         evidence == null ->
-            stringResource(R.string.survey_relay_server, nodeName(node, names), howText(answer.how), time)
+            stringResource(R.string.survey_relay_server, nodeName(node, names), answerHowText(answer, names), time)
 
         sameAsHeader ->
             stringResource(R.string.survey_relay_server_evidence_same, evidenceText(evidence, answer.heardAtMs, now))
@@ -1915,6 +1916,22 @@ private fun serverText(answer: ServerAnswer, names: Map<Long, String>, sameAsHea
     }
 }
 
+/** How SigSleuth knows the relay: a near link's node and distance when SigSleuth sent them, else [howText]. */
+@Composable
+@ReadOnlyComposable
+private fun answerHowText(answer: ServerAnswer, names: Map<Long, String>): String {
+    val near = answer.near
+    return if (answer.how == "near_link" && near != null) {
+        stringResource(
+            R.string.survey_server_near_link_node,
+            names[near.nodeId] ?: near.name ?: nodeName(near.nodeId, names),
+            distanceText(near.km * METERS_PER_KM),
+        )
+    } else {
+        howText(answer.how)
+    }
+}
+
 /** How SigSleuth knows the relay, from [ServerAnswer.how]. */
 @Composable
 @ReadOnlyComposable
@@ -1922,6 +1939,7 @@ private fun howText(how: String): String = when (how) {
     "direct" -> stringResource(R.string.survey_server_direct)
     "survey_link" -> stringResource(R.string.survey_server_survey_link)
     "gateway_link" -> stringResource(R.string.survey_server_gateway_link)
+    "near_link" -> stringResource(R.string.survey_server_near_link)
     "sender_link" -> stringResource(R.string.survey_server_sender_link)
     "reported" -> stringResource(R.string.survey_server_reported)
     "only_candidate" -> stringResource(R.string.survey_server_only_candidate)

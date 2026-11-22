@@ -144,6 +144,9 @@
     <string name="survey_server_direct">heard directly</string>
     <string name="survey_server_survey_link">heard nearby by a survey</string>
     <string name="survey_server_gateway_link">linked to a gateway that heard it</string>
+    <string name="survey_server_near_link">linked to a node nearby</string>
+    <!-- How SigSleuth knows the relay: %1$s a node near the packet's position that SigSleuth often saw linked directly with the relay, %2$s how far it is from there ("6.8 km"). -->
+    <string name="survey_server_near_link_node">linked to %1$s, %2$s from you</string>
     <string name="survey_server_sender_link">linked to the sender</string>
     <string name="survey_server_reported">says it relayed it</string>
     <string name="survey_server_only_candidate">the only one that could</string>

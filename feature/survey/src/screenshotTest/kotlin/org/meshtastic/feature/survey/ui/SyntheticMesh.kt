@@ -24,6 +24,7 @@ import org.meshtastic.feature.survey.DirectSender
 import org.meshtastic.feature.survey.LinkEvidence
 import org.meshtastic.feature.survey.MappedNode
 import org.meshtastic.feature.survey.MappedNodes
+import org.meshtastic.feature.survey.NearEvidence
 import org.meshtastic.feature.survey.RelayGuess
 import org.meshtastic.feature.survey.RelayStats
 import org.meshtastic.feature.survey.ServerAnswer
@@ -274,7 +275,14 @@ internal class SyntheticMesh(
             } else {
                 null
             }
-        return ServerAnswer(seq, heardAtMs, byte, named, how, names[named], evidence = evidence)
+        val near =
+            if (how == "near_link") {
+                val partner = nodes[random.nextInt(nodes.size)].id
+                NearEvidence(partner, names[partner], random.nextDouble(1.0, 25.0))
+            } else {
+                null
+            }
+        return ServerAnswer(seq, heardAtMs, byte, named, how, names[named], evidence = evidence, near = near)
     }
 
     private companion object {
@@ -287,7 +295,7 @@ internal class SyntheticMesh(
         const val BROADCAST = 0xFFFF_FFFFL
         const val NAME_LETTERS = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"
         val HOWS =
-            listOf("survey_link", "survey_link", "gateway_link", "sender_link", "reported", "only_candidate", "unknown")
+            listOf("survey_link", "near_link", "gateway_link", "sender_link", "reported", "only_candidate", "unknown")
 
         fun walk(along: Double): Pair<Double, Double> = Pair(
             WALK_START.first + (WALK_END.first - WALK_START.first) * along,

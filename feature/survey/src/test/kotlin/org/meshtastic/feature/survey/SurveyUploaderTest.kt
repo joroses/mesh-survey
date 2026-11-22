@@ -274,6 +274,22 @@ class SurveyUploaderTest {
     }
 
     @Test
+    fun `a near link keeps the node it was linked to and how far that is`() = runTest {
+        record("a", 2)
+        // Seq 2's link has no evidence, as an older server answers.
+        replyFields =
+            """, "heard": [{"seq": 1, "node_id": 26, "how": "near_link", "near_node_id": 282, "near_km": 6.8}, """ +
+            """{"seq": 2, "node_id": 26, "how": "near_link"}], """ +
+            """"nodes": [{"node_id": 282, "long_name": "Hill", "short_name": "HL"}]"""
+        val seen = mutableListOf<ServerAnswer>()
+        answers.listener = { _, list -> seen += list }
+
+        uploader().upload()
+
+        assertEquals(listOf(NearEvidence(282, "HL", 6.8), null), seen.map { it.near })
+    }
+
+    @Test
     fun `a private session stays on the phone until its Upload button sends it`() = runTest {
         record("private", 2, upload = false)
         record("shared", 1)

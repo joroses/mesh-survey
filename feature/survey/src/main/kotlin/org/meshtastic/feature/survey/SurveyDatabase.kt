@@ -120,8 +120,8 @@ data class SurveyDeleted(@PrimaryKey val id: Int = 0, @ColumnInfo(name = "new_ce
 /**
  * SigSleuth's answer ([ServerAnswer]) for the newest uploaded packet of each relay byte in a session, so an ended
  * session's relays show it ([replayRelays]). The packet's time is its measurement's, found by [seq]. [candidates] is a
- * JSON list of [ServerCandidate]s, null when there are none; the `link_` columns are a survey link's [LinkEvidence],
- * null for other answers and from older servers.
+ * JSON list of [ServerCandidate]s, null when there are none; the `link_` columns are a survey link's [LinkEvidence] and
+ * the `near_` ones a near link's [NearEvidence], null for other answers and from older servers.
  */
 @Entity(tableName = "survey_answer", primaryKeys = ["session_id", "relay_byte"])
 data class SavedAnswer(
@@ -136,6 +136,9 @@ data class SavedAnswer(
     @ColumnInfo(name = "link_offset_ms") val linkOffsetMs: Long?,
     @ColumnInfo(name = "link_mine") val linkMine: Boolean?,
     @ColumnInfo(name = "link_rssi") val linkRssi: Int?,
+    @ColumnInfo(name = "near_node_id") val nearNodeId: Long? = null,
+    @ColumnInfo(name = "near_name") val nearName: String? = null,
+    @ColumnInfo(name = "near_km") val nearKm: Double? = null,
 )
 
 /** A [SavedAnswer] with its packet's time, [heardAtMs], from the measurement it answers. */
@@ -154,6 +157,7 @@ data class SavedAnswerRow(@Embedded val answer: SavedAnswer, @ColumnInfo(name = 
             } else {
                 null
             },
+            if (nearNodeId != null && nearKm != null) NearEvidence(nearNodeId, nearName, nearKm) else null,
         )
     }
 }
@@ -171,6 +175,9 @@ fun ServerAnswer.saved(sessionId: String) = SavedAnswer(
     evidence?.offsetMs,
     evidence?.mine,
     evidence?.rssi,
+    near?.nodeId,
+    near?.name,
+    near?.km,
 )
 
 private val answerJson = Json { ignoreUnknownKeys = true }
@@ -626,14 +633,14 @@ interface SurveyDao {
  */
 @Database(
     entities = [SurveySession::class, SurveyMeasurement::class, SurveyDeleted::class, SavedAnswer::class],
-    version = 7,
+    version = 8,
     exportSchema = true,
     // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key. 4: whether
     // each session may be uploaded. 5: each measurement's cell, what SigSleuth said it adds and what it adds to the
     // phone's earlier sessions, filled in for older rows, each session's counts of them, and what deleted sessions had
     // added to the map. 6: those counts by cell (distinct relay bytes and direct senders, cells with a new one) rather
     // than by pairs of a cell and a key, and no relay or direct counts from SigSleuth or for deleted sessions.
-    // 7: SigSleuth's answer for each session's relay bytes, empty until the next uploads.
+    // 7: SigSleuth's answer for each session's relay bytes, empty until the next uploads. 8: a near link's node and km.
     autoMigrations =
     [
         AutoMigration(from = 1, to = 2),
@@ -642,6 +649,7 @@ interface SurveyDao {
         AutoMigration(from = 4, to = 5, spec = FillNewToYou::class),
         AutoMigration(from = 5, to = 6, spec = CountNewsByCell::class),
         AutoMigration(from = 6, to = 7),
+        AutoMigration(from = 7, to = 8),
     ],
 )
 abstract class SurveyDatabase : RoomDatabase() {
