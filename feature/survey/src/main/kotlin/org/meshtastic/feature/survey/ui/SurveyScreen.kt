@@ -104,6 +104,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -205,6 +206,7 @@ import org.meshtastic.feature.survey.RelayStats
 import org.meshtastic.feature.survey.SIGSLEUTH_MAX_ACCURACY_M
 import org.meshtastic.feature.survey.SIGSLEUTH_MAX_FIX_AGE_S
 import org.meshtastic.feature.survey.ServerAnswer
+import org.meshtastic.feature.survey.SurveyDeleted
 import org.meshtastic.feature.survey.SurveyFix
 import org.meshtastic.feature.survey.SurveyMeasurement
 import org.meshtastic.feature.survey.SurveyNews
@@ -225,7 +227,45 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource as sharedStringResource
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** What the survey screen shows, as [SurveyViewModel]'s flows have it; [SurveyContent] draws it. */
+internal data class SurveyUi(
+    val state: SurveyState = SurveyState(),
+    val radioConnected: Boolean = false,
+    val relayNames: Map<Long, String> = emptyMap(),
+    val sessions: List<SurveySessionSummary> = emptyList(),
+    val uploadSettings: SurveyUploadSettings? = null,
+    val uploading: Boolean = false,
+    val carMode: Boolean = false,
+    val deleted: SurveyDeleted? = null,
+    val directSenders: Int = 0,
+    val opened: OpenedSession? = null,
+)
+
+/** What the survey screen's controls do. [SurveyScreen] hands them to [SurveyViewModel]; by default they do nothing. */
+@Suppress("LongParameterList")
+internal class SurveyActions(
+    val onNavigateUp: () -> Unit = {},
+    val onStart: () -> Unit = {},
+    val onStop: () -> Unit = {},
+    val onCarMode: (Boolean) -> Unit = {},
+    val onSaveServer: (SurveyUploadSettings) -> Unit = {},
+    val onAutomatic: (Boolean) -> Unit = {},
+    val onUpload: (sessionId: String) -> Unit = {},
+    val onUploadAll: () -> Unit = {},
+    val onExport: (SurveySessionSummary) -> Unit = {},
+    val onDelete: (sessionId: String) -> Unit = {},
+    val onOpen: (sessionId: String) -> Unit = {},
+    val onCloseSession: () -> Unit = {},
+)
+
+/**
+ * A still picture of the survey screen, for screenshots: every clock stopped at [now], and the relay rows of
+ * [openRelays] opened. Null, as in the app, the clocks tick and every row starts closed.
+ */
+internal data class SurveySnapshot(val now: SurveyNow, val openRelays: Set<Int> = emptySet())
+
+internal val LocalSurveySnapshot = staticCompositionLocalOf<SurveySnapshot?> { null }
+
 @Composable
 fun SurveyScreen(
     onNavigateUp: () -> Unit,
@@ -242,8 +282,6 @@ fun SurveyScreen(
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
     val directSenders by viewModel.directSenders.collectAsStateWithLifecycle()
     val opened by viewModel.opened.collectAsStateWithLifecycle()
-    val totals =
-        remember(sessions, deleted, directSenders) { surveyTotals(sessions.map { it.session }, deleted, directSenders) }
     // Only while this screen is in front: Android drops the flag once the app is in the background.
     KeepScreenOn(carMode && state.session != null)
 
@@ -276,6 +314,56 @@ fun SurveyScreen(
             val sessionId = exportSessionId
             if (uri != null && sessionId != null) viewModel.export(sessionId, uri)
         }
+    val actions =
+        remember(viewModel, onNavigateUp) {
+            SurveyActions(
+                onNavigateUp = onNavigateUp,
+                onStart = requestStart,
+                onStop = viewModel::stop,
+                onCarMode = viewModel::setCarMode,
+                onSaveServer = viewModel::saveServer,
+                onAutomatic = viewModel::setAutomatic,
+                onUpload = viewModel::upload,
+                onUploadAll = viewModel::uploadAll,
+                onExport = { summary ->
+                    exportSessionId = summary.session.id
+                    exporter.launch(csvFileName(summary))
+                },
+                onDelete = viewModel::delete,
+                onOpen = viewModel::open,
+                onCloseSession = viewModel::closeSession,
+            )
+        }
+    SurveyContent(
+        SurveyUi(
+            state,
+            radioConnected,
+            relayNames,
+            sessions,
+            uploadSettings,
+            uploading,
+            carMode,
+            deleted,
+            directSenders,
+            opened,
+        ),
+        actions,
+        modifier,
+    )
+}
+
+/** The survey screen drawn from [ui] alone, so screenshots can draw it from made-up data. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modifier = Modifier) {
+    val state = ui.state
+    val sessions = ui.sessions
+    val uploadSettings = ui.uploadSettings
+    val uploading = ui.uploading
+    val totals =
+        remember(sessions, ui.deleted, ui.directSenders) {
+            surveyTotals(sessions.map { it.session }, ui.deleted, ui.directSenders)
+        }
     val uploadsOn = uploadSettings?.url?.isNotBlank() == true
     val recording = state.session
     // The session recording now has the screen to itself, so the list holds only ended ones.
@@ -287,11 +375,11 @@ fun SurveyScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.survey_title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = actions.onNavigateUp) {
                         Icon(MeshtasticIcons.ArrowBack, contentDescription = stringResource(R.string.survey_back))
                     }
                 },
-                actions = { CarModeChip(carMode, viewModel::setCarMode) },
+                actions = { CarModeChip(ui.carMode, actions.onCarMode) },
             )
         },
     ) { padding ->
@@ -302,22 +390,21 @@ fun SurveyScreen(
             RecordingView(
                 state,
                 recording,
-                relayNames,
-                car = carMode,
+                ui.relayNames,
+                car = ui.carMode,
                 upload = uploadSettings?.takeIf { uploadsOn }?.let { uploadMark(it, live) },
                 onUpload = { showUpload = true },
-                onStop = viewModel::stop,
+                onStop = actions.onStop,
                 modifier = Modifier.padding(padding),
             )
-            val settings = uploadSettings
-            if (showUpload && settings != null) {
+            if (showUpload && uploadSettings != null) {
                 UploadSheet(
-                    settings,
+                    uploadSettings,
                     live,
                     pastWaiting = past.count { it.waiting },
                     uploading = uploading,
-                    onAutomatic = viewModel::setAutomatic,
-                    onUpload = { viewModel.upload(recording.id) },
+                    onAutomatic = actions.onAutomatic,
+                    onUpload = { actions.onUpload(recording.id) },
                     onDismiss = { showUpload = false },
                 )
             }
@@ -327,7 +414,7 @@ fun SurveyScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item(key = "idle") { IdleCard(state, radioConnected, onStart = requestStart) }
+                item(key = "idle") { IdleCard(state, ui.radioConnected, onStart = actions.onStart) }
                 uploadSettings?.let { current ->
                     item(key = "upload") {
                         UploadCard(
@@ -335,9 +422,9 @@ fun SurveyScreen(
                             pastWaiting = past.count { it.waiting },
                             anyUploaded = past.any { it.uploadedCount > 0 },
                             uploading = uploading,
-                            onSave = viewModel::saveServer,
-                            onAutomatic = viewModel::setAutomatic,
-                            onUploadAll = viewModel::uploadAll,
+                            onSave = actions.onSaveServer,
+                            onAutomatic = actions.onAutomatic,
+                            onUploadAll = actions.onUploadAll,
                         )
                     }
                 }
@@ -370,18 +457,15 @@ fun SurveyScreen(
                         uploadsOn = uploadsOn,
                         uploading = uploading,
                         showRadio = older == null || radioKey(older) != radioKey(summary.session),
-                        onOpen = { viewModel.open(summary.session.id) }.takeIf { summary.measurementCount > 0 },
-                        onUpload = { viewModel.upload(summary.session.id) },
-                        onExport = {
-                            exportSessionId = summary.session.id
-                            exporter.launch(csvFileName(summary))
-                        },
-                        onDelete = { viewModel.delete(summary.session.id) },
+                        onOpen = { actions.onOpen(summary.session.id) }.takeIf { summary.measurementCount > 0 },
+                        onUpload = { actions.onUpload(summary.session.id) },
+                        onExport = { actions.onExport(summary) },
+                        onDelete = { actions.onDelete(summary.session.id) },
                     )
                 }
             }
         }
-        opened?.let { SessionRelaysSheet(it, onDismiss = viewModel::closeSession) }
+        ui.opened?.let { SessionRelaysSheet(it, onDismiss = actions.onCloseSession) }
     }
 }
 
@@ -1376,39 +1460,41 @@ private fun highlighted(text: String, part: String, style: SpanStyle): Annotated
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SessionRelaysSheet(opened: OpenedSession, onDismiss: () -> Unit) {
-    val clock = rememberSurveyClock()
     val sheetState =
         rememberBottomSheetState(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
         )
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        RelaysList(
-            opened.relays?.relays,
-            opened.relays?.neighbours.orEmpty(),
-            opened.session.spreadingFactor,
-            opened.names,
-            clock::value,
-            // The rows' own inset brings their text in line with the title.
-            contentPadding = PaddingValues(start = SHEET_INSET, end = SHEET_INSET, bottom = 24.dp),
-            header = {
-                Column(
-                    Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 8.dp).semantics(
-                        mergeDescendants = true,
-                    ) {
-                        heading()
-                    },
-                ) {
-                    Text(stringResource(R.string.survey_relays_title), style = MaterialTheme.typography.headlineSmall)
-                    Text(
-                        sessionTitle(opened.session),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-        )
-    }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) { SessionRelays(opened) }
+}
+
+/** [SessionRelaysSheet]'s content: the relays list under the session's date and length. */
+@Composable
+internal fun SessionRelays(opened: OpenedSession) {
+    val clock = rememberSurveyClock()
+    RelaysList(
+        opened.relays?.relays,
+        opened.relays?.neighbours.orEmpty(),
+        opened.session.spreadingFactor,
+        opened.names,
+        clock::value,
+        // The rows' own inset brings their text in line with the title.
+        contentPadding = PaddingValues(start = SHEET_INSET, end = SHEET_INSET, bottom = 24.dp),
+        header = {
+            Column(
+                Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 8.dp).semantics(mergeDescendants = true) {
+                    heading()
+                },
+            ) {
+                Text(stringResource(R.string.survey_relays_title), style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    sessionTitle(opened.session),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
 }
 
 /** A sheet's edge to its rows, so with [ROW_INSET] their text sits 24 dp in, as sheet titles do. */
@@ -1434,7 +1520,8 @@ private fun RelaysList(
     header: (@Composable () -> Unit)? = null,
 ) {
     val sorted = remember(relays) { relays?.entries?.sortedByDescending { it.value.packets } }
-    var open by remember { mutableStateOf(emptySet<Int>()) }
+    val snapshotOpen = LocalSurveySnapshot.current?.openRelays.orEmpty()
+    var open by remember { mutableStateOf(snapshotOpen) }
     LazyColumn(modifier, contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         header?.let { item(key = "header") { it() } }
         when {
@@ -1867,20 +1954,23 @@ private fun distanceText(meters: Double): String = if (meters < METERS_PER_KM) {
 }
 
 /** The wall clock and the clock GPS fixes are timed on, read together. */
-private data class SurveyNow(val wallMs: Long, val elapsedMs: Long) {
+internal data class SurveyNow(val wallMs: Long, val elapsedMs: Long) {
     companion object {
         fun read() = SurveyNow(nowMillis, SystemClock.elapsedRealtime())
     }
 }
 
-/** Both clocks, read together every second. */
+/** Both clocks, read together every second, or stopped at the [LocalSurveySnapshot]'s time. */
 @Composable
 private fun rememberSurveyClock(): State<SurveyNow> {
-    val clock = remember { mutableStateOf(SurveyNow.read()) }
-    LaunchedEffect(clock) {
-        while (true) {
-            delay(MILLIS_PER_SECOND)
-            clock.value = SurveyNow.read()
+    val stopped = LocalSurveySnapshot.current?.now
+    val clock = remember { mutableStateOf(stopped ?: SurveyNow.read()) }
+    if (stopped == null) {
+        LaunchedEffect(clock) {
+            while (true) {
+                delay(MILLIS_PER_SECOND)
+                clock.value = SurveyNow.read()
+            }
         }
     }
     return clock
@@ -2095,18 +2185,32 @@ private fun UploadSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                stringResource(R.string.survey_upload),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() },
-            )
-            UploadSummary(settings, recording, pastWaiting, onAutomatic) {
-                UploadButton(R.string.survey_upload_now, (recording?.pendingCount ?: 0) > 0, uploading, onUpload)
-            }
+        UploadSheetContent(settings, recording, pastWaiting, uploading, onAutomatic, onUpload)
+    }
+}
+
+/** [UploadSheet]'s content. */
+@Composable
+@Suppress("LongParameterList")
+internal fun UploadSheetContent(
+    settings: SurveyUploadSettings,
+    recording: SurveySessionSummary?,
+    pastWaiting: Int,
+    uploading: Boolean,
+    onAutomatic: (Boolean) -> Unit = {},
+    onUpload: () -> Unit = {},
+) {
+    Column(
+        Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            stringResource(R.string.survey_upload),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.semantics { heading() },
+        )
+        UploadSummary(settings, recording, pastWaiting, onAutomatic) {
+            UploadButton(R.string.survey_upload_now, (recording?.pendingCount ?: 0) > 0, uploading, onUpload)
         }
     }
 }
