@@ -143,8 +143,10 @@
     <!-- How SigSleuth knows the relay: %1$s a node near the packet's position that SigSleuth often saw linked directly with the relay, %2$s how far it is from there ("6.8 km"). -->
     <string name="survey_server_near_link_node">linked to %1$s, %2$s from you</string>
     <string name="survey_server_sender_link">linked to the sender</string>
-    <string name="survey_server_reported">says it relayed it</string>
-    <string name="survey_server_only_candidate">the only one that could</string>
+    <!-- The node uploaded this packet to MQTT itself, one hop before the copy heard here. -->
+    <string name="survey_server_reported">uploaded it one hop earlier</string>
+    <!-- Named without a link: near the packet, and no other node with this relay byte comes close. -->
+    <string name="survey_server_only_candidate">only strong match nearby</string>
     <!-- SigSleuth's answer with the evidence behind it, in place of the packet's time: %1$s the node's short name, %2$s where and when the node was heard directly ("heard directly by you 2.3 km away, 29 days ago"). -->
     <string name="survey_relay_server_evidence">SigSleuth: %1$s, %2$s</string>
     <!-- As survey_relay_server_evidence, when the relay byte's line above already names the same node: %1$s where and when the node was heard directly. -->
