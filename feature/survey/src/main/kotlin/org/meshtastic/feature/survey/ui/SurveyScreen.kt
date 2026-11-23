@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -60,6 +61,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -141,6 +143,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -713,7 +716,7 @@ private fun RecordingHeader(
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         StatusDot(if (waiting) colors.StatusYellow else colors.StatusGreen)
         if (car && !waiting) {
-            Text(time, Modifier.weight(1f), style = timeStyle, maxLines = 1)
+            FitText(time, timeStyle, Modifier.weight(1f))
         } else {
             Text(
                 stringResource(if (waiting) R.string.survey_waiting_title else R.string.survey_recording),
@@ -928,11 +931,10 @@ private fun RssiReading(rssi: Int?, style: TextStyle) {
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(Modifier.size(RSSI_DOT_SIZE).background(rssiQuality(rssi).color(), CircleShape))
-        Text(
+        FitText(
             stringResource(R.string.survey_rssi_value, rssi),
-            style = style.copy(fontFeatureSettings = "tnum"),
+            style.copy(fontFeatureSettings = "tnum"),
             color = colors.onSurface,
-            maxLines = 1,
         )
     }
 }
@@ -977,30 +979,37 @@ private fun Stat(
     val content = if (onClick == null) Color.Unspecified else colors.onPrimaryContainer
     Column(if (onClick == null) modifier.semantics(mergeDescendants = true) {} else modifier) {
         Column(chip.padding(horizontal = STAT_INSET, vertical = if (onClick == null) 2.dp else 4.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    value,
-                    style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
-                    color = content,
-                    maxLines = 1,
+            // An inline note that does not fit beside the figure goes under it, rather than shrinking to "…".
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(
                     modifier = if (inlineNote != null) Modifier.alignByBaseline() else Modifier,
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    // Weighted, so the chevron is measured first and the figure shrinks to the room left.
+                    FitText(
+                        value,
+                        MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+                        Modifier.weight(1f, fill = false),
+                        color = content,
+                    )
+                    if (onClick != null) {
+                        Icon(
+                            MeshtasticIcons.ChevronRight,
+                            contentDescription = null,
+                            Modifier.size(20.dp),
+                            tint = content,
+                        )
+                    }
+                }
                 inlineNote?.let {
                     Text(
                         it,
                         style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
                         color = colors.StatusGreen,
                         maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.alignByBaseline(),
                     )
-                }
-                if (onClick != null) {
-                    Icon(MeshtasticIcons.ChevronRight, contentDescription = null, Modifier.size(20.dp), tint = content)
                 }
             }
             // In the chip, its icon takes the chip's colour: the figure's own has too little contrast on it.
@@ -1065,6 +1074,21 @@ private fun FigureLabel(
 }
 
 private val FIGURE_ICON_SIZE = 14.dp
+
+/** One line of [text] that shrinks to fit its width, down to [FIT_MIN_SIZE], instead of losing characters. */
+@Composable
+private fun FitText(text: String, style: TextStyle, modifier: Modifier = Modifier, color: Color = Color.Unspecified) =
+    Text(
+        text,
+        modifier,
+        color = color,
+        autoSize = TextAutoSize.StepBased(minFontSize = FIT_MIN_SIZE, maxFontSize = style.fontSize),
+        style = style,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+
+private val FIT_MIN_SIZE = 10.sp
 
 /** Widens the content by [x] on each side, so text inset by [x] lines up with the parent's. */
 private fun Modifier.bleed(x: Dp) = layout { measurable, constraints ->
@@ -2252,7 +2276,7 @@ private fun UploadSummary(
     val error = recording?.session?.lastUploadError?.takeIf { pending > 0 }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            settings.url,
+            uploadUrlTyped(settings.url).trimEnd('/'),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -2692,12 +2716,18 @@ private fun UploadProgress(summary: SurveySessionSummary, uploadsOn: Boolean) {
     if (!missing || !shown) return
     Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(stringResource(R.string.survey_uploaded_of, uploaded, count), style = MaterialTheme.typography.bodyMedium)
-        LinearProgressIndicator(progress = { uploaded.toFloat() / count }, modifier = Modifier.fillMaxWidth())
+        // The default track is the card's own colour, which left only the bar and its end dot showing.
+        LinearProgressIndicator(
+            progress = { uploaded.toFloat() / count },
+            modifier = Modifier.fillMaxWidth(),
+            trackColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        )
     }
 }
 
 /** How many packets SigSleuth kept and skipped; the reasons stay out, as a list of them crowded the card. */
 @Composable
+@ReadOnlyComposable
 private fun serverText(session: SurveySession): String? {
     if (session.serverKept + session.serverSkipped == 0L) return null
     return if (session.serverSkipped == 0L) {
