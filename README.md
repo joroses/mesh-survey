@@ -3,8 +3,8 @@
 Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshtastic/Meshtastic-Android) that works with Meshtastic® nodes. It adds a **signal survey**: while a survey runs, the app records every LoRa packet the connected node hears, with the phone's GPS position, and can export each session as CSV or upload it to a [SigSleuth](https://github.com/joroses/sigsleuth) server. See [`feature/survey/README.md`](feature/survey/README.md) for how it works and which upstream files it changes.
 
 <p align="center">
-  <img src="feature/survey/docs/survey-recording.jpg" alt="A survey recording: elapsed time, node and frequency, measurement count, relay bytes, GPS accuracy, the last packet's SNR and RSSI, and a Stop button" width="300"/>
-  <img src="feature/survey/docs/survey-relays.jpg" alt="The Relays dialog: each relay byte heard, with its packet count and the likely or possible node behind it" width="300"/>
+  <img src="feature/survey/docs/survey-recording.jpg" alt="A survey recording: GPS, upload and elapsed time; relays, cells and direct senders with what is new to you and what SigSleuth's map gained; the last packet's relay, SNR and RSSI; a Stop button; and the relays heard so far" width="300"/>
+  <img src="feature/survey/docs/survey-relays.jpg" alt="An ended session's relays: each relay byte with the node behind it, its packets, RSSI and SNR, why SigSleuth names that node, and nodes heard directly nearby" width="300"/>
 </p>
 
 - **Modified work.** This fork has been modified from the upstream project since 2026-09: the signal survey, the app name, application ID and icons, and the source link on the About screen. The [commit history](https://github.com/joroses/mesh-survey/commits/feature/signal-survey) shows every change and its date.
