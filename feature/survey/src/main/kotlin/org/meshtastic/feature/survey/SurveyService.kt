@@ -150,7 +150,7 @@ class SurveyService : Service() {
         val waiting = (state.measurementCount - state.acknowledged).coerceAtLeast(0).toInt()
         val details =
             listOfNotNull(
-                state.newToYou?.takeIf { it.cells > 0 }?.let(::newToYouText),
+                state.newToYou?.takeIf { it.cells > 0 || it.relays > 0 || it.direct > 0 }?.let(::newToYouText),
                 state.news?.newCells?.let { resources.getQuantityString(R.plurals.survey_cells_added, it, it) },
                 resources.getQuantityString(R.plurals.survey_upload_pending, waiting, waiting).takeIf {
                     state.uploadFailing && waiting > 0
@@ -181,14 +181,14 @@ class SurveyService : Service() {
         super.onDestroy()
     }
 
-    /** "New to you: 4 cells · a new relay in 9 cells", as the screen's `newToYouText`. */
+    /** "New to you: 4 cells · 2 relays · 1 direct node". */
     private fun newToYouText(news: SurveyNews): String {
         fun part(plural: Int, count: Int) = count.takeIf { it > 0 }?.let { resources.getQuantityString(plural, it, it) }
         val parts =
             listOfNotNull(
                 part(R.plurals.survey_cells, news.localNewCells),
-                part(R.plurals.survey_new_relay_cells, news.localNewRelayCells),
-                part(R.plurals.survey_new_direct_cells, news.localNewDirectCells),
+                part(R.plurals.survey_relays, news.localNewRelays),
+                part(R.plurals.survey_direct_nodes, news.localNewDirect),
             )
         if (parts.isEmpty()) return getString(R.string.survey_nothing_new)
         return getString(R.string.survey_new_to_you, parts.joinToString(" · "))

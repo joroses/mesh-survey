@@ -35,11 +35,11 @@ class SurveyNewToYouTest {
     )
 
     private val offline =
-        session("offline", SurveyNews(40, 21, 5, localNewCells = 7, localNewRelayCells = 30, localNewDirectCells = 2))
+        session("offline", SurveyNews(40, 21, 5, localNewCells = 7, localNewRelays = 12, localNewDirect = 2))
     private val uploaded =
         session(
             "uploaded",
-            SurveyNews(10, 8, 1, newCells = 4, localNewCells = 3, localNewRelayCells = 5),
+            SurveyNews(10, 8, 1, newCells = 4, localNewCells = 3, localNewRelays = 5),
         )
     private val uncounted = session("uncounted", news = null)
 

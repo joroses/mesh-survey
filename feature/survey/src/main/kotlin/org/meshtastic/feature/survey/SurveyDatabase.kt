@@ -84,10 +84,11 @@ data class SurveySession(
 )
 
 /**
- * What a session measured where it had a cell: its distinct cells, relay bytes and senders heard directly; the cells
- * SigSleuth's replies called new to its map (null until a reply says, a cell counting once whichever batch said so);
- * and the cells that were new to this phone, or where it heard a relay byte or a direct sender for the first time there
- * ([SurveyMeasurement.localNew]). Every "new" count is of cells, so sessions' counts add up.
+ * What a session measured: its distinct cells (where it had a GPS fix), relay bytes and senders heard directly (with or
+ * without a fix); the cells SigSleuth's replies called new to its map (null until a reply says, a cell counting once
+ * whichever batch said so); and what was new to this phone on its network: cells no earlier session had
+ * ([SurveyMeasurement.localNew]), and relay bytes and direct senders no earlier session's lists have ([SessionRelay],
+ * [SessionDirect]).
  */
 data class SurveyNews(
     val cells: Int,
@@ -95,17 +96,15 @@ data class SurveyNews(
     val direct: Int,
     @ColumnInfo(name = "new_cells") val newCells: Int? = null,
     @ColumnInfo(name = "local_new_cells") val localNewCells: Int = 0,
-    @ColumnInfo(name = "local_new_relay_cells") val localNewRelayCells: Int = 0,
-    @ColumnInfo(name = "local_new_direct_cells") val localNewDirectCells: Int = 0,
+    @ColumnInfo(name = "local_new_relays") val localNewRelays: Int = 0,
+    @ColumnInfo(name = "local_new_direct") val localNewDirect: Int = 0,
 ) {
     companion object {
         /**
-         * [SurveyMeasurement.localNew] bits; [SurveyMeasurement.serverNew] uses only [NEW_CELL]. The `NEWS` query
-         * repeats them.
+         * The [SurveyMeasurement.localNew] and [SurveyMeasurement.serverNew] bit of a row whose cell is new; the `NEWS`
+         * query repeats it.
          */
         const val NEW_CELL = 1
-        const val NEW_NODE = 2
-        const val NEW_DIRECT = 4
     }
 }
 
@@ -116,6 +115,31 @@ data class SurveyNews(
  */
 @Entity(tableName = "survey_deleted")
 data class SurveyDeleted(@PrimaryKey val id: Int = 0, @ColumnInfo(name = "new_cells") val newCells: Int = 0)
+
+/**
+ * A relay byte a session heard, with or without a cell; [SurveyDao.insertMeasurement] keeps each session's distinct
+ * ones, so the relays new to the phone are counted from these short lists ([NEW_RELAYS]) rather than every measurement.
+ */
+@Entity(
+    tableName = "survey_session_relay",
+    primaryKeys = ["session_id", "relay_byte"],
+    indices = [Index(value = ["relay_byte"])],
+)
+data class SessionRelay(
+    @ColumnInfo(name = "session_id") val sessionId: String,
+    @ColumnInfo(name = "relay_byte") val relayByte: Int,
+)
+
+/** A sender a session heard directly ([isDirect]), with or without a cell, as [SessionRelay] for [NEW_DIRECT]. */
+@Entity(
+    tableName = "survey_session_direct",
+    primaryKeys = ["session_id", "node_id"],
+    indices = [Index(value = ["node_id"])],
+)
+data class SessionDirect(
+    @ColumnInfo(name = "session_id") val sessionId: String,
+    @ColumnInfo(name = "node_id") val nodeId: Long,
+)
 
 /**
  * SigSleuth's answer ([ServerAnswer]) for the newest uploaded packet of each relay byte in a session, so an ended
@@ -220,8 +244,8 @@ data class SurveyMeasurement(
      */
     @ColumnInfo(name = "server_new") val serverNew: Int? = null,
     /**
-     * What it adds to this phone's sessions that started earlier on the same spreading factor and bandwidth, as
-     * [SurveyNews] bits; null without a cell.
+     * [SurveyNews.NEW_CELL] when no session that started earlier on the same network had its cell, else 0. Rows saved
+     * by versions 5 to 8 may also carry bits 2 and 4 (a relay byte or direct sender new there), which nothing reads.
      */
     @ColumnInfo(name = "local_new") val localNew: Int? = null,
 ) {
@@ -273,30 +297,51 @@ internal const val IS_DIRECT =
     "hop_start = hop_limit AND relay_byte = CASE WHEN sender_node_id % 256 = 0 THEN 255 ELSE sender_node_id % 256 END"
 private const val CELL = "cell_x || ',' || cell_y"
 
-/** [SurveyNews]'s columns, counted over one session's measurements that have a cell. */
+/** Sessions `s` that started before the `survey_session` row being counted, on its network ([SAME_NETWORK]). */
+private const val EARLIER_SAME_NETWORK =
+    "s.started_at < survey_session.started_at AND s.spreading_factor = survey_session.spreading_factor " +
+        "AND s.bandwidth_khz = survey_session.bandwidth_khz " +
+        "AND (s.frequency_mhz IS NULL OR survey_session.frequency_mhz IS NULL " +
+        "OR abs(s.frequency_mhz - survey_session.frequency_mhz) < s.bandwidth_khz / 2000)"
+
+/** The `survey_session` row's relay bytes ([SessionRelay]) that no earlier session on its network heard. */
+private const val NEW_RELAYS =
+    "(SELECT COUNT(*) FROM survey_session_relay k WHERE k.session_id = survey_session.id AND NOT EXISTS (" +
+        "SELECT 1 FROM survey_session_relay e JOIN survey_session s ON s.id = e.session_id " +
+        "WHERE e.relay_byte = k.relay_byte AND $EARLIER_SAME_NETWORK))"
+
+/** The `survey_session` row's direct senders ([SessionDirect]) that no earlier session on its network heard. */
+private const val NEW_DIRECT =
+    "(SELECT COUNT(*) FROM survey_session_direct k WHERE k.session_id = survey_session.id AND NOT EXISTS (" +
+        "SELECT 1 FROM survey_session_direct e JOIN survey_session s ON s.id = e.session_id " +
+        "WHERE e.node_id = k.node_id AND $EARLIER_SAME_NETWORK))"
+
+/**
+ * [SurveyNews]'s columns for one `survey_session` row: counted over its measurements (cell counts skip rows without a
+ * cell), its new relay bytes and direct senders from the session lists.
+ */
 internal const val NEWS_COLUMNS =
-    "COUNT(DISTINCT $CELL) AS cells, " +
+    "COUNT(DISTINCT CASE WHEN cell_x IS NOT NULL THEN $CELL END) AS cells, " +
         "COUNT(DISTINCT relay_byte) AS relays, " +
         "COUNT(DISTINCT CASE WHEN $IS_DIRECT THEN sender_node_id END) AS direct, " +
-        "CASE WHEN COUNT(server_new) > 0 THEN COUNT(DISTINCT CASE WHEN server_new & 1 THEN $CELL END) END " +
-        "AS new_cells, " +
-        "COUNT(DISTINCT CASE WHEN local_new & 1 THEN $CELL END) AS local_new_cells, " +
-        "COUNT(DISTINCT CASE WHEN local_new & 2 THEN $CELL END) AS local_new_relay_cells, " +
-        "COUNT(DISTINCT CASE WHEN local_new & 4 THEN $CELL END) AS local_new_direct_cells"
+        "CASE WHEN COUNT(CASE WHEN cell_x IS NOT NULL THEN server_new END) > 0 THEN " +
+        "COUNT(DISTINCT CASE WHEN cell_x IS NOT NULL AND server_new & 1 THEN $CELL END) END AS new_cells, " +
+        "COUNT(DISTINCT CASE WHEN cell_x IS NOT NULL AND local_new & 1 THEN $CELL END) AS local_new_cells, " +
+        "$NEW_RELAYS AS local_new_relays, $NEW_DIRECT AS local_new_direct"
 
 /** [SurveyNews]'s columns on `survey_session`, in [NEWS_COLUMNS]' order. */
 internal const val NEWS_TARGET =
-    "(news_cells, news_relays, news_direct, news_new_cells, news_local_new_cells, news_local_new_relay_cells, " +
-        "news_local_new_direct_cells)"
+    "(news_cells, news_relays, news_direct, news_new_cells, news_local_new_cells, news_local_new_relays, " +
+        "news_local_new_direct)"
 
 private const val NEWS =
-    "SELECT $NEWS_COLUMNS FROM survey_measurement WHERE session_id = :sessionId AND cell_x IS NOT NULL"
+    "SELECT $NEWS_COLUMNS FROM survey_session LEFT JOIN survey_measurement ON session_id = survey_session.id " +
+        "WHERE survey_session.id = :sessionId"
 
 /** Measurements `m` with a cell as [CellRow]s; the migration reads the columns in this order. */
 internal const val CELL_ROWS =
     "SELECT m.seq, m.session_id AS sessionId, s.started_at AS startedAt, s.spreading_factor AS spreadingFactor, " +
         "s.bandwidth_khz AS bandwidthKhz, s.frequency_mhz AS frequencyMhz, m.cell_x AS x, m.cell_y AS y, " +
-        "m.relay_byte AS relayByte, CASE WHEN $IS_DIRECT THEN m.sender_node_id END AS directSender, " +
         "m.local_new AS localNew FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
         "WHERE m.cell_x IS NOT NULL"
 
@@ -314,7 +359,22 @@ private const val SUMMARY =
 interface SurveyDao {
     @Insert suspend fun insertSession(session: SurveySession)
 
-    @Insert suspend fun insertMeasurement(measurement: SurveyMeasurement): Long
+    @Insert suspend fun insertRow(measurement: SurveyMeasurement): Long
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addRelay(relay: SessionRelay)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addDirect(direct: SessionDirect)
+
+    /** Saves a measurement, adding its relay byte and direct sender to its session's lists. */
+    @Transaction
+    suspend fun insertMeasurement(measurement: SurveyMeasurement): Long = with(measurement) {
+        insertRow(this).also {
+            relayByte?.let { byte -> addRelay(SessionRelay(sessionId, byte)) }
+            if (isDirect()) addDirect(SessionDirect(sessionId, senderNodeId))
+        }
+    }
 
     @Query("SELECT * FROM survey_session ORDER BY started_at DESC")
     fun sessionRows(): Flow<List<SurveySession>>
@@ -375,25 +435,56 @@ interface SurveyDao {
     ): List<DirectPlace>
 
     /**
-     * The keys sessions that started before [startedAt] on this network ([SAME_NETWORK]) have in one cell.
-     * [SurveyMeasurement.localNew] compares against them.
+     * Whether any session that started before [startedAt] on this network ([SAME_NETWORK]) has a row in this cell.
+     * [SurveyMeasurement.localNew] compares [SurveyNews.NEW_CELL] against this.
      */
     @Query(
-        "SELECT DISTINCT m.relay_byte AS relayByte, CASE WHEN $IS_DIRECT THEN m.sender_node_id END AS directSender " +
-            "FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
-            "WHERE m.cell_x = :cellX AND m.cell_y = :cellY AND s.started_at < :startedAt AND $SAME_NETWORK",
+        "SELECT EXISTS(SELECT 1 FROM survey_measurement m JOIN survey_session s ON s.id = m.session_id " +
+            "WHERE m.cell_x = :cellX AND m.cell_y = :cellY AND s.started_at < :startedAt AND $SAME_NETWORK)",
     )
-    suspend fun cellKeys(
+    suspend fun hasCell(
         cellX: Int,
         cellY: Int,
         startedAt: Long,
         spreadingFactor: Int,
         bandwidthKhz: Float,
         frequencyMhz: Float?,
-    ): List<CellKey>
+    ): Boolean
 
-    suspend fun cellKeys(session: SurveySession, cell: SurveyCell): List<CellKey> = with(session) {
-        cellKeys(cell.x, cell.y, startedAt, spreadingFactor, bandwidthKhz, frequencyMhz)
+    suspend fun hasCell(session: SurveySession, cell: SurveyCell): Boolean = with(session) {
+        hasCell(cell.x, cell.y, startedAt, spreadingFactor, bandwidthKhz, frequencyMhz)
+    }
+
+    /** The relay bytes sessions that started before [startedAt] on this network ([SAME_NETWORK]) heard. */
+    @Query(
+        "SELECT DISTINCT r.relay_byte FROM survey_session_relay r JOIN survey_session s ON s.id = r.session_id " +
+            "WHERE s.started_at < :startedAt AND $SAME_NETWORK",
+    )
+    suspend fun earlierRelays(
+        startedAt: Long,
+        spreadingFactor: Int,
+        bandwidthKhz: Float,
+        frequencyMhz: Float?,
+    ): List<Int>
+
+    /** The senders sessions that started before [startedAt] on this network ([SAME_NETWORK]) heard directly. */
+    @Query(
+        "SELECT DISTINCT d.node_id FROM survey_session_direct d JOIN survey_session s ON s.id = d.session_id " +
+            "WHERE s.started_at < :startedAt AND $SAME_NETWORK",
+    )
+    suspend fun earlierDirect(
+        startedAt: Long,
+        spreadingFactor: Int,
+        bandwidthKhz: Float,
+        frequencyMhz: Float?,
+    ): List<Long>
+
+    /** What the sessions before [session] on its network heard, which its new relays and direct senders are not. */
+    suspend fun earlierKeys(session: SurveySession): EarlierKeys = with(session) {
+        EarlierKeys(
+            earlierRelays(startedAt, spreadingFactor, bandwidthKhz, frequencyMhz).toSet(),
+            earlierDirect(startedAt, spreadingFactor, bandwidthKhz, frequencyMhz).toSet(),
+        )
     }
 
     /** [directPlaces] for [session]'s radio and settings. */
@@ -512,8 +603,8 @@ interface SurveyDao {
     @Query(NEWS)
     suspend fun countNews(sessionId: String): SurveyNews
 
-    /** The distinct senders every session heard directly where it had a cell, as [SurveyNews.direct] counts them. */
-    @Query("SELECT COUNT(DISTINCT sender_node_id) FROM survey_measurement WHERE cell_x IS NOT NULL AND $IS_DIRECT")
+    /** The distinct senders every session heard directly, with or without a cell ([SessionDirect]). */
+    @Query("SELECT COUNT(DISTINCT node_id) FROM survey_session_direct")
     suspend fun countDirectSenders(): Int
 
     /** [countDirectSenders], following the session table as [sessions] does, so not each insert while recording. */
@@ -522,7 +613,7 @@ interface SurveyDao {
     @Query(
         "UPDATE survey_session SET news_cells = :cells, news_relays = :relays, news_direct = :direct, " +
             "news_new_cells = :newCells, news_local_new_cells = :localNewCells, " +
-            "news_local_new_relay_cells = :localNewRelayCells, news_local_new_direct_cells = :localNewDirectCells " +
+            "news_local_new_relays = :localNewRelays, news_local_new_direct = :localNewDirect " +
             "WHERE id = :sessionId",
     )
     @Suppress("LongParameterList")
@@ -533,8 +624,8 @@ interface SurveyDao {
         direct: Int,
         newCells: Int?,
         localNewCells: Int,
-        localNewRelayCells: Int,
-        localNewDirectCells: Int,
+        localNewRelays: Int,
+        localNewDirect: Int,
     )
 
     /**
@@ -550,16 +641,34 @@ interface SurveyDao {
             it.direct,
             it.newCells,
             it.localNewCells,
-            it.localNewRelayCells,
-            it.localNewDirectCells,
+            it.localNewRelays,
+            it.localNewDirect,
         )
     }
+
+    /**
+     * Recounts [SurveyNews.localNewRelays] and [SurveyNews.localNewDirect] from the session lists, for the counted
+     * sessions that started after [startedAt] on this network: they are the only ones a deleted session's start and
+     * network could have hidden relays or direct senders from.
+     */
+    @Query(
+        "UPDATE survey_session SET news_local_new_relays = $NEW_RELAYS, news_local_new_direct = $NEW_DIRECT " +
+            "WHERE news_cells IS NOT NULL AND id IN (" +
+            "SELECT s.id FROM survey_session s WHERE s.started_at > :startedAt AND $SAME_NETWORK)",
+    )
+    suspend fun recountKeysAfter(startedAt: Long, spreadingFactor: Int, bandwidthKhz: Float, frequencyMhz: Float?)
 
     @Query("UPDATE survey_session SET last_upload_error = :error WHERE id = :sessionId")
     suspend fun uploadFailed(sessionId: String, error: String)
 
     @Query("DELETE FROM survey_measurement WHERE session_id = :sessionId")
     suspend fun deleteMeasurements(sessionId: String)
+
+    @Query("DELETE FROM survey_session_relay WHERE session_id = :sessionId")
+    suspend fun deleteRelays(sessionId: String)
+
+    @Query("DELETE FROM survey_session_direct WHERE session_id = :sessionId")
+    suspend fun deleteDirect(sessionId: String)
 
     @Query("DELETE FROM survey_session WHERE id = :sessionId")
     suspend fun deleteSessionRow(sessionId: String)
@@ -607,27 +716,32 @@ interface SurveyDao {
         val cells = sessionCells(sessionId)
         deleteAnswers(sessionId)
         deleteMeasurements(sessionId)
+        deleteRelays(sessionId)
+        deleteDirect(sessionId)
         deleteSessionRow(sessionId)
         recountAfter(session, cells)
     }
 
     /**
-     * Sets [SurveyMeasurement.localNew] again ([withLocalNew]) for sessions that started after [deleted] on its
-     * network, in its [cells], and recounts those that changed. Removing a session only makes keys newer, so nothing
-     * else can change. Each cell is read once, every session's rows: a later session can match a network the deleted
-     * one doesn't.
+     * Gives the sessions that started after [deleted] on its network what it was first to have: in its [cells], sets
+     * [SurveyMeasurement.localNew] again ([withLocalNew]) and recounts the sessions that changed; their new relays and
+     * direct senders come from the session lists ([recountKeysAfter]). Removing a session only makes things newer, so
+     * nothing else can change. Each cell is read once, every session's rows: a later session can match a network the
+     * deleted one doesn't.
      */
     suspend fun recountAfter(deleted: SurveySession, cells: List<SurveyCell>) {
         val network = with(deleted) { SurveyNetwork(spreadingFactor, bandwidthKhz, frequencyMhz) }
         val changed = mutableSetOf<String>()
         for (cell in cells) {
-            for ((row, bits) in cellRows(cell.x, cell.y).asSequence().withLocalNew()) {
-                if (row.startedAt > deleted.startedAt && row.network.same(network) && bits != row.localNew) {
-                    setLocalNew(row.seq, bits)
+            for ((row, bit) in cellRows(cell.x, cell.y).asSequence().withLocalNew()) {
+                val saved = (row.localNew ?: 0) and SurveyNews.NEW_CELL
+                if (row.startedAt > deleted.startedAt && row.network.same(network) && bit != saved) {
+                    setLocalNew(row.seq, bit)
                     changed += row.sessionId
                 }
             }
         }
+        with(deleted) { recountKeysAfter(startedAt, spreadingFactor, bandwidthKhz, frequencyMhz) }
         changed.forEach { recountNews(it) }
     }
 }
@@ -637,8 +751,16 @@ interface SurveyDao {
  * the user picks another radio and migrated often upstream.
  */
 @Database(
-    entities = [SurveySession::class, SurveyMeasurement::class, SurveyDeleted::class, SavedAnswer::class],
-    version = 8,
+    entities =
+    [
+        SurveySession::class,
+        SurveyMeasurement::class,
+        SurveyDeleted::class,
+        SavedAnswer::class,
+        SessionRelay::class,
+        SessionDirect::class,
+    ],
+    version = 10,
     exportSchema = true,
     // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key. 4: whether
     // each session may be uploaded. 5: each measurement's cell, what SigSleuth said it adds and what it adds to the
@@ -646,6 +768,9 @@ interface SurveyDao {
     // added to the map. 6: those counts by cell (distinct relay bytes and direct senders, cells with a new one) rather
     // than by pairs of a cell and a key, and no relay or direct counts from SigSleuth or for deleted sessions.
     // 7: SigSleuth's answer for each session's relay bytes, empty until the next uploads. 8: a near link's node and km.
+    // 9: the local relay and direct counts renamed, as relays and direct senders rather than cells. 10: each session's
+    // distinct relay bytes and direct senders (fixless packets too) in their own lists, the new ones counted from them
+    // across the network.
     autoMigrations =
     [
         AutoMigration(from = 1, to = 2),
@@ -655,6 +780,8 @@ interface SurveyDao {
         AutoMigration(from = 5, to = 6, spec = CountNewsByCell::class),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9, spec = RenameNewKeys::class),
+        AutoMigration(from = 9, to = 10, spec = FillSessionLists::class),
     ],
 )
 abstract class SurveyDatabase : RoomDatabase() {

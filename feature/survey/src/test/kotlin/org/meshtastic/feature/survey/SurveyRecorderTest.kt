@@ -611,7 +611,7 @@ class SurveyRecorderTest {
             recorder.stop()
             // The phone had nothing before it, so all of it is new to you.
             assertEquals(
-                SurveyNews(1, 2, 1, localNewCells = 1, localNewRelayCells = 1, localNewDirectCells = 1),
+                SurveyNews(1, 2, 1, localNewCells = 1, localNewRelays = 2, localNewDirect = 1),
                 dao.sessions.single().news,
             )
         }
@@ -666,15 +666,18 @@ class SurveyRecorderTest {
         hear(from = 0x500, hopsUsed = 1, relay = 0x50)
         location.send(SurveyFix(5_000, 42.5, 1.57, 10f))
         hear(from = 0x500, hopsUsed = 1, relay = 0x3F)
+        // A fixless packet with a new relay byte and direct sender still counts.
+        location.send(SurveyFix(5_000, 42.5, 1.57, 500f))
+        hear(from = 0x560, hopsUsed = 0, relay = 0x60)
 
         val session = recorder.state.value.session!!.id
-        val node = SurveyNews.NEW_NODE
+        // Only the second cell is new; relays and direct senders are counted from the session lists.
         assertEquals(
-            listOf(0, node, node or SurveyNews.NEW_DIRECT, node, SurveyNews.NEW_CELL or node),
+            listOf(0, 0, 0, 0, SurveyNews.NEW_CELL, 0),
             dao.measurements.filter { it.sessionId == session }.map { it.localNew },
         )
-        // Byte 3F, heard in both cells, is one relay; a new relay was heard in both.
-        val news = SurveyNews(2, 3, 1, localNewCells = 1, localNewRelayCells = 2, localNewDirectCells = 1)
+        // Byte 3F was already known on the network, so hearing it in a new cell adds only the cell.
+        val news = SurveyNews(2, 4, 2, localNewCells = 1, localNewRelays = 3, localNewDirect = 2)
         assertEquals(news, recorder.state.value.newToYou)
         recorder.stop()
         assertEquals(news, dao.sessions.single { it.id == session }.news)
@@ -721,7 +724,7 @@ class SurveyRecorderTest {
 
             val killed = dao.sessions.single { it.id == "killed" }
             assertEquals(SurveyStatus.INTERRUPTED, killed.status)
-            assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), killed.news)
+            assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0, localNewRelays = 1), killed.news)
         }
 
     @Test

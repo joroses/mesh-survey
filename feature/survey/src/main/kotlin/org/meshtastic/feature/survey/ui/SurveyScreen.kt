@@ -2572,11 +2572,7 @@ private fun NewsStats(
 ) {
     @Composable
     @ReadOnlyComposable
-    fun newIn(cells: Int) = cells
-        .takeIf { it > 0 && !car }
-        ?.let {
-            pluralStringResource(R.plurals.survey_stat_new_in_cells, it, it)
-        }
+    fun newCount(count: Int) = count.takeIf { it > 0 && !car }?.let { stringResource(R.string.survey_stat_new, it) }
 
     @Composable
     @ReadOnlyComposable
@@ -2587,8 +2583,8 @@ private fun NewsStats(
             relays.toString(),
             Figure.RELAYS,
             Modifier.weight(1f),
-            inlineNote = plus(news.localNewRelayCells),
-            note = newIn(news.localNewRelayCells),
+            inlineNote = plus(news.localNewRelays),
+            note = newCount(news.localNewRelays),
             onClick = onRelays,
             onClickLabel = stringResource(R.string.survey_relays_open),
         )
@@ -2597,15 +2593,15 @@ private fun NewsStats(
             Figure.CELLS,
             Modifier.weight(1f),
             inlineNote = plus(news.localNewCells),
-            note = news.localNewCells.takeIf { it > 0 && !car }?.let { stringResource(R.string.survey_stat_new, it) },
+            note = newCount(news.localNewCells),
             mapNote = mapCells?.let { stringResource(R.string.survey_stat_added, it) },
         )
         Stat(
             news.direct.toString(),
             Figure.DIRECT,
             Modifier.weight(1f),
-            inlineNote = plus(news.localNewDirectCells),
-            note = newIn(news.localNewDirectCells),
+            inlineNote = plus(news.localNewDirect),
+            note = newCount(news.localNewDirect),
         )
         packets?.let { Stat(it.toString(), Figure.PACKETS, Modifier.weight(1f)) }
     }

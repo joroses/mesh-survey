@@ -519,7 +519,7 @@ class SurveyUploaderTest {
 
         // Only the new cell is kept; the reply's other answers are not read.
         assertEquals(listOf(SurveyNews.NEW_CELL, 0), dao.measurements.map { it.serverNew })
-        val news = SurveyNews(cells = 1, relays = 1, direct = 0, newCells = 1)
+        val news = SurveyNews(cells = 1, relays = 1, direct = 0, newCells = 1, localNewRelays = 1)
         assertEquals(news, dao.sessions.single().news)
         assertEquals(
             listOf(
@@ -556,14 +556,17 @@ class SurveyUploaderTest {
         assertEquals(1, dao.recounts)
         assertEquals(listOf(500L, 1_000L, 1_001L, 1_001L), progress.map { it.acknowledged })
         assertEquals(listOf(null, null, null), progress.dropLast(1).map { it.news })
-        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), progress.last().news)
+        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0, localNewRelays = 1), progress.last().news)
 
         // The first batch works, the second fails.
         record("a", SurveyUploader.BATCH_SIZE + 1)
         onBatch = { fail = true }
         uploader.upload()
         assertEquals(2, dao.recounts)
-        assertEquals(SurveyUploadProgress(1_501, SurveyNews(1, 1, 0), failed = true), progress.last())
+        assertEquals(
+            SurveyUploadProgress(1_501, SurveyNews(1, 1, 0, localNewRelays = 1), failed = true),
+            progress.last(),
+        )
     }
 
     @Test
@@ -580,7 +583,7 @@ class SurveyUploaderTest {
 
         assertTrue(run.isCancelled)
         assertEquals(SurveyUploader.BATCH_SIZE.toLong(), dao.sessions.single().uploadedSeq)
-        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0), dao.sessions.single().news)
+        assertEquals(SurveyNews(cells = 1, relays = 1, direct = 0, localNewRelays = 1), dao.sessions.single().news)
     }
 
     @Test

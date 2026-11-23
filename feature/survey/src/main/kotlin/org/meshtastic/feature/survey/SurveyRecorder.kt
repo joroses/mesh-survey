@@ -288,7 +288,10 @@ class SurveyRecorder(
                 DirectNeighbours(history.map { it.toDirectSender() }),
                 defaultKeyChannels(radioConfig.channelSetFlow.first()),
                 mapped,
-                NewToYou { cell -> dao.cellKeys(session, cell) },
+                NewToYou(
+                    hasCell = { cell -> dao.hasCell(session, cell) },
+                    earlierKeys = { dao.earlierKeys(session) },
+                ),
             )
         mutableState.value = SurveyState(session = session, neighbours = current.neighbours.all, mapped = mapped)
         writer = scope.launch { write(current) }

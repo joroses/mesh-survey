@@ -42,43 +42,38 @@
     </plurals>
     <!-- The notification's text, the recording card's three figures: distinct cells, relay bytes and senders heard directly. -->
     <string name="survey_notification_stats">Cells %1$d · Relays %2$d · Heard directly %3$d</string>
-    <!-- What a session added that no earlier session on this phone had, on the same LoRa settings: %1$s lists it ("4 cells · a new relay in 9 cells · a new direct node in 1 cell"). A relay or direct node is new in a cell when no earlier session heard it there. -->
+    <!-- What a session added that no earlier session on this phone had, on the same LoRa settings: %1$s lists it ("4 cells · 2 relays · 1 direct node"). -->
     <string name="survey_new_to_you">New to you: %1$s</string>
     <string name="survey_nothing_new">Nothing new to you yet</string>
     <plurals name="survey_cells">
         <item quantity="one">%1$d cell</item>
         <item quantity="other">%1$d cells</item>
     </plurals>
-    <plurals name="survey_new_relay_cells">
-        <item quantity="one">a new relay in %1$d cell</item>
-        <item quantity="other">a new relay in %1$d cells</item>
+    <plurals name="survey_relays">
+        <item quantity="one">%1$d relay</item>
+        <item quantity="other">%1$d relays</item>
     </plurals>
-    <plurals name="survey_new_direct_cells">
-        <item quantity="one">a new direct node in %1$d cell</item>
-        <item quantity="other">a new direct node in %1$d cells</item>
+    <plurals name="survey_direct_nodes">
+        <item quantity="one">%1$d direct node</item>
+        <item quantity="other">%1$d direct nodes</item>
     </plurals>
     <!-- Cells SigSleuth's map gained from these uploads, as its replies said. -->
     <plurals name="survey_cells_added">
         <item quantity="one">%1$d cell added to the map</item>
         <item quantity="other">%1$d cells added to the map</item>
     </plurals>
-    <!-- A session card's figures: distinct relay bytes heard, plus cells and senders heard directly where it had a fix, each with what was new to this phone under it. -->
+    <!-- A session card's figures: distinct cells (where it had a fix), relay bytes and senders heard directly, each with what was new to this phone under it. -->
     <string name="survey_stat_cells">Cells</string>
     <string name="survey_stat_relays_heard">Relays</string>
     <string name="survey_stat_direct">Direct</string>
     <!-- Beside Direct while recording: every packet this session has recorded. -->
     <string name="survey_stat_packets">Packets</string>
-    <!-- Under a session's cell count: cells no earlier session on this phone had. -->
+    <!-- Under a session's figure in normal mode: how many were not heard in any earlier session on this phone. -->
     <string name="survey_stat_new">+%1$d new</string>
     <!-- Inline green delta beside a car-mode stat figure. -->
     <string name="survey_stat_plus">+%1$d</string>
     <!-- Under a session's cell count, once SigSleuth has answered: the cells its map did not have. -->
     <string name="survey_stat_added">%1$d added to map</string>
-    <!-- Under a session's relay or direct count: the cells where one was heard there for the first time on this phone. -->
-    <plurals name="survey_stat_new_in_cells">
-        <item quantity="one">new in %1$d cell</item>
-        <item quantity="other">new in %1$d cells</item>
-    </plurals>
     <!-- The card under Sessions: every session on this phone together. Cells count once per LoRa settings; direct nodes once. -->
     <string name="survey_totals">Surveyed so far</string>
     <!-- Beside the totals' cells and direct nodes: the cells SigSleuth's map gained, worded like survey_stat_added. -->
