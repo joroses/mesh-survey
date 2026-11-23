@@ -633,7 +633,8 @@ private fun CarModeChip(carMode: Boolean, onCarMode: (Boolean) -> Unit) {
 
 /**
  * The session recording now: what it is doing, then what it found, the last packet and Stop. Its relays are in the list
- * under it. In [car] mode the small text is left out: Packets, the notes under the figures but the new cells.
+ * under it. In [car] mode the small text is left out: Packets, and the full notes under the figures become compact `+N`
+ * deltas (green beside each figure for new-to-you, blue with the map icon under Cells for SigSleuth's map).
  */
 @Composable
 @Suppress("LongParameterList")
@@ -664,7 +665,7 @@ private fun RecordingCard(
             NewsStats(
                 state.newToYou ?: NO_NEWS,
                 relays = state.relays.size,
-                mapCells = state.news?.newCells.takeUnless { car },
+                mapCells = state.news?.newCells,
                 packets = state.measurementCount.takeUnless { car },
                 car = car,
             )
@@ -964,6 +965,7 @@ private fun Stat(
     inlineNote: String? = null,
     note: String? = null,
     mapNote: String? = null,
+    mapNoteDescription: String? = null,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
 ) {
@@ -1017,7 +1019,33 @@ private fun Stat(
         }
         val notes = Modifier.padding(horizontal = STAT_INSET)
         note?.let { Text(it, notes, style = MaterialTheme.typography.labelMedium, color = colors.StatusGreen) }
-        mapNote?.let { Text(it, notes, style = MaterialTheme.typography.labelMedium, color = colors.StatusSky) }
+        mapNote?.let {
+            Row(
+                notes,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                // A bare "+N" (car mode) takes the totals' map icon, so it does not read as a second new-cells count.
+                if (mapNoteDescription != null) {
+                    Icon(
+                        Figure.MAP.icon(),
+                        contentDescription = null,
+                        Modifier.size(FIGURE_ICON_SIZE),
+                        tint = colors.StatusSky,
+                    )
+                }
+                Text(
+                    it,
+                    if (mapNoteDescription == null) {
+                        Modifier
+                    } else {
+                        Modifier.semantics { contentDescription = mapNoteDescription }
+                    },
+                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                    color = colors.StatusSky,
+                )
+            }
+        }
     }
 }
 
@@ -2581,9 +2609,10 @@ private fun SessionMenu(onExport: () -> Unit, onDelete: () -> Unit) {
 private val MENU_BUTTON_INSET = 12.dp
 
 /**
- * Relays, cells and senders heard directly, each with what was new to this phone under it in green, and under the
- * cells, once SigSleuth has answered, the [mapCells] its map gained. With [onRelays], the relays figure opens their
- * list; it comes first, where a button is easy to find. In [car] mode only the new cells keep their note.
+ * Relays, cells and senders heard directly, each with what was new to this phone in green, and under the cells, once
+ * SigSleuth has answered, the [mapCells] its map gained. With [onRelays], the relays figure opens their list; it comes
+ * first, where a button is easy to find. In [car] mode the new-to-you counts sit beside each figure as `+N` (under it
+ * when there is no room), and map additions sit under Cells as a blue `+N` with the map icon when non-zero.
  */
 @Composable
 private fun NewsStats(
@@ -2602,6 +2631,8 @@ private fun NewsStats(
     @ReadOnlyComposable
     fun plus(count: Int) = count.takeIf { it > 0 && car }?.let { stringResource(R.string.survey_stat_plus, it) }
 
+    val mapAdded = mapCells?.let { stringResource(R.string.survey_stat_added, it) }
+
     Row(Modifier.fillMaxWidth().bleed(STAT_INSET), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Stat(
             relays.toString(),
@@ -2618,7 +2649,13 @@ private fun NewsStats(
             Modifier.weight(1f),
             inlineNote = plus(news.localNewCells),
             note = newCount(news.localNewCells),
-            mapNote = mapCells?.let { stringResource(R.string.survey_stat_added, it) },
+            mapNote =
+            if (car) {
+                mapCells?.takeIf { it > 0 }?.let { stringResource(R.string.survey_stat_plus, it) }
+            } else {
+                mapAdded
+            },
+            mapNoteDescription = mapAdded.takeIf { car && (mapCells ?: 0) > 0 },
         )
         Stat(
             news.direct.toString(),

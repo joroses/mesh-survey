@@ -70,7 +70,7 @@
     <string name="survey_stat_packets">Packets</string>
     <!-- Under a session's figure in normal mode: how many were not heard in any earlier session on this phone. -->
     <string name="survey_stat_new">+%1$d new</string>
-    <!-- Inline green delta beside a car-mode stat figure. -->
+    <!-- Compact delta in car mode: green beside a figure for new-to-you, or blue under Cells for cells added to the map. -->
     <string name="survey_stat_plus">+%1$d</string>
     <!-- Under a session's cell count, once SigSleuth has answered: the cells its map did not have. -->
     <string name="survey_stat_added">%1$d added to map</string>
