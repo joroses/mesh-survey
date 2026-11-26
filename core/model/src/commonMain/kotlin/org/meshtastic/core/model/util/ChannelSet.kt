@@ -40,8 +40,7 @@ import org.meshtastic.proto.ModuleSettings
 @Throws(MalformedMeshtasticUrlException::class)
 fun CommonUri.toChannelSet(): ChannelSet {
     val h = host ?: ""
-    val isCorrectHost =
-        h.equals(MESHTASTIC_HOST, ignoreCase = true) || h.equals("www.$MESHTASTIC_HOST", ignoreCase = true)
+    val isCorrectHost = isSupportedShareUri(scheme, host)
     val segments = pathSegments
     val isCorrectPath = segments.any { it.equals("e", ignoreCase = true) }
     val frag = fragment

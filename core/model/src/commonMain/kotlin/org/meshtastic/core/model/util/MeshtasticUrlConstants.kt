@@ -16,17 +16,31 @@
  */
 package org.meshtastic.core.model.util
 
-/** The base domain for all Meshtastic URIs. */
+/** The base domain for imported Meshtastic URIs. */
 const val MESHTASTIC_HOST = "meshtastic.org"
+
+/** Custom scheme and authority for links created by Mesh Survey. */
+const val FORK_URL_SCHEME = "meshsurvey"
+const val FORK_URL_HOST = "meshsurvey"
 
 /** Path segment for Shared Contact URIs. */
 const val CONTACT_SHARE_PATH = "/v/"
 
-/** Full prefix for Shared Contact URIs: https://meshtastic.org/v/# */
-const val CONTACT_URL_PREFIX = "https://$MESHTASTIC_HOST$CONTACT_SHARE_PATH#"
+/** Full prefix for Shared Contact URIs created by Mesh Survey: meshsurvey://meshsurvey/v/# */
+const val CONTACT_URL_PREFIX = "$FORK_URL_SCHEME://$FORK_URL_HOST$CONTACT_SHARE_PATH#"
 
 /** Path segment for Channel Set URIs. */
 const val CHANNEL_SHARE_PATH = "/e/"
 
-/** Full prefix for Channel Set URIs: https://meshtastic.org/e/ */
-const val CHANNEL_URL_PREFIX = "https://$MESHTASTIC_HOST$CHANNEL_SHARE_PATH"
+/** Full prefix for Channel Set URIs created by Mesh Survey: meshsurvey://meshsurvey/e/ */
+const val CHANNEL_URL_PREFIX = "$FORK_URL_SCHEME://$FORK_URL_HOST$CHANNEL_SHARE_PATH"
+
+/** Accepts links created by Mesh Survey as well as imported Meshtastic share URLs. */
+internal fun isSupportedShareUri(scheme: String?, host: String?): Boolean {
+    val h = host.orEmpty()
+    return if (scheme.equals(FORK_URL_SCHEME, ignoreCase = true)) {
+        h.equals(FORK_URL_HOST, ignoreCase = true)
+    } else {
+        h.equals(MESHTASTIC_HOST, ignoreCase = true) || h.equals("www.$MESHTASTIC_HOST", ignoreCase = true)
+    }
+}

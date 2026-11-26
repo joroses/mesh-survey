@@ -122,7 +122,7 @@ class MeshNotificationManagerImplRoutingTest {
         val posted = activeByTag("waypoint").single().notification
         assertEquals(NotificationChannels.WAYPOINTS, posted.channelId)
         assertNull(posted.group, "a waypoint is not a conversation and must stay out of the messages summary")
-        assertEquals("meshtastic://meshtastic/map?waypointId=42", tapTarget(posted))
+        assertEquals("meshsurvey://meshsurvey/map?waypointId=42", tapTarget(posted))
     }
 
     @Test
@@ -136,7 +136,7 @@ class MeshNotificationManagerImplRoutingTest {
             assertEquals(NotificationChannels.REACTIONS, posted.channelId)
             assertEquals("👍", posted.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
             assertNull(posted.group, "a reaction is not a conversation and must stay out of the messages summary")
-            assertEquals("meshtastic://meshtastic/messages/0!abcd1234", tapTarget(posted))
+            assertEquals("meshsurvey://meshsurvey/messages/0!abcd1234", tapTarget(posted))
 
             manager.cancelMessageNotification("0!abcd1234")
             assertTrue(activeByTag("reaction").isEmpty())
@@ -149,7 +149,7 @@ class MeshNotificationManagerImplRoutingTest {
         val posted = activeByTag("alert").single().notification
         assertEquals(NotificationChannels.ALERTS, posted.channelId)
         assertEquals(Notification.CATEGORY_ALARM, posted.category)
-        assertEquals("meshtastic://meshtastic/messages/0!abcd1234", tapTarget(posted))
+        assertEquals("meshsurvey://meshsurvey/messages/0!abcd1234", tapTarget(posted))
     }
 
     @Test
@@ -162,7 +162,7 @@ class MeshNotificationManagerImplRoutingTest {
         val posted = activeByTag("mesh_beacon").single()
         assertEquals(7, posted.id)
         assertEquals(NotificationChannels.MESH_BEACON, posted.notification.channelId)
-        assertEquals("meshtastic://meshtastic/discovery", tapTarget(posted.notification))
+        assertEquals("meshsurvey://meshsurvey/discovery", tapTarget(posted.notification))
     }
 
     @Test
@@ -175,7 +175,7 @@ class MeshNotificationManagerImplRoutingTest {
         assertEquals(101, posted.id)
         assertEquals(NotificationChannels.NEW_NODES, posted.notification.channelId)
         assertEquals("New node seen: N101", posted.notification.extras.getString(Notification.EXTRA_TITLE))
-        assertEquals("meshtastic://meshtastic/nodes/101", tapTarget(posted.notification))
+        assertEquals("meshsurvey://meshsurvey/nodes/101", tapTarget(posted.notification))
 
         manager.cancelNewNodeNotification(101)
         assertTrue(activeByTag("new_node").isEmpty())
@@ -191,7 +191,7 @@ class MeshNotificationManagerImplRoutingTest {
         val byNode = activeByTag("low_battery").associateBy { it.id }
         assertEquals(NotificationChannels.LOW_BATTERY, byNode.getValue(1).notification.channelId)
         assertEquals(NotificationChannels.LOW_BATTERY_REMOTE, byNode.getValue(2).notification.channelId)
-        assertEquals("meshtastic://meshtastic/nodes/2", tapTarget(byNode.getValue(2).notification))
+        assertEquals("meshsurvey://meshsurvey/nodes/2", tapTarget(byNode.getValue(2).notification))
         // Ongoing notifications never bridge to a watch.
         assertEquals(0, byNode.getValue(1).notification.flags and Notification.FLAG_ONGOING_EVENT)
     }
@@ -337,7 +337,7 @@ class MeshNotificationManagerImplRoutingTest {
         assertTrue(accepted)
         val posted = activeByTag("firmware_update").single().notification
         assertEquals(NotificationChannels.DEVICE_STATUS, posted.channelId)
-        assertEquals("meshtastic://meshtastic/firmware/update", tapTarget(posted))
+        assertEquals("meshsurvey://meshsurvey/firmware/update", tapTarget(posted))
     }
 
     @Test
@@ -360,7 +360,7 @@ class MeshNotificationManagerImplRoutingTest {
 
         val posted = activeByTag("reconnect_blocked").single().notification
         assertEquals(NotificationChannels.DEVICE_STATUS, posted.channelId)
-        assertEquals("meshtastic://meshtastic/connections", tapTarget(posted))
+        assertEquals("meshsurvey://meshsurvey/connections", tapTarget(posted))
     }
 
     private suspend fun MeshNotificationManagerImpl.showFirmwareUpdateNotice(destination: FirmwareUpdateDestination) =

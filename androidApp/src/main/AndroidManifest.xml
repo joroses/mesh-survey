@@ -255,53 +255,23 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="meshtastic" android:host="meshtastic" />
+                <data android:scheme="meshsurvey" android:host="meshsurvey" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <!--
-                  The QR codes to share channel settings and contacts are shared as meshtastic URLS.
-                  We also support NFC NDEF Discovery for the same URLS.
-
-                  An approximate example:
-                  https://meshtastic.org/e/YXNkZnF3ZXJhc2RmcXdlcmFzZGZxd2Vy
-                  https://meshtastic.org/v/#CNar9vwDEi0KCSEzZjgyOTVkNhIPV2F0ZXJmYWxsIDIg4piGGgPimaciBu2eP4KV1igJOAI
+                  Channel settings and contacts shared by Mesh Survey use meshsurvey://meshsurvey/e/ and /v/ URIs.
+                  Support NFC NDEF discovery for those URIs without claiming meshtastic.org.
                 -->
-                <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
 
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="https" />
-                <data android:host="meshtastic.org" />
+                <data android:scheme="meshsurvey" android:host="meshsurvey" />
                 <data android:pathPrefix="/e/" />
                 <data android:pathPrefix="/E/" />
                 <data android:pathPrefix="/v/" />
                 <data android:pathPrefix="/V/" />
-            </intent-filter>
-
-            <!-- App Links for modern RESTful navigation paths -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:host="meshtastic.org" />
-                
-                <data android:pathPrefix="/share" />
-                <data android:pathPrefix="/connections" />
-                <data android:pathPrefix="/map" />
-                <data android:pathPrefix="/messages" />
-                <data android:pathPrefix="/quickchat" />
-                <data android:pathPrefix="/nodes" />
-                <data android:pathPrefix="/settings" />
-                <data android:pathPrefix="/channels" />
-                <data android:pathPrefix="/firmware" />
-                <data android:pathPrefix="/wifi-provision" />
-                <data android:pathPrefix="/discovery" />
             </intent-filter>
 
             <intent-filter>

@@ -19,7 +19,7 @@ package org.meshtastic.core.navigation
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
-const val DEEP_LINK_BASE_URI = "meshtastic://meshtastic"
+const val DEEP_LINK_BASE_URI = "meshsurvey://meshsurvey"
 
 interface Route : NavKey
 

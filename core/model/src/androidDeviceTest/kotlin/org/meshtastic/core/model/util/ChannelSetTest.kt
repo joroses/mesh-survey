@@ -31,7 +31,9 @@ class ChannelSetTest {
         val url = Uri.parse("https://meshtastic.org/e/#CgMSAQESBggBQANIAQ")
         val cs = url.toChannelSet()
         Assert.assertEquals("LongFast", cs.primaryChannel!!.name)
-        Assert.assertEquals(url.toString(), cs.getChannelUrl(false).toString())
+        val created = cs.getChannelUrl(false).toString()
+        Assert.assertTrue(created.startsWith(CHANNEL_URL_PREFIX))
+        Assert.assertEquals("LongFast", Uri.parse(created).toChannelSet().primaryChannel!!.name)
     }
 
     /** validate against the host or path in a case-insensitive way */

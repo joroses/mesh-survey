@@ -25,12 +25,40 @@ import org.meshtastic.proto.Config.LoRaConfig
 import org.meshtastic.proto.Config.LoRaConfig.ModemPreset
 import org.meshtastic.proto.Config.LoRaConfig.RegionCode
 import org.meshtastic.proto.ModuleSettings
+import org.meshtastic.proto.SharedContact
+import org.meshtastic.proto.User
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ChannelSetUrlTest {
+
+    @Test
+    fun `created share links use meshsurvey scheme while meshtastic links still import`() {
+        val channelUrl = channelSet(1).getChannelUrl().toString()
+        assertTrue(channelUrl.startsWith("meshsurvey://meshsurvey/e/#"), channelUrl)
+        assertFalse(channelUrl.contains("meshtastic.org", ignoreCase = true))
+
+        val imported = CommonUri.parse(REPLACE_CHANNEL_URL).toChannelSet()
+        assertEquals("LongFast", imported.primaryChannel?.name)
+
+        val contact =
+            SharedContact.Builder()
+                .also { wb ->
+                    wb.node_num = 12345
+                    wb.user = User.Builder().also { u -> u.long_name = "Alice" }.build()
+                }
+                .build()
+        val contactUrl = contact.getSharedContactUrl()
+        assertTrue(contactUrl.toString().startsWith("meshsurvey://meshsurvey/v/#"), contactUrl.toString())
+        assertEquals("Alice", contactUrl.toSharedContact().user?.long_name)
+
+        val importedContactUrl =
+            CommonUri.parse(contactUrl.toString().replace("meshsurvey://meshsurvey/", "https://meshtastic.org/"))
+        assertEquals("Alice", importedContactUrl.toSharedContact().user?.long_name)
+    }
 
     @Test
     fun `legacy fragment add parameter remains add mode alongside other parameters`() {

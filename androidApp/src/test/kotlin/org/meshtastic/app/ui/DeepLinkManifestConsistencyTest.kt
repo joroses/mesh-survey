@@ -18,6 +18,7 @@ package org.meshtastic.app.ui
 
 import org.junit.runner.RunWith
 import org.meshtastic.core.common.util.CommonUri
+import org.meshtastic.core.navigation.DEEP_LINK_BASE_URI
 import org.meshtastic.core.navigation.DeepLinkRouter
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -25,21 +26,15 @@ import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * Guards against drift between [DeepLinkRouter] and the https App Links intent-filter (`android:autoVerify="true"`,
- * host `meshtastic.org`) in `androidApp/src/main/AndroidManifest.xml`.
+ * Guards [DeepLinkRouter] and the deep-link intent-filters in `androidApp/src/main/AndroidManifest.xml`.
  *
- * Every top-level path segment routed by [DeepLinkRouter.route] must be declared as an `android:pathPrefix` in that
- * filter — otherwise `https://meshtastic.org/{path}` links open in the browser instead of the app, even though the
- * `meshtastic://` scheme works. The segments come straight from [DeepLinkRouter.topLevelPathSegments], the set
- * [DeepLinkRouter.route] gates its dispatch on, so a new router segment fails here until the manifest declares it.
- *
- * Robolectric because on Android the router's `DeepLinkUri` is `android.net.Uri`, a stub on the plain unit-test
- * classpath.
+ * Mesh Survey uses its own `meshsurvey://meshsurvey` scheme and does not claim `meshtastic.org` or `meshtastic://`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -49,27 +44,33 @@ class DeepLinkManifestConsistencyTest {
     fun `every canonical segment is actually routed by DeepLinkRouter`() {
         DeepLinkRouter.topLevelPathSegments.forEach { segment ->
             assertNotNull(
-                DeepLinkRouter.route(CommonUri.parse("https://meshtastic.org/$segment")),
+                DeepLinkRouter.route(CommonUri.parse("$DEEP_LINK_BASE_URI/$segment")),
                 "DeepLinkRouter.topLevelPathSegments lists /$segment but route() has no branch for it — " +
-                    "add the branch or remove the segment from the set and the manifest",
+                    "add the branch or remove the segment from the set",
             )
         }
     }
 
     @Test
-    fun `app links intent filter declares a pathPrefix for every routed segment`() {
-        val prefixes = appLinkPathPrefixes()
-        DeepLinkRouter.topLevelPathSegments.forEach { segment ->
-            assertTrue(
-                "/$segment" in prefixes,
-                "AndroidManifest.xml autoVerify filter is missing <data android:pathPrefix=\"/$segment\" /> — " +
-                    "https://meshtastic.org/$segment will open in the browser instead of the app",
-            )
-        }
+    fun `manifest declares meshsurvey scheme and does not claim meshtastic domain or scheme`() {
+        val dataElements = manifestDataElements()
+        assertTrue(
+            dataElements.any {
+                it.getAttribute("android:scheme") == "meshsurvey" && it.getAttribute("android:host") == "meshsurvey"
+            },
+            "AndroidManifest.xml must declare <data android:scheme=\"meshsurvey\" android:host=\"meshsurvey\" />",
+        )
+        assertFalse(
+            dataElements.any { it.getAttribute("android:host").equals("meshtastic.org", ignoreCase = true) },
+            "AndroidManifest.xml must not claim meshtastic.org",
+        )
+        assertFalse(
+            dataElements.any { it.getAttribute("android:scheme").equals("meshtastic", ignoreCase = true) },
+            "AndroidManifest.xml must not claim the meshtastic:// scheme",
+        )
     }
 
-    /** Collects the pathPrefix values of the autoVerify (App Links) intent-filter for meshtastic.org. */
-    private fun appLinkPathPrefixes(): Set<String> {
+    private fun manifestDataElements(): List<Element> {
         val manifest = manifestFile()
         val factory =
             DocumentBuilderFactory.newInstance().apply {
@@ -81,19 +82,8 @@ class DeepLinkManifestConsistencyTest {
                 isExpandEntityReferences = false
             }
         val document = factory.newDocumentBuilder().parse(manifest)
-        val filters = document.getElementsByTagName("intent-filter")
-        val prefixes = mutableSetOf<String>()
-        for (i in 0 until filters.length) {
-            val filter = filters.item(i) as Element
-            if (filter.getAttribute("android:autoVerify") != "true") continue
-            val dataElements = filter.getElementsByTagName("data")
-            val attrs = (0 until dataElements.length).map { dataElements.item(it) as Element }
-            if (attrs.none { it.getAttribute("android:host") == "meshtastic.org" }) continue
-            if (attrs.none { it.getAttribute("android:scheme") == "https" }) continue
-            attrs.mapNotNullTo(prefixes) { it.getAttribute("android:pathPrefix").ifEmpty { null } }
-        }
-        if (prefixes.isEmpty()) fail("No https App Links intent-filter for meshtastic.org found in ${manifest.path}")
-        return prefixes
+        val elements = document.getElementsByTagName("data")
+        return (0 until elements.length).map { elements.item(it) as Element }
     }
 
     private fun manifestFile(): File = listOf("src/main/AndroidManifest.xml", "androidApp/src/main/AndroidManifest.xml")

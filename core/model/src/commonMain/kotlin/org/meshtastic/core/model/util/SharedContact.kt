@@ -56,7 +56,7 @@ fun CommonUri.toSharedContact(): SharedContact {
 @Throws(MalformedMeshtasticUrlException::class)
 private fun CommonUri.sharedContactFragment(): String {
     val h = host?.lowercase() ?: ""
-    val isCorrectHost = h == MESHTASTIC_HOST || h == "www.$MESHTASTIC_HOST"
+    val isCorrectHost = isSupportedShareUri(scheme, host)
     val segments = pathSegments
     val isCorrectPath = segments.any { it.equals("v", ignoreCase = true) }
 

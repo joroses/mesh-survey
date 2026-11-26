@@ -34,10 +34,7 @@ fun handleMeshtasticUri(
     onChannel: (CommonUri) -> Unit = {},
     onContact: (CommonUri) -> Unit = {},
 ): Boolean {
-    val h = uri.host ?: ""
-    val isCorrectHost =
-        h.equals(MESHTASTIC_HOST, ignoreCase = true) || h.equals("www.$MESHTASTIC_HOST", ignoreCase = true)
-    if (!isCorrectHost) return false
+    if (!isSupportedShareUri(uri.scheme, uri.host)) return false
 
     val segments = uri.pathSegments
     return when {

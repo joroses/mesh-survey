@@ -59,7 +59,8 @@ class SharedContactTest {
                     wb.node_num = 12345
                 }
                 .build()
-        val urlStr = original.getSharedContactUrl().toString().replace("meshtastic.org", "www.meshtastic.org")
+        val urlStr =
+            original.getSharedContactUrl().toString().replace("meshsurvey://meshsurvey/", "https://www.meshtastic.org/")
         val url = Uri.parse(urlStr)
         val contact = url.toSharedContact()
         assertEquals("Suzume", contact.user?.long_name)
@@ -89,7 +90,8 @@ class SharedContactTest {
                     wb.node_num = 12345
                 }
                 .build()
-        val urlStr = original.getSharedContactUrl().toString().replace("meshtastic.org", "example.com")
+        val urlStr =
+            original.getSharedContactUrl().toString().replace("meshsurvey://meshsurvey/", "https://example.com/")
         val url = Uri.parse(urlStr)
         url.toSharedContact()
     }
