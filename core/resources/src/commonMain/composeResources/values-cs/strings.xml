@@ -140,10 +140,10 @@
     <string name="bluetooth_permission_blocked_notice_pre31">Oprávnění k poloze je vypnuté a Android se už nezeptá. Zapněte ho v nastavení aplikace pro vyhledávání Bluetooth zařízení, nebo se připojte přes Wi-Fi či USB.</string>
     <string name="bluetooth_permission_blocked_rationale">Přístup k zařízením v okolí je vypnutý a Android se už nezeptá. Zapněte ho v nastavení aplikace pro vyhledávání a připojení přes Bluetooth.</string>
     <string name="bluetooth_permission_blocked_rationale_pre31">Oprávnění k poloze je vypnuté a Android se už znovu nezeptá. Zapněte ho v nastavení aplikace, abyste mohli vyhledávat a připojovat zařízení přes Bluetooth.</string>
-    <string name="bluetooth_permission_denied_notice">Bez přístupu k zařízením v okolí nemůže Meshtastic vyhledat ani se připojit k vašemu rádiu přes Bluetooth. Přes Wi-Fi nebo USB se můžete připojit i nadále.</string>
-    <string name="bluetooth_permission_denied_notice_pre31">Bez oprávnění k poloze Android blokuje skenování Bluetooth, takže Meshtastic nemůže najít vaše rádio. Přes Wi-Fi nebo USB se můžete připojit i nadále.</string>
-    <string name="bluetooth_permission_rationale">Meshtastic potřebuje přístup k zařízením v okolí, aby našel vaše rádio a mohl se k němu připojit. Toto oprávnění slouží pouze ke komunikaci s vašimi vlastními zařízeními a nikdy se nepoužívá ke zjišťování vaší polohy. Bez tohoto oprávnění nebude Bluetooth dostupné – Wi-Fi a USB budou nadále fungovat.</string>
-    <string name="bluetooth_permission_rationale_pre31">Meshtastic potřebuje oprávnění k poloze, protože tato verze Androidu považuje skenování Bluetooth za funkci související s polohou. Vaše poloha se pro tento účel nikdy nezjišťuje ani nesdílí. Bez tohoto oprávnění nebude Bluetooth dostupné – Wi-Fi a USB budou nadále fungovat.</string>
+    <string name="bluetooth_permission_denied_notice">Bez přístupu k zařízením v okolí nemůže Mesh Survey vyhledat ani se připojit k vašemu rádiu přes Bluetooth. Přes Wi-Fi nebo USB se můžete připojit i nadále.</string>
+    <string name="bluetooth_permission_denied_notice_pre31">Bez oprávnění k poloze Android blokuje skenování Bluetooth, takže Mesh Survey nemůže najít vaše rádio. Přes Wi-Fi nebo USB se můžete připojit i nadále.</string>
+    <string name="bluetooth_permission_rationale">Mesh Survey potřebuje přístup k zařízením v okolí, aby našel vaše rádio a mohl se k němu připojit. Toto oprávnění slouží pouze ke komunikaci s vašimi vlastními zařízeními a nikdy se nepoužívá ke zjišťování vaší polohy. Bez tohoto oprávnění nebude Bluetooth dostupné – Wi-Fi a USB budou nadále fungovat.</string>
+    <string name="bluetooth_permission_rationale_pre31">Mesh Survey potřebuje oprávnění k poloze, protože tato verze Androidu považuje skenování Bluetooth za funkci související s polohou. Vaše poloha se pro tento účel nikdy nezjišťuje ani nesdílí. Bez tohoto oprávnění nebude Bluetooth dostupné – Wi-Fi a USB budou nadále fungovat.</string>
     <string name="bluetooth_scan_location_services_disabled">Služby určování polohy jsou vypnuté. Zapněte je pro vyhledávání blízkých zařízení.</string>
     <string name="bluetooth_scan_missing_permission">Vyhledávání zařízení přes Bluetooth vyžaduje oprávnění. Povolte oprávnění „Blízká zařízení“ (nebo „Poloha“), aby bylo možné vyhledávat zařízení.</string>
     <string name="bluetooth_scan_start_failed">Nepodařilo se spustit skenování přes Bluetooth. Zkuste to znovu nebo Bluetooth vypněte a znovu zapněte, pokud problém přetrvává.</string>
@@ -156,7 +156,7 @@
     <string name="bonding_failed_permissions">Párování se nezdařilo. Povolte oprávnění k přístupu k blízkým zařízením a zkuste to znovu.</string>
     <string name="bonding_failed_retry">Párování nebylo dokončeno. Zkuste zařízení spárovat znovu.</string>
     <string name="boot_reconnect_blocked_message">Přístup k zařízením v okolí je vypnutý, takže rádio není dostupné přes Bluetooth. Klepnutím ho znovu povolíte.</string>
-    <string name="boot_reconnect_blocked_title">Meshtastic se nemůže znovu připojit</string>
+    <string name="boot_reconnect_blocked_title">Mesh Survey se nemůže znovu připojit</string>
     <string name="bottom_nav_settings">Nastavení</string>
     <plurals name="cache_limit_eviction_warning">
         <item quantity="one">Pokud tuto hodnotu snížíte, trvale se smaže uložená historie pro %1$d zařízení.</item>
@@ -206,7 +206,7 @@
     <string name="chirpy_error_unknown">Ups! Došlo k výrazné ztrátě paketů nebo rušení signálu! 📡 Zkusme tento požadavek odeslat znovu a uvidíme, jestli se nám podaří projít.</string>
     <string name="chirpy_error_unsupported_flavor">V této variantě aplikace mám omezené možnosti! 🔌 Zkuste použít verzi s plnou integrací AI Core.</string>
     <string name="chirpy_error_unsupported_platform">Ach ne! Moje anténa se na této platformě zřejmě nedokáže připojit. 📡 Zkontrolujte prosím kompatibilitu svého hardwaru!</string>
-    <string name="chirpy_intro">Ahoj! 📡 Jsem Chirpy, váš asistent Meshtastic přímo v zařízení! Mohu vám pomoci s nastavením, konfigurací, řešením problémů a tipy pro mesh sítě. S čím vám mohu pomoci?</string>
+    <string name="chirpy_intro">Ahoj! 📡 Jsem Chirpy, váš asistent Mesh Survey přímo v zařízení! Mohu vám pomoci s nastavením, konfigurací, řešením problémů a tipy pro mesh sítě. S čím vám mohu pomoci?</string>
     <string name="chirpy_ready">Zeptat se Chirpyho</string>
     <string name="chirpy_search_placeholder">Zeptejte se na Meshtastic…</string>
     <string name="chirpy_suggested_pages_help">Zde jsou některé stránky dokumentace, které by vám mohly pomoci:</string>
@@ -345,7 +345,7 @@
     <string name="desc_node_filter_clear">vyčistit filtr uzlů</string>
     <string name="description">Popis</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Ukončit</string>
     <string name="desktop_update_available_title">Je k dispozici aktualizace aplikace</string>
     <string name="desktop_update_download">Stáhnout aktualizaci %1$s</string>
@@ -779,7 +779,7 @@
     <!-- LOCAL -->
     <string name="local_network_permission">Oprávnění k místní síti</string>
     <string name="local_network_permission_blocked_rationale">Přístup k místní síti je vypnutý a Android se už nezeptá. Rádio v síti Wi-Fi nelze najít ani k němu přistupovat, dokud tento přístup nezapnete v nastavení aplikace. Rádio na veřejné adrese nebo přes VPN to neovlivní.</string>
-    <string name="local_network_permission_denied_hint">Přístup k místní síti je pro Meshtastic vypnutý. Pokud je toto rádio v místní síti, připojení se nezdaří, dokud v nastavení systému nepovolíte přístup k místní síti.</string>
+    <string name="local_network_permission_denied_hint">Přístup k místní síti je pro Mesh Survey vypnutý. Pokud je toto rádio v místní síti, připojení se nezdaří, dokud v nastavení systému nepovolíte přístup k místní síti.</string>
     <string name="local_stats_bad">Poškozené %1$d</string>
     <string name="local_stats_battery">Baterie: %1$d%</string>
     <string name="local_stats_diagnostics_prefix">Diagnostika: %1$s</string>
@@ -797,8 +797,8 @@
     <string name="location_permission">Oprávnění k poloze</string>
     <string name="location_permission_blocked_notice">Přístup k poloze je vypnutý a Android se už nezeptá. Kdykoli budete chtít znovu používat mapu a sdílení polohy, zapněte ho v nastavení aplikace.</string>
     <string name="location_permission_blocked_toast">Přístup k poloze je vypnutý. Zapněte ho v nastavení aplikace, chcete-li sdílet svou polohu.</string>
-    <string name="location_permission_denied_notice">Bez přístupu k poloze mapa nezobrazí vaši polohu a Meshtastic ji nebude moci sdílet v mesh síti. Vše ostatní bude fungovat dál a přístup můžete později zapnout.</string>
-    <string name="location_permission_rationale">Meshtastic používá vaši polohu pro zobrazení na mapě, měření vzdálenosti k uzlům a po zapnutí i pro její sdílení v mesh síti. Po zamítnutí oprávnění ostatní funkce fungují dál.</string>
+    <string name="location_permission_denied_notice">Bez přístupu k poloze mapa nezobrazí vaši polohu a Mesh Survey ji nebude moci sdílet v mesh síti. Vše ostatní bude fungovat dál a přístup můžete později zapnout.</string>
+    <string name="location_permission_rationale">Mesh Survey používá vaši polohu pro zobrazení na mapě, měření vzdálenosti k uzlům a po zapnutí i pro její sdílení v mesh síti. Po zamítnutí oprávnění ostatní funkce fungují dál.</string>
     <string name="location_sharing">Sdílení polohy</string>
     <!-- LOCKDOWN -->
     <string name="lockdown_backoff">Zkuste to znovu za %1$d sekund.</string>
@@ -943,7 +943,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Upozornění na varování</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Upozornění na hromadné zprávy</string>
     <string name="meshtastic_low_battery_notifications">Upozornění na nízký stav baterie</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Upozornění na nízký stav baterie (oblíbené uzly)</string>
@@ -1036,7 +1036,7 @@
     <string name="navigate_back">Přejít zpět</string>
     <string name="nearby_devices_permission">Oprávnění k zařízením v okolí</string>
     <string name="need_hardware">Potřebujete zařízení?</string>
-    <string name="need_hardware_description">Pro používání Meshtastic potřebujete kompatibilní zařízení. Naši podporovatelé a partneři nabízejí zařízení připravená k použití. Zde jsou některé z nejoblíbenějších možností.</string>
+    <string name="need_hardware_description">Pro používání Mesh Survey potřebujete kompatibilní zařízení. Naši podporovatelé a partneři nabízejí zařízení připravená k použití. Zde jsou některé z nejoblíbenějších možností.</string>
     <string name="neighbor_info">Informace o sousedech</string>
     <string name="neighbor_info_config">Nastavení informace o sousedech</string>
     <string name="network">Síť</string>
@@ -1145,9 +1145,9 @@
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Mesh</string>
     <string name="notification_permission_blocked_notice">Oznámení jsou vypnutá a Android se už nezeptá. Zapněte je v nastavení aplikace, abyste dostávali upozornění na nové zprávy a další události.</string>
-    <string name="notification_permission_denied_notice">Bez oznámení vás Meshtastic nemůže upozornit na nové zprávy, nové uzly ani nízký stav baterie, když aplikace běží na pozadí.</string>
-    <string name="notification_permission_rationale">Oznámení vás upozorní, když aplikace Meshtastic není otevřená: na nové zprávy, nově nalezené uzly a nízký stav baterie rádia. Pokud je zamítnete, nic dalšího se nezmění.</string>
-    <string name="notification_permissions_description">Meshtastic vás pomocí oznámení upozorní na nové zprávy a důležité události. Nastavení oznámení si můžete kdykoli upravit.</string>
+    <string name="notification_permission_denied_notice">Bez oznámení vás Mesh Survey nemůže upozornit na nové zprávy, nové uzly ani nízký stav baterie, když aplikace běží na pozadí.</string>
+    <string name="notification_permission_rationale">Oznámení vás upozorní, když aplikace Mesh Survey není otevřená: na nové zprávy, nově nalezené uzly a nízký stav baterie rádia. Pokud je zamítnete, nic dalšího se nezmění.</string>
+    <string name="notification_permissions_description">Mesh Survey vás pomocí oznámení upozorní na nové zprávy a důležité události. Nastavení oznámení si můžete kdykoli upravit.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Oznámení z kanálů a přímých zpráv.</string>
     <string name="notifications_for_low_battery_alerts">Oznámení o nízké úrovni baterie připojeného zařízení.</string>
@@ -1175,7 +1175,7 @@
     <string name="open_compass">Otevřít kompas</string>
     <string name="open_location_settings">Otevřít nastavení polohy</string>
     <string name="open_settings">Otevřít nastavení</string>
-    <string name="open_source_description">Meshtastic používá následující open-source knihovny. Klepnutím zobrazíte jejich licence.</string>
+    <string name="open_source_description">Mesh Survey používá následující open-source knihovny. Klepnutím zobrazíte jejich licence.</string>
     <string name="open_source_libraries">Open source knihovny</string>
     <string name="open_wifi_settings">Otevřít nastavení Wi-Fi</string>
     <string name="options">Nastavení</string>
@@ -1209,7 +1209,7 @@
     <string name="permission_local_network_summary">Vyhledat rádia v síti Wi-Fi</string>
     <string name="permission_location_summary">Zobrazit svou polohu na mapě a sdílet ji přes mesh síť</string>
     <string name="permission_location_summary_pre31">Najít vaše rádio přes Bluetooth, zobrazit vaši polohu na mapě a sdílet ji v mesh síti</string>
-    <string name="permission_missing_31">Meshtastic potřebuje mít povoleno oprávnění ‚Blízká zařízení‘, aby mohl vyhledávat a připojovat zařízení přes Bluetooth. Když jej nepoužíváte, můžete jej vypnout.</string>
+    <string name="permission_missing_31">Mesh Survey potřebuje mít povoleno oprávnění ‚Blízká zařízení‘, aby mohl vyhledávat a připojovat zařízení přes Bluetooth. Když jej nepoužíváte, můžete jej vypnout.</string>
     <string name="permission_missing_pre31">V této verzi Androidu jedno oprávnění k poloze zajišťuje dvě věci: umožňuje skenování Bluetooth a zobrazuje vaši polohu na mapě mesh sítě. Sdílení vaší polohy v mesh síti zůstává vypnuté, dokud ho sami nezapnete.</string>
     <string name="permission_nearby_devices_summary">Najít a připojit se k vašemu rádiu přes Bluetooth</string>
     <string name="permission_notifications_summary">Upozorňovat na zprávy, nové uzly a vybitou baterii</string>
@@ -1230,7 +1230,7 @@
     <string name="permissions_nothing_needed">Nic nevyžaduje vaši pozornost</string>
     <string name="permissions_show">Zobrazit oprávnění</string>
     <string name="phone_location">Poloha telefonu</string>
-    <string name="phone_location_description">Meshtastic využívá polohu telefonu pro některé funkce. Oprávnění k poloze si můžete kdykoli upravit v nastavení.</string>
+    <string name="phone_location_description">Mesh Survey využívá polohu telefonu pro některé funkce. Oprávnění k poloze si můžete kdykoli upravit v nastavení.</string>
     <plurals name="plurals_hours">
         <item quantity="one">%1$d hodina</item>
         <item quantity="few">%1$d hodin</item>
@@ -1446,7 +1446,7 @@
     <string name="share_contact">Sdílet kontakt</string>
     <string name="share_location">Sdílet polohu</string>
     <string name="share_location_description">Použijte GPS telefonu k odesílání polohy do svého uzlu namísto použití hardwarového GPS přímo na uzlu.</string>
-    <string name="share_qr_subtext">Naskenujte tento kód pomocí aplikace Meshtastic na jiném zařízení a přidejte jej tam.</string>
+    <string name="share_qr_subtext">Naskenujte tento kód pomocí aplikace Mesh Survey na jiném zařízení a přidejte jej tam.</string>
     <string name="share_to">Sdílet do…</string>
     <string name="share_your_location_in_real_time">Sdílejte svou polohu v reálném čase a udržujte svou skupinu koordinovanou díky integrovaným funkcím GPS.</string>
     <string name="shared_contact_no_public_key">Tento kontakt nemá žádný veřejný klíč, takže jej nelze importovat. Kontakt bez něj vymaže všechny klíče, které vaše rádio již pro daný uzel drží. Požádejte odesílatele, aby jej znovu sdílel, jakmile si jeho uzel vymění klíče.</string>
@@ -1529,7 +1529,7 @@
     <string name="tak_server_status_not_running">TAK server není spuštěn</string>
     <string name="tak_server_status_off">Vypnuto</string>
     <string name="tak_server_status_starting">Spouštění serveru TAK</string>
-    <string name="tak_server_status_unavailable">Místní TAK server je k dispozici v aplikaci Meshtastic pro Android</string>
+    <string name="tak_server_status_unavailable">Místní TAK server je k dispozici v aplikaci Mesh Survey pro Android</string>
     <string name="tak_server_status_waiting">Server naslouchá na 127.0.0.1:8089 — čeká na ATAK</string>
     <string name="tak_server_test_card_title">Test TAK mesh sítě (ladění)</string>
     <string name="tak_server_test_protocol_v1_label">V1 (starší firmware &lt; 2.8.0 – PLI + pouze chat)</string>

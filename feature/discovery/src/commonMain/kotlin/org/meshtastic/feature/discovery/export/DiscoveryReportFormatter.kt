@@ -79,6 +79,6 @@ internal object DiscoveryReportFormatter {
     fun generateFileName(session: DiscoverySessionEntity, extension: String): String {
         val dateStr =
             DateFormatter.formatDateTime(session.timestamp).replace(" ", "_").replace("/", "-").replace(":", "-")
-        return "meshtastic_discovery_$dateStr.$extension"
+        return "meshsurvey_discovery_$dateStr.$extension"
     }
 }

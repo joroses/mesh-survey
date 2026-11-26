@@ -188,7 +188,7 @@
     <string name="chirpy_error_unknown">哎呀！我们遇到了严重的丢包或信号干扰！📡 让我们重新发送一下那个查询请求，看看这次能不能顺利通联。</string>
     <string name="chirpy_error_unsupported_flavor">我在这个应用版本中是在受限的频率下运行的！🔌 请尝试使用集成了完整 AI 核心。</string>
     <string name="chirpy_error_unsupported_platform">哎呀！我的天线似乎无法在这个平台上建立连接。📡 请再次检查你的硬件兼容性！</string>
-    <string name="chirpy_intro">嘿，你好呀！📡 我是 Chirpy，你设备上的 Meshtastic 专属助手！我可以帮你进行设备设置、参数配置、故障排查，还能提供网状网络的小贴士。有什么我可以帮你的吗？</string>
+    <string name="chirpy_intro">嘿，你好呀！📡 我是 Chirpy，你设备上的 Mesh Survey 专属助手！我可以帮你进行设备设置、参数配置、故障排查，还能提供网状网络的小贴士。有什么我可以帮你的吗？</string>
     <string name="chirpy_ready">询问 Chirpy</string>
     <string name="chirpy_search_placeholder">询问关于 Meshtastic 的问题…</string>
     <string name="chirpy_suggested_pages_help">以下是一些可能对你有帮助的文档页面：</string>
@@ -325,11 +325,11 @@
     <string name="desc_node_filter_clear">清除筛选</string>
     <string name="description">说明</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">退出</string>
-    <string name="desktop_tray_show">显示 Meshtastic</string>
-    <string name="desktop_tray_tooltip">Meshtastic 桌面版</string>
-    <string name="desktop_update_available_message">Meshtastic 桌面客户端 %1$s 已准备好下载。</string>
+    <string name="desktop_tray_show">显示 Mesh Survey</string>
+    <string name="desktop_tray_tooltip">Mesh Survey 桌面版</string>
+    <string name="desktop_update_available_message">Mesh Survey 桌面客户端 %1$s 已准备好下载。</string>
     <string name="desktop_update_available_title">检测到新版本</string>
     <string name="desktop_update_download">下载更新 %1$s</string>
     <string name="details">详细信息</string>
@@ -914,7 +914,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">提醒通知</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">广播消息提醒</string>
     <string name="meshtastic_low_battery_notifications">低电量通知</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">低电量通知 (收藏节点)</string>
@@ -1084,7 +1084,7 @@
     <string name="notes">注</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">网状网络</string>
-    <string name="notification_permissions_description">Meshtastic 使用通知来随时更新新消息和其他重要事件。您可以随时从设置中更新您的通知权限。</string>
+    <string name="notification_permissions_description">Mesh Survey 使用通知来随时更新新消息和其他重要事件。您可以随时从设置中更新您的通知权限。</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">频道和直接消息通知。</string>
     <string name="notifications_for_low_battery_alerts">已连接设备的低电量警报通知。</string>
@@ -1106,7 +1106,7 @@
     <string name="open_bluetooth_settings">打开蓝牙设置</string>
     <string name="open_compass">打开指南针...</string>
     <string name="open_settings">打开设置</string>
-    <string name="open_source_description">Meshtastic 是用以下开源库构建的。点击任何库查看其许可证。</string>
+    <string name="open_source_description">Mesh Survey 是用以下开源库构建的。点击任何库查看其许可证。</string>
     <string name="open_source_libraries">开源库</string>
     <string name="open_wifi_settings">打开 Wi-Fi 设置</string>
     <string name="options">选项</string>
@@ -1137,10 +1137,10 @@
     <string name="paxcounter_config">Paxcount 配置</string>
     <string name="periodic_position_broadcast">定期广播</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic需要启用“附近的设备”权限，以便通过蓝牙查找并连接设备。不使用时，您可以将其禁用。</string>
+    <string name="permission_missing_31">Mesh Survey需要启用“附近的设备”权限，以便通过蓝牙查找并连接设备。不使用时，您可以将其禁用。</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">手机位置</string>
-    <string name="phone_location_description">Meshtastic 通过使用您的手机定位功能来实现多项功能。您可随时通过设置菜单调整定位权限。</string>
+    <string name="phone_location_description">Mesh Survey 通过使用您的手机定位功能来实现多项功能。您可随时通过设置菜单调整定位权限。</string>
     <string name="pin_selected">PIN</string>
     <string name="play">开始</string>
     <plurals name="plurals_hours">

@@ -255,10 +255,10 @@
     <string name="desc_node_filter_clear">rensa filtrering av noder</string>
     <string name="description">Beskrivning</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Avsluta</string>
-    <string name="desktop_tray_show">Visa Meshtastic</string>
-    <string name="desktop_update_available_message">Meshtastic Desktop %1$s är redo att hämtas.</string>
+    <string name="desktop_tray_show">Visa Mesh Survey</string>
+    <string name="desktop_update_available_message">Mesh Survey Desktop %1$s är redo att hämtas.</string>
     <string name="desktop_update_available_title">App-uppdatering tillgänglig</string>
     <string name="desktop_update_download">Hämtar uppdatering %1$s</string>
     <string name="details">Detaljer</string>
@@ -633,7 +633,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Larmmeddelanden</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Meddelandeaviseringar</string>
     <string name="meshtastic_low_battery_notifications">Avisering vid låg batterinivå</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Meddelanden om lågt batteri (favoritnoder)</string>
@@ -759,7 +759,7 @@
     <string name="notes">Anteckningar</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Meshnätverk</string>
-    <string name="notification_permissions_description">Meshtastic använder aviseringar för att hålla dig uppdaterad om nya meddelanden och andra viktiga händelser. Du kan uppdatera dina aviseringsbehörigheter när som helst från inställningar.</string>
+    <string name="notification_permissions_description">Mesh Survey använder aviseringar för att hålla dig uppdaterad om nya meddelanden och andra viktiga händelser. Du kan uppdatera dina aviseringsbehörigheter när som helst från inställningar.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Aviseringar för kanal och direktmeddelanden.</string>
     <string name="notifications_for_low_battery_alerts">Aviseringar för låg batterinivå för den anslutna enheten.</string>
@@ -807,10 +807,10 @@
     <string name="paxcounter_config">Konfiguration av PAX-räknare</string>
     <string name="periodic_position_broadcast">Periodisk positionssändning</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic behöver "Närliggande enheter"-behörigheter aktiverade för att hitta och ansluta till enheter via Bluetooth. Du kan inaktivera när den inte används.</string>
+    <string name="permission_missing_31">Mesh Survey behöver "Närliggande enheter"-behörigheter aktiverade för att hitta och ansluta till enheter via Bluetooth. Du kan inaktivera när den inte används.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Telefonens plats</string>
-    <string name="phone_location_description">Meshtastic använder telefonens plats för att aktivera ett antal funktioner. Du kan uppdatera dina platsbehörigheter när som helst från inställningar.</string>
+    <string name="phone_location_description">Mesh Survey använder telefonens plats för att aktivera ett antal funktioner. Du kan uppdatera dina platsbehörigheter när som helst från inställningar.</string>
     <string name="pin_selected">Pinkod</string>
     <string name="play">Spela upp</string>
     <plurals name="plurals_hours">

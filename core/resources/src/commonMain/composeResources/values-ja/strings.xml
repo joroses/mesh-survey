@@ -188,7 +188,7 @@
     <string name="chirpy_error_unknown">おっと！ひどいパケット損失か信号干渉が発生しました！📡 そのクエリを再送信して、通るか試してみましょう。</string>
     <string name="chirpy_error_unsupported_flavor">このアプリのフレーバーでは限られた周波数で動作しています！🔌 AI Core が完全に統合されたバージョンをお試しください。</string>
     <string name="chirpy_error_unsupported_platform">しまった！このプラットフォームではアンテナが接続を確立できないようです。📡 ハードウェアの互換性を再確認してください！</string>
-    <string name="chirpy_intro">こんにちは！📡 私は Chirpy、あなたのデバイス上で動く Meshtastic アシスタントです！セットアップ、設定、トラブルシューティング、メッシュネットワークのヒントをお手伝いできます。何かお手伝いしましょうか？</string>
+    <string name="chirpy_intro">こんにちは！📡 私は Chirpy、あなたのデバイス上で動く Mesh Survey アシスタントです！セットアップ、設定、トラブルシューティング、メッシュネットワークのヒントをお手伝いできます。何かお手伝いしましょうか？</string>
     <string name="chirpy_ready">Chirpy に質問</string>
     <string name="chirpy_search_placeholder">Meshtastic について質問…</string>
     <string name="chirpy_suggested_pages_help">お役に立ちそうなドキュメントページはこちらです：</string>
@@ -319,11 +319,11 @@
     <string name="desc_node_filter_clear">ノードフィルターをクリアします</string>
     <string name="description">説明</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">終了</string>
-    <string name="desktop_tray_show">Meshtastic を表示</string>
-    <string name="desktop_tray_tooltip">Meshtastic デスクトップ</string>
-    <string name="desktop_update_available_message">Meshtastic デスクトップ %1$s をダウンロードできます。</string>
+    <string name="desktop_tray_show">Mesh Survey を表示</string>
+    <string name="desktop_tray_tooltip">Mesh Survey デスクトップ</string>
+    <string name="desktop_update_available_message">Mesh Survey デスクトップ %1$s をダウンロードできます。</string>
     <string name="desktop_update_available_title">アプリの更新があります</string>
     <string name="desktop_update_download">更新 %1$s をダウンロード</string>
     <string name="details">詳細</string>
@@ -900,7 +900,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">アラート通知</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">ブロードキャストメッセージの通知</string>
     <string name="meshtastic_low_battery_notifications">バッテリー残量低下通知</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">バッテリー残量低下通知 (お気に入りノード)</string>
@@ -1070,7 +1070,7 @@
     <string name="notes">メモ</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">メッシュ</string>
-    <string name="notification_permissions_description">Meshtastic は、新着メッセージやその他の重要なイベントをお知らせするために通知を使用します。通知の権限は、設定からいつでも更新できます。</string>
+    <string name="notification_permissions_description">Mesh Survey は、新着メッセージやその他の重要なイベントをお知らせするために通知を使用します。通知の権限は、設定からいつでも更新できます。</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">チャンネルメッセージとダイレクトメッセージの通知。</string>
     <string name="notifications_for_low_battery_alerts">接続中のデバイスのバッテリー残量低下アラートの通知。</string>
@@ -1092,7 +1092,7 @@
     <string name="open_bluetooth_settings">Bluetooth 設定を開く</string>
     <string name="open_compass">コンパスを開く</string>
     <string name="open_settings">設定を開く</string>
-    <string name="open_source_description">Meshtastic は以下のオープンソースライブラリを使用して構築されています。ライブラリをタップするとライセンスを表示できます。</string>
+    <string name="open_source_description">Mesh Survey は以下のオープンソースライブラリを使用して構築されています。ライブラリをタップするとライセンスを表示できます。</string>
     <string name="open_source_libraries">オープンソースライブラリ</string>
     <string name="open_wifi_settings">Wi-Fi 設定を開く</string>
     <string name="options">オプション</string>
@@ -1123,11 +1123,11 @@
     <string name="paxcounter_config">Paxcounter 設定</string>
     <string name="periodic_position_broadcast">定期的な位置情報ブロードキャスト</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic が Bluetooth でデバイスを検出して接続するには、「付近のデバイス」の権限を有効にする必要があります。使用しないときは無効にできます。</string>
+    <string name="permission_missing_31">Mesh Survey が Bluetooth でデバイスを検出して接続するには、「付近のデバイス」の権限を有効にする必要があります。使用しないときは無効にできます。</string>
     <!-- PERMISSIONS -->
     <string name="permissions">権限</string>
     <string name="phone_location">スマートフォンの位置情報</string>
-    <string name="phone_location_description">Meshtastic は、さまざまな機能を有効にするためにスマートフォンの位置情報を使用します。位置情報の権限は、設定からいつでも更新できます。</string>
+    <string name="phone_location_description">Mesh Survey は、さまざまな機能を有効にするためにスマートフォンの位置情報を使用します。位置情報の権限は、設定からいつでも更新できます。</string>
     <string name="play">再生</string>
     <plurals name="plurals_hours">
         <item quantity="other">%1$d 時間</item>

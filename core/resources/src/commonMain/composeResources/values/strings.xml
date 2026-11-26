@@ -156,10 +156,10 @@
     <string name="bluetooth_permission_blocked_notice_pre31">Location permission is turned off and Android will not ask again. Turn it on in app settings to scan for Bluetooth devices, or connect over Wi-Fi or USB instead.</string>
     <string name="bluetooth_permission_blocked_rationale">Nearby devices access is off and Android will not ask again. Turn it on in app settings to scan and connect over Bluetooth.</string>
     <string name="bluetooth_permission_blocked_rationale_pre31">Location permission is off and Android will not ask again. Turn it on in app settings to scan and connect over Bluetooth.</string>
-    <string name="bluetooth_permission_denied_notice">Without Nearby devices access, Meshtastic cannot find or connect to your radio over Bluetooth. You can still connect over Wi-Fi or USB.</string>
-    <string name="bluetooth_permission_denied_notice_pre31">Without Location permission, Android blocks Bluetooth scanning, so Meshtastic cannot find your radio. You can still connect over Wi-Fi or USB.</string>
-    <string name="bluetooth_permission_rationale">Meshtastic needs Nearby devices access to find your radio and connect to it. It is used only to talk to your own devices, never to work out where you are. Without it, Bluetooth is unavailable — Wi-Fi and USB still work.</string>
-    <string name="bluetooth_permission_rationale_pre31">Meshtastic needs Location permission because this version of Android treats Bluetooth scanning as a location capability. Your position is never read or shared for this. Without it, Bluetooth is unavailable — Wi-Fi and USB still work.</string>
+    <string name="bluetooth_permission_denied_notice">Without Nearby devices access, Mesh Survey cannot find or connect to your radio over Bluetooth. You can still connect over Wi-Fi or USB.</string>
+    <string name="bluetooth_permission_denied_notice_pre31">Without Location permission, Android blocks Bluetooth scanning, so Mesh Survey cannot find your radio. You can still connect over Wi-Fi or USB.</string>
+    <string name="bluetooth_permission_rationale">Mesh Survey needs Nearby devices access to find your radio and connect to it. It is used only to talk to your own devices, never to work out where you are. Without it, Bluetooth is unavailable — Wi-Fi and USB still work.</string>
+    <string name="bluetooth_permission_rationale_pre31">Mesh Survey needs Location permission because this version of Android treats Bluetooth scanning as a location capability. Your position is never read or shared for this. Without it, Bluetooth is unavailable — Wi-Fi and USB still work.</string>
     <string name="bluetooth_scan_location_services_disabled">Location services are off. Turn them on to scan for nearby devices.</string>
     <string name="bluetooth_scan_missing_permission">Bluetooth scan needs permission. Grant the Nearby devices (or Location) permission to find devices.</string>
     <string name="bluetooth_scan_start_failed">Bluetooth scan couldn't start. Try again, or toggle Bluetooth if the problem continues.</string>
@@ -170,7 +170,7 @@
     <string name="bonding_failed_permissions">Pairing failed. Grant nearby device permissions and try again.</string>
     <string name="bonding_failed_retry">Pairing did not complete. Try pairing again.</string>
     <string name="boot_reconnect_blocked_message">Nearby devices permission is off, so your radio cannot be reached over Bluetooth. Tap to turn it back on.</string>
-    <string name="boot_reconnect_blocked_title">Meshtastic can't reconnect</string>
+    <string name="boot_reconnect_blocked_title">Mesh Survey can't reconnect</string>
     <string name="bottom_nav_settings">Settings</string>
     <string name="busy_noise_floor">Busy floor</string>
     <plurals name="cache_limit_eviction_warning">
@@ -232,7 +232,7 @@
     <string name="chirpy_hop_tap_to_start">TAP TO START</string>
     <string name="chirpy_hop_update_complete">Update complete</string>
     <string name="chirpy_hop_update_interrupted">Update interrupted</string>
-    <string name="chirpy_intro">Hey there! 📡 I'm Chirpy, your on-device Meshtastic assistant! I can help with setup, configuration, troubleshooting, and mesh networking tips. What can I help you with?</string>
+    <string name="chirpy_intro">Hey there! 📡 I'm Chirpy, your on-device Mesh Survey assistant! I can help with setup, configuration, troubleshooting, and mesh networking tips. What can I help you with?</string>
     <string name="chirpy_ready">Ask Chirpy</string>
     <string name="chirpy_search_placeholder">Ask about Meshtastic…</string>
     <string name="chirpy_suggested_pages_help">Here are some documentation pages that might help:</string>
@@ -385,11 +385,11 @@
     <string name="desc_node_filter_clear">clear node filter</string>
     <string name="description">Description</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Quit</string>
-    <string name="desktop_tray_show">Show Meshtastic</string>
-    <string name="desktop_tray_tooltip">Meshtastic Desktop</string>
-    <string name="desktop_update_available_message">Meshtastic Desktop %1$s is ready to download.</string>
+    <string name="desktop_tray_show">Show Mesh Survey</string>
+    <string name="desktop_tray_tooltip">Mesh Survey Desktop</string>
+    <string name="desktop_update_available_message">Mesh Survey Desktop %1$s is ready to download.</string>
     <string name="desktop_update_available_title">App update available</string>
     <string name="desktop_update_download">Download update %1$s</string>
     <string name="details">Details</string>
@@ -683,7 +683,7 @@
     <string name="firmware_maintenance_upgrade_confirm_text">This installs an upgraded bootloader on %1$s, which makes future Bluetooth updates much faster. The firmware is reinstalled afterwards.\n\nDon't disconnect the device while this runs.</string>
     <string name="firmware_maintenance_upgrade_confirm_title">Upgrade bootloader?</string>
     <string name="firmware_maintenance_wrong_destination">That location isn't the device's update drive, so nothing was written to the device. Select the removable drive that appears when the device is in update mode.</string>
-    <string name="firmware_old">The radio firmware is too old to talk to this application. For more information on this see <a href="https://meshtastic.org/docs/getting-started/flashing-firmware">our Firmware Installation guide</a>.</string>
+    <string name="firmware_old">The radio firmware is too old to talk to this application. For more information on this see <a href="https://meshtastic.org/docs/getting-started/flashing-firmware">the Meshtastic Firmware Installation guide</a>.</string>
     <string name="firmware_recovery_banner">Finish updating %1$s</string>
     <string name="firmware_recovery_ble_failed">Couldn't finish the update over Bluetooth. This device's stock bootloader can't reliably complete an interrupted update over the air. Connect it to a computer with USB and re-flash it using the vendor's serial DFU tool (for example adafruit-nrfutil) to recover the device.</string>
     <string name="firmware_recovery_button">Resume firmware update</string>
@@ -928,8 +928,8 @@
     <string name="local_mbtiles_file">Local MBTiles File</string>
     <string name="local_network_permission">Local network permission</string>
     <string name="local_network_permission_blocked_rationale">Local network access is off and Android will not ask again. A radio on your Wi-Fi cannot be found or reached until you turn it on in app settings. A radio on a public address or over a VPN is unaffected.</string>
-    <string name="local_network_permission_denied_hint">Local network access is turned off for Meshtastic. If this radio is on your local network, the connection will fail until you allow local network access in system settings.</string>
-    <string name="local_network_permission_rationale">Meshtastic needs local network access to find and reach radios on your Wi-Fi. It only looks on the network you are already connected to. Without it, a radio on your Wi-Fi cannot be reached even by typing its address; a radio on a public address or over a VPN is unaffected.</string>
+    <string name="local_network_permission_denied_hint">Local network access is turned off for Mesh Survey. If this radio is on your local network, the connection will fail until you allow local network access in system settings.</string>
+    <string name="local_network_permission_rationale">Mesh Survey needs local network access to find and reach radios on your Wi-Fi. It only looks on the network you are already connected to. Without it, a radio on your Wi-Fi cannot be reached even by typing its address; a radio on a public address or over a VPN is unaffected.</string>
     <string name="local_stats_bad">Bad %1$d</string>
     <string name="local_stats_battery">Battery: %1$d%</string>
     <string name="local_stats_diagnostics_prefix">Diagnostics: %1$s</string>
@@ -948,8 +948,8 @@
     <string name="location_permission">Location permission</string>
     <string name="location_permission_blocked_notice">Location access is turned off and Android will not ask again. Turn it on in app settings whenever you want the map and position sharing back.</string>
     <string name="location_permission_blocked_toast">Location permission is off. Turn it on in app settings to share your position.</string>
-    <string name="location_permission_denied_notice">Without location access, the map will not show where you are and Meshtastic cannot share your position with the mesh. Everything else keeps working, and you can turn it on later.</string>
-    <string name="location_permission_rationale">Meshtastic uses your location to place you on the map, measure distance to nodes, and — only if you turn it on — share your position with the mesh. Declining leaves everything else working.</string>
+    <string name="location_permission_denied_notice">Without location access, the map will not show where you are and Mesh Survey cannot share your position with the mesh. Everything else keeps working, and you can turn it on later.</string>
+    <string name="location_permission_rationale">Mesh Survey uses your location to place you on the map, measure distance to nodes, and — only if you turn it on — share your position with the mesh. Declining leaves everything else working.</string>
     <string name="location_precise_blocked_toast">Precise location is off. Turn on Use precise location in app settings to share your position.</string>
     <string name="location_precise_rationale">Sharing your position with the mesh needs precise location, so other nodes see where you are rather than a rough area. When Android asks, choose Precise. The map and everything else keep working with approximate location.</string>
     <string name="location_sharing">Location Sharing</string>
@@ -1124,7 +1124,7 @@
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Alert notifications</string>
     <string name="meshtastic_alerts_notifications_description">Critical alerts sent by nodes on the mesh.</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Broadcast message notifications</string>
     <string name="meshtastic_broadcast_notifications_description">Messages sent to your channels.</string>
     <string name="meshtastic_client_notifications">Radio notifications</string>
@@ -1144,7 +1144,7 @@
     <string name="meshtastic_reactions_notifications">Reaction notifications</string>
     <string name="meshtastic_reactions_notifications_description">Emoji reactions to messages.</string>
     <string name="meshtastic_service_notifications">Service notifications</string>
-    <string name="meshtastic_service_notifications_description">Shows the connection to your radio while Meshtastic runs in the background.</string>
+    <string name="meshtastic_service_notifications_description">Shows the connection to your radio while Mesh Survey runs in the background.</string>
     <string name="meshtastic_waypoints_notifications">Waypoint notifications</string>
     <string name="meshtastic_waypoints_notifications_description">Waypoints shared on the mesh, and geofence crossings.</string>
     <!-- MESSAGE -->
@@ -1234,7 +1234,7 @@
     <string name="mqtt_status_topics_refused_some">Connected, but the broker refused %1$s</string>
     <string name="mqtt_test_connection">Test connection</string>
     <string name="must_set_region">You must set a region!</string>
-    <string name="must_update">You must update this application on the app store (or Github). It is too old to talk to this radio firmware.  Please read our <a href="https://meshtastic.org/docs/software/android/installation">docs</a> on this topic.</string>
+    <string name="must_update">You must update this application on GitHub. It is too old to talk to this radio firmware. Please read the <a href="https://meshtastic.org/docs/software/android/installation">Meshtastic docs</a> on this topic.</string>
     <!-- MUTE -->
     <string name="mute_1_week">1 week</string>
     <string name="mute_8_hours">8 hours</string>
@@ -1253,7 +1253,7 @@
     <string name="navigate_into_label">Navigate Into</string>
     <string name="nearby_devices_permission">Nearby devices permission</string>
     <string name="need_hardware">Need Hardware?</string>
-    <string name="need_hardware_description">Meshtastic requires a compatible device. Our backers and partners offer ready-to-use hardware. Here are some of the most popular options.</string>
+    <string name="need_hardware_description">Mesh Survey requires a compatible Meshtastic device. Meshtastic backers and partners offer ready-to-use hardware. Here are some of the most popular options.</string>
     <string name="neighbor_info">Neighbor Info</string>
     <string name="neighbor_info_config">Neighbor Info Config</string>
     <string name="network">Network</string>
@@ -1367,9 +1367,9 @@
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Mesh</string>
     <string name="notification_permission_blocked_notice">Notifications are turned off and Android will not ask again. Turn them on in app settings to hear about new messages and alerts.</string>
-    <string name="notification_permission_denied_notice">Without notifications, Meshtastic cannot alert you to new messages, new nodes, or a low battery while the app is in the background.</string>
-    <string name="notification_permission_rationale">Notifications are how Meshtastic reaches you when the app is not open: new messages, newly discovered nodes, and a radio running low on battery. Nothing else changes if you decline.</string>
-    <string name="notification_permissions_description">Meshtastic uses notifications to keep you updated on new messages and other important events. You can update your notification permissions at any time from settings.</string>
+    <string name="notification_permission_denied_notice">Without notifications, Mesh Survey cannot alert you to new messages, new nodes, or a low battery while the app is in the background.</string>
+    <string name="notification_permission_rationale">Notifications are how Mesh Survey reaches you when the app is not open: new messages, newly discovered nodes, and a radio running low on battery. Nothing else changes if you decline.</string>
+    <string name="notification_permissions_description">Mesh Survey uses notifications to keep you updated on new messages and other important events. You can update your notification permissions at any time from settings.</string>
     <string name="notification_reaction_to">%1$s to “%2$s”</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Notifications for channel and direct messages.</string>
@@ -1399,7 +1399,7 @@
     <string name="open_compass">Open Compass</string>
     <string name="open_location_settings">Open location settings</string>
     <string name="open_settings">Open settings</string>
-    <string name="open_source_description">Meshtastic is built with the following open source libraries. Tap any library to view its license.</string>
+    <string name="open_source_description">Mesh Survey is built with the following open source libraries. Tap any library to view its license.</string>
     <string name="open_source_libraries">Open Source Libraries</string>
     <string name="open_wifi_settings">Open Wi-Fi settings</string>
     <string name="options">Options</string>
@@ -1438,7 +1438,7 @@
     <string name="permission_local_network_summary">Find radios on your Wi-Fi network</string>
     <string name="permission_location_summary">Show your position on the map and share it with the mesh</string>
     <string name="permission_location_summary_pre31">Find your radio over Bluetooth, place you on the map, and share your position with the mesh</string>
-    <string name="permission_missing_31">Meshtastic needs "Nearby devices" permissions enabled to find and connect to devices via Bluetooth. You can disable when not in use.</string>
+    <string name="permission_missing_31">Mesh Survey needs "Nearby devices" permissions enabled to find and connect to devices via Bluetooth. You can disable when not in use.</string>
     <string name="permission_missing_pre31">On this version of Android, one Location permission covers two things: it is what unlocks Bluetooth scanning, and it places you on the mesh map. Sharing your position with the mesh stays off until you turn it on yourself.</string>
     <string name="permission_nearby_devices_summary">Find and connect to your radio over Bluetooth</string>
     <string name="permission_notifications_summary">Alert you to messages, new nodes and low battery</string>
@@ -1459,7 +1459,7 @@
     <string name="permissions_nothing_needed">Nothing needs your attention</string>
     <string name="permissions_show">Show permissions</string>
     <string name="phone_location">Phone Location</string>
-    <string name="phone_location_description">Meshtastic uses your phone's location to enable a number of features. You can update your location permissions at any time from settings.</string>
+    <string name="phone_location_description">Mesh Survey uses your phone's location to enable a number of features. You can update your location permissions at any time from settings.</string>
     <string name="phosphorus">Phosphorus</string>
     <string name="pin_selected">Pin</string>
     <string name="play">Play</string>
@@ -1761,13 +1761,13 @@
     <string name="share_channels">Share Channels</string>
     <string name="share_channels_add_hint">Adding keeps the channels they already have and appends yours.</string>
     <string name="share_channels_replace_hint">Replacing overwrites every channel on their radio with yours.</string>
-    <string name="share_channels_subject">Meshtastic channels</string>
+    <string name="share_channels_subject">Mesh Survey channels</string>
     <string name="share_connected_node">Share Connected Node</string>
     <string name="share_contact">Share Contact</string>
-    <string name="share_contact_subject">Meshtastic contact</string>
+    <string name="share_contact_subject">Mesh Survey contact</string>
     <string name="share_location">Share Location</string>
     <string name="share_location_description">Use your phone GPS to send locations to your node instead of using a hardware GPS on your node.</string>
-    <string name="share_qr_subtext">Scan this code with another device's Meshtastic app to add it there.</string>
+    <string name="share_qr_subtext">Scan this code with Mesh Survey on another device to add it there.</string>
     <string name="share_to">Share to…</string>
     <string name="share_your_location_in_real_time">Share your location in real-time and keep your group coordinated with integrated GPS features.</string>
     <string name="shared_contact_no_public_key">This contact has no public key, so it cannot be imported. A contact without one clears any key your radio already holds for that node. Ask the sender to share it again once their node has exchanged keys.</string>
@@ -1872,7 +1872,7 @@
     <string name="tak_server_status_not_running">TAK Server is not running</string>
     <string name="tak_server_status_off">Off</string>
     <string name="tak_server_status_starting">Starting TAK Server</string>
-    <string name="tak_server_status_unavailable">Local TAK Server is available in Meshtastic for Android</string>
+    <string name="tak_server_status_unavailable">Local TAK Server is available in Mesh Survey for Android</string>
     <string name="tak_server_status_waiting">Listening on 127.0.0.1:8089 — waiting for ATAK</string>
     <string name="tak_server_test_card_title">TAK Mesh Test (Debug)</string>
     <string name="tak_server_test_idle">Send all %1$d test fixtures to mesh</string>

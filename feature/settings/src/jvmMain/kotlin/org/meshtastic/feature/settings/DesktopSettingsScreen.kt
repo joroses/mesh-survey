@@ -47,7 +47,6 @@ import org.meshtastic.core.resources.bottom_nav_settings
 import org.meshtastic.core.resources.device_links
 import org.meshtastic.core.resources.discovery_local_mesh
 import org.meshtastic.core.resources.fr_HT
-import org.meshtastic.core.resources.help_and_documentation
 import org.meshtastic.core.resources.info
 import org.meshtastic.core.resources.node_layout_section_title
 import org.meshtastic.core.resources.preferences_language
@@ -65,7 +64,6 @@ import org.meshtastic.core.ui.icon.ChevronRight
 import org.meshtastic.core.ui.icon.Device
 import org.meshtastic.core.ui.icon.Distance
 import org.meshtastic.core.ui.icon.FormatPaint
-import org.meshtastic.core.ui.icon.HelpOutline
 import org.meshtastic.core.ui.icon.Info
 import org.meshtastic.core.ui.icon.Language
 import org.meshtastic.core.ui.icon.List
@@ -267,15 +265,6 @@ fun DesktopSettingsScreen(
                     lowBatteryEnabled = settingsViewModel.lowBatteryEnabled.collectAsStateWithLifecycle().value,
                     onToggleLowBattery = { settingsViewModel.setLowBatteryEnabled(it) },
                 )
-
-                ExpressiveSection(title = stringResource(Res.string.help_and_documentation)) {
-                    ListItem(
-                        text = stringResource(Res.string.help_and_documentation),
-                        leadingIcon = MeshtasticIcons.HelpOutline,
-                    ) {
-                        onNavigate(SettingsRoute.HelpDocs)
-                    }
-                }
 
                 DesktopAppInfoSection(
                     appVersionName = settingsViewModel.appVersionName,

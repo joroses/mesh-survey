@@ -239,9 +239,9 @@
     <string name="desc_node_filter_clear">очистити фільтр вузлів</string>
     <string name="description">Опис</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Вийти</string>
-    <string name="desktop_tray_show">Показати Meshtastic</string>
+    <string name="desktop_tray_show">Показати Mesh Survey</string>
     <string name="details">Подробиці</string>
     <string name="detection_sensor">Датчик виявлення</string>
     <string name="detection_sensor_config">Налаштування датчика виявлення</string>
@@ -594,7 +594,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Сповіщення про тривоги</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Сповіщення загального каналу</string>
     <string name="meshtastic_low_battery_notifications">Сповіщення про низький рівень заряду</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Сповіщення про низький рівень заряду акумулятора (улюблені вузли)</string>
@@ -748,7 +748,7 @@
     <!-- OPEN -->
     <string name="open_compass">Відкрити компас</string>
     <string name="open_settings">Відкрити налаштування</string>
-    <string name="open_source_description">Meshtastic побудований на бібліотеках з відкритим вихідним кодом. Натисніть на будь-яку бібліотеку, щоб побачити її ліцензію.</string>
+    <string name="open_source_description">Mesh Survey побудований на бібліотеках з відкритим вихідним кодом. Натисніть на будь-яку бібліотеку, щоб побачити її ліцензію.</string>
     <string name="open_source_libraries">Бібліотеки з відкритим вихідним кодом</string>
     <string name="options">Налаштування</string>
     <string name="orient_north">Орієнтація північ</string>
@@ -767,10 +767,10 @@
     <string name="paxcounter">Лічильник пристроїв</string>
     <string name="paxcounter_config">Конфігурація лічильника пристроїв</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Для пошуку та підключення до пристроїв через Bluetooth програмі Meshtastic потрібен дозвіл «Пристрої поблизу». Ви можете вимкнути його, коли не користуєтеся програмою.</string>
+    <string name="permission_missing_31">Для пошуку та підключення до пристроїв через Bluetooth програмі Mesh Survey потрібен дозвіл «Пристрої поблизу». Ви можете вимкнути його, коли не користуєтеся програмою.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Геопозиція телефона</string>
-    <string name="phone_location_description">Meshtastic використовує геопозицію вашого телефона для роботи низки функцій. Ви можете змінити дозволи на доступ до місцезнаходження в будь-який час у налаштуваннях.</string>
+    <string name="phone_location_description">Mesh Survey використовує геопозицію вашого телефона для роботи низки функцій. Ви можете змінити дозволи на доступ до місцезнаходження в будь-який час у налаштуваннях.</string>
     <string name="pin_selected">Контакт</string>
     <string name="play">Відтворити</string>
     <plurals name="plurals_hours">

@@ -270,7 +270,7 @@ fun TakServerScreen(onBack: () -> Unit) {
                 },
                 actions = {
                     if (isTakServerEnabled) {
-                        IconButton(onClick = { exportLauncher("Meshtastic_TAK_Server.zip") }) {
+                        IconButton(onClick = { exportLauncher("MeshSurvey_TAK_Server.zip") }) {
                             Icon(
                                 imageVector = MeshtasticIcons.Share,
                                 contentDescription = stringResource(Res.string.export_tak_data_package),
@@ -292,7 +292,7 @@ fun TakServerScreen(onBack: () -> Unit) {
                 onChannelSelected = { takPrefs.setTakServerChannel(it) },
                 status = takServerStatus,
                 clientCount = takClientCount,
-                onExport = { exportLauncher("Meshtastic_TAK_Server.zip") },
+                onExport = { exportLauncher("MeshSurvey_TAK_Server.zip") },
                 supportsTakV2 = supportsTakV2,
             )
             TakMeshTestCard()

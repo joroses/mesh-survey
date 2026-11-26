@@ -103,7 +103,7 @@ class MeshNotificationManagerImplRoutingTest {
             MeshNotification.Type.Warning,
         )
         manager.showFirmwareUpdateNotice(FirmwareUpdateDestination.AndroidUpdate)
-        manager.showReconnectBlockedNotification("Meshtastic can't reconnect", "Bluetooth is off")
+        manager.showReconnectBlockedNotification("Mesh Survey can't reconnect", "Bluetooth is off")
 
         val posted = systemNotificationManager.activeNotifications
         assertEquals(8, posted.size)
@@ -356,7 +356,7 @@ class MeshNotificationManagerImplRoutingTest {
     fun `the reconnect-blocked warning replaces itself and opens connections`() = runWithRenderScope { scope ->
         val manager = createManager(scope)
 
-        repeat(2) { manager.showReconnectBlockedNotification("Meshtastic can't reconnect", "Bluetooth is off") }
+        repeat(2) { manager.showReconnectBlockedNotification("Mesh Survey can't reconnect", "Bluetooth is off") }
 
         val posted = activeByTag("reconnect_blocked").single().notification
         assertEquals(NotificationChannels.DEVICE_STATUS, posted.channelId)

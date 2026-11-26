@@ -186,7 +186,7 @@
     <string name="desc_node_filter_clear">limpar filtro de dispositivos</string>
     <string name="description">Descrição</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="details">Detalhes</string>
     <string name="detection_sensor">Sensor de Detecção</string>
     <string name="detection_sensor_config">Configuração do Sensor de Detecção</string>
@@ -361,7 +361,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Notificações de Alerta</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Notificações de mensagem transmitida</string>
     <string name="meshtastic_low_battery_notifications">Notificações de bateria fraca</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Notificações de bateria fraca (nós favoritos)</string>
@@ -431,7 +431,7 @@
     <string name="none_quality">Nenhum</string>
     <string name="not_connected">Não conectado</string>
     <!-- NOTIFICATION -->
-    <string name="notification_permissions_description">Meshtastic usa notificações para mantê-lo atualizado sobre novas mensagens e outros eventos importantes. Você pode atualizar suas permissões de notificação a qualquer momento nas configurações.</string>
+    <string name="notification_permissions_description">Mesh Survey usa notificações para mantê-lo atualizado sobre novas mensagens e outros eventos importantes. Você pode atualizar suas permissões de notificação a qualquer momento nas configurações.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Notificações para canais e mensagens diretas.</string>
     <string name="notifications_for_low_battery_alerts">Notificações para alertas de bateria fraca para o dispositivo conectado.</string>
@@ -455,10 +455,10 @@
     <string name="paxcounter">Medidor de Fluxo de Pessoas</string>
     <string name="paxcounter_config">Configuração do Contador de Pessoas</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic precisa das permissões de "Dispositivos próximos" habilitadas para localizar e conectar a dispositivos via Bluetooth. Você pode desativar quando não estiver em uso.</string>
+    <string name="permission_missing_31">Mesh Survey precisa das permissões de "Dispositivos próximos" habilitadas para localizar e conectar a dispositivos via Bluetooth. Você pode desativar quando não estiver em uso.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Localização do Telefone</string>
-    <string name="phone_location_description">Meshtastic usa a localização do seu telefone para habilitar vários recursos. Você pode atualizar as permissões de localização a qualquer momento a partir das configurações.</string>
+    <string name="phone_location_description">Mesh Survey usa a localização do seu telefone para habilitar vários recursos. Você pode atualizar as permissões de localização a qualquer momento a partir das configurações.</string>
     <!-- PM -->
     <!-- POSITION -->
     <string name="position">Posição</string>

@@ -152,10 +152,10 @@
     <string name="bluetooth_permission_blocked_notice_pre31">Разрешение на определение местоположения выключено, и Android больше не будет спрашивать. Включи его в настройках приложения, чтобы сканировать устройства Bluetooth, или подключись через Wi-Fi или USB.</string>
     <string name="bluetooth_permission_blocked_rationale">Доступ к ближайшим устройствам выключен, и Android больше не будет спрашивать. Включи его в настройках приложения чтобы сканировать и подключаться по Bluetooth.</string>
     <string name="bluetooth_permission_blocked_rationale_pre31">Разрешение на определение местоположения выключено, и Android больше не будет спрашивать. Включи его в настройках приложения, чтобы сканировать и подключаться через Bluetooth.</string>
-    <string name="bluetooth_permission_denied_notice">Без доступа к устройствам поблизости Meshtastic не сможет найти или подключиться к твоей радиостанции по Bluetooth. Ты всё ещё можешь подключиться через Wi-Fi или USB.</string>
-    <string name="bluetooth_permission_denied_notice_pre31">Без разрешения на доступ к местоположению Android блокирует сканирование Bluetooth, поэтому Meshtastic не может найти твою радиостанцию. Ты всё ещё можешь подключиться через Wi-Fi или USB.</string>
-    <string name="bluetooth_permission_rationale">Meshtastic требует доступ к устройствам поблизости, чтобы найти ваше радио и подключиться к нему. Он используется только для общения с вашими устройствами и никогда — чтобы определить ваше местоположение. Без этого Bluetooth недоступен — Wi-Fi и USB всё равно работают.</string>
-    <string name="bluetooth_permission_rationale_pre31">Meshtastic нуждается в разрешении на доступ к местоположению, потому что эта версия Android рассматривает сканирование Bluetooth как функцию определения местоположения. Ваше положение никогда не считывается и не передается для этого. Без этого Bluetooth недоступен — Wi-Fi и USB всё ещё работают.</string>
+    <string name="bluetooth_permission_denied_notice">Без доступа к устройствам поблизости Mesh Survey не сможет найти или подключиться к твоей радиостанции по Bluetooth. Ты всё ещё можешь подключиться через Wi-Fi или USB.</string>
+    <string name="bluetooth_permission_denied_notice_pre31">Без разрешения на доступ к местоположению Android блокирует сканирование Bluetooth, поэтому Mesh Survey не может найти твою радиостанцию. Ты всё ещё можешь подключиться через Wi-Fi или USB.</string>
+    <string name="bluetooth_permission_rationale">Mesh Survey требует доступ к устройствам поблизости, чтобы найти ваше радио и подключиться к нему. Он используется только для общения с вашими устройствами и никогда — чтобы определить ваше местоположение. Без этого Bluetooth недоступен — Wi-Fi и USB всё равно работают.</string>
+    <string name="bluetooth_permission_rationale_pre31">Mesh Survey нуждается в разрешении на доступ к местоположению, потому что эта версия Android рассматривает сканирование Bluetooth как функцию определения местоположения. Ваше положение никогда не считывается и не передается для этого. Без этого Bluetooth недоступен — Wi-Fi и USB всё ещё работают.</string>
     <string name="bluetooth_scan_location_services_disabled">Службы определения местоположения отключены. Включите их, чтобы искать ближайшие устройства.</string>
     <string name="bluetooth_scan_missing_permission">Сканирование Bluetooth требует разрешения. Дайте разрешение на поиск устройств поблизости (или местоположения).</string>
     <string name="bluetooth_scan_start_failed">Невозможно запустить сканирование Bluetooth. Попробуй снова или включи/выключи Bluetooth, если проблема не исчезнет.</string>
@@ -168,7 +168,7 @@
     <string name="bonding_failed_permissions">Сопряжение не удалось. Дай соседнему устройству разрешения и попробуй снова.</string>
     <string name="bonding_failed_retry">Сопряжение не завершилось. Попробуй снова.</string>
     <string name="boot_reconnect_blocked_message">Разрешение на доступ к ближайшим устройствам выключено, поэтому к твоему радио нельзя подключиться через Bluetooth. Нажми, чтобы включить его снова.</string>
-    <string name="boot_reconnect_blocked_title">Meshtastic не может переподключиться</string>
+    <string name="boot_reconnect_blocked_title">Mesh Survey не может переподключиться</string>
     <string name="bottom_nav_settings">Настройки</string>
     <string name="busy_noise_floor">Busy floor</string>
     <plurals name="cache_limit_eviction_warning">
@@ -230,7 +230,7 @@
     <string name="chirpy_hop_tap_to_start">НАЖМИТЕ ДЛЯ НАЧАЛА</string>
     <string name="chirpy_hop_update_complete">Обновление завершено</string>
     <string name="chirpy_hop_update_interrupted">Обновление прервано</string>
-    <string name="chirpy_intro">Привет! 📡 Я Chirpy - твой помощник по Meshtastic на устройстве! Я могу помочь с настройкой, конфигурацией, устранением неполадок и советами по mesh-сетям. Чем я могу тебе помочь?</string>
+    <string name="chirpy_intro">Привет! 📡 Я Chirpy - твой помощник по Mesh Survey на устройстве! Я могу помочь с настройкой, конфигурацией, устранением неполадок и советами по mesh-сетям. Чем я могу тебе помочь?</string>
     <string name="chirpy_ready">Спроси Chirpy</string>
     <string name="chirpy_search_placeholder">Спроси о Meshtastic…</string>
     <string name="chirpy_suggested_pages_help">Вот несколько страниц документации, которые могут помочь:</string>
@@ -383,11 +383,11 @@
     <string name="desc_node_filter_clear">очистить фильтр нод</string>
     <string name="description">Описание</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Выход</string>
-    <string name="desktop_tray_show">Показать Meshtastic</string>
-    <string name="desktop_tray_tooltip">Meshtastic Desktop</string>
-    <string name="desktop_update_available_message">Meshtastic Desktop %1$s готов к загрузке.</string>
+    <string name="desktop_tray_show">Показать Mesh Survey</string>
+    <string name="desktop_tray_tooltip">Mesh Survey Desktop</string>
+    <string name="desktop_update_available_message">Mesh Survey Desktop %1$s готов к загрузке.</string>
     <string name="desktop_update_available_title">Доступно обновление приложения</string>
     <string name="desktop_update_download">Загрузить обновление %1$s</string>
     <string name="details">Подробности</string>
@@ -917,8 +917,8 @@
     <string name="local_mbtiles_file">Локальный файл MBTiles</string>
     <string name="local_network_permission">Доступ к локальной сети</string>
     <string name="local_network_permission_blocked_rationale">Доступ к локальной сети выключен, и Android больше не будет спрашивать. Радио в вашей Wi-Fi сети не может быть найдено или доступно, пока вы не включите его в настройках приложения. Радио через публичный адрес или VPN не затронуто.</string>
-    <string name="local_network_permission_denied_hint">Доступ к локальной сети для Meshtastic выключен. Если это радиоустройство в твоей локальной сети, подключение не удастся, пока не разрешишь доступ к локальной сети в системных настройках.</string>
-    <string name="local_network_permission_rationale">Meshtastic нужен доступ к локальной сети, чтобы находить и подключаться к радиостанциям в твоей Wi-Fi. Он ищет только в сети, к которой ты уже подключен. Без этого радиостанцию в твоей Wi-Fi нельзя будет найти даже по её адресу; радиостанции с публичным адресом или через VPN это не касается.</string>
+    <string name="local_network_permission_denied_hint">Доступ к локальной сети для Mesh Survey выключен. Если это радиоустройство в твоей локальной сети, подключение не удастся, пока не разрешишь доступ к локальной сети в системных настройках.</string>
+    <string name="local_network_permission_rationale">Mesh Survey нужен доступ к локальной сети, чтобы находить и подключаться к радиостанциям в твоей Wi-Fi. Он ищет только в сети, к которой ты уже подключен. Без этого радиостанцию в твоей Wi-Fi нельзя будет найти даже по её адресу; радиостанции с публичным адресом или через VPN это не касается.</string>
     <string name="local_stats_bad">Плохие: %1$d</string>
     <string name="local_stats_battery">Батарея: %1$d</string>
     <string name="local_stats_diagnostics_prefix">Диагностика: %1$s</string>
@@ -937,8 +937,8 @@
     <string name="location_permission">Доступ к местоположению</string>
     <string name="location_permission_blocked_notice">Доступ к местоположению отключен, и Android больше не будет спрашивать. Включи его в настройках приложения, когда захочешь снова пользоваться картой и делиться местоположением.</string>
     <string name="location_permission_blocked_toast">Разрешение на определение местоположения выключено. Включи его в настройках приложения, чтобы поделиться своей позицией.</string>
-    <string name="location_permission_denied_notice">Без доступа к местоположению карта не покажет где ты находишься, и Meshtastic не сможет делиться твоей позицией в сети. Всё остальное будет работать, и ты сможешь включить это позже.</string>
-    <string name="location_permission_rationale">Meshtastic использует твоё местоположение, чтобы показать тебя на карте, измерять расстояние до нод и — только если ты включишь эту функцию — делиться своим местоположением с сетью. Отказ от этого ничего другого не ломает.</string>
+    <string name="location_permission_denied_notice">Без доступа к местоположению карта не покажет где ты находишься, и Mesh Survey не сможет делиться твоей позицией в сети. Всё остальное будет работать, и ты сможешь включить это позже.</string>
+    <string name="location_permission_rationale">Mesh Survey использует твоё местоположение, чтобы показать тебя на карте, измерять расстояние до нод и — только если ты включишь эту функцию — делиться своим местоположением с сетью. Отказ от этого ничего другого не ломает.</string>
     <string name="location_precise_blocked_toast">Точное местоположение отключено. Включи точное местоположение в настройках приложения, чтобы поделиться им.</string>
     <string name="location_precise_rationale">Распространение твоей позиции в сети требует точного расположения, поэтому другие ноды видят, где ты находишься вместо сплошной площади. Когда Android спрашивает, выбери точность. Карта и все остальное продолжают работать с приблизительным местоположением.</string>
     <string name="location_sharing">Поделиться местоположением</string>
@@ -1116,7 +1116,7 @@
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Служебные уведомления</string>
     <string name="meshtastic_alerts_notifications_description">Критические оповещения, отправляемые нодами в сеть.</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Уведомления о сообщениях в общем чате</string>
     <string name="meshtastic_broadcast_notifications_description">Сообщения, отправляемые в ваши каналы.</string>
     <string name="meshtastic_client_notifications">Уведомления по радио</string>
@@ -1237,7 +1237,7 @@
     <string name="navigate_into_label">Перейти в</string>
     <string name="nearby_devices_permission">Разрешение ближайших устройств</string>
     <string name="need_hardware">Нужно оборудование?</string>
-    <string name="need_hardware_description">Meshtastic требует совместимое устройство. Наши спонсоры и партнёры предлагают готовое к использованию оборудование. Вот некоторые из самых популярных вариантов тут.</string>
+    <string name="need_hardware_description">Mesh Survey требует совместимое устройство. Наши спонсоры и партнёры предлагают готовое к использованию оборудование. Вот некоторые из самых популярных вариантов тут.</string>
     <string name="neighbor_info">Информация об окружении</string>
     <string name="neighbor_info_config">Настройки соседей</string>
     <string name="network">Сеть</string>
@@ -1350,9 +1350,9 @@
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Меш</string>
     <string name="notification_permission_blocked_notice">Уведомления отключены, и Android больше не будет спрашивать. Включи их в настройках приложения, чтобы получать оповещения о новых сообщениях и тревогах.</string>
-    <string name="notification_permission_denied_notice">Без уведомлений Meshtastic не сможет оповещать тебя о новых сообщениях, новых нодах или низком заряде батареи, когда приложение работает в фоновом режиме.</string>
-    <string name="notification_permission_rationale">Уведомления — это способ, которым Meshtastic связывается с тобой, когда приложение закрыто(в фоне): новые сообщения, обнаруженные ноды и низкий заряд батареи радио. Если ты откажешься, больше ничего не изменится.</string>
-    <string name="notification_permissions_description">Meshtastic использует уведомления, чтобы держать вас в курсе новых сообщений и других важных событий. Вы можете обновить разрешения уведомлений в любое время из настроек.</string>
+    <string name="notification_permission_denied_notice">Без уведомлений Mesh Survey не сможет оповещать тебя о новых сообщениях, новых нодах или низком заряде батареи, когда приложение работает в фоновом режиме.</string>
+    <string name="notification_permission_rationale">Уведомления — это способ, которым Mesh Survey связывается с тобой, когда приложение закрыто(в фоне): новые сообщения, обнаруженные ноды и низкий заряд батареи радио. Если ты откажешься, больше ничего не изменится.</string>
+    <string name="notification_permissions_description">Mesh Survey использует уведомления, чтобы держать вас в курсе новых сообщений и других важных событий. Вы можете обновить разрешения уведомлений в любое время из настроек.</string>
     <string name="notification_reaction_to">%1$s к %2$s”</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Уведомления для каналов и личных сообщений.</string>
@@ -1382,7 +1382,7 @@
     <string name="open_compass">Открыть компас</string>
     <string name="open_location_settings">Открыть настройки геолокации</string>
     <string name="open_settings">Открыть настройки</string>
-    <string name="open_source_description">Meshtastic создан с использованием следующих библиотек с открытым исходным кодом. Нажмите на любую библиотеку, чтобы просмотреть ее лицензию.</string>
+    <string name="open_source_description">Mesh Survey создан с использованием следующих библиотек с открытым исходным кодом. Нажмите на любую библиотеку, чтобы просмотреть ее лицензию.</string>
     <string name="open_source_libraries">Библиотеки с открытым исходным кодом</string>
     <string name="open_wifi_settings">Открыть настройки Wi-Fi</string>
     <string name="options">Опции</string>
@@ -1420,7 +1420,7 @@
     <string name="permission_local_network_summary">Поиск радиоустройств в твоей сети Wi-Fi</string>
     <string name="permission_location_summary">Показывать твоё местоположение на карте и делиться им с mesh-сетью</string>
     <string name="permission_location_summary_pre31">Найди своё радио по Bluetooth, отметь себя на карте и поделите своим местоположением с mesh-сетью</string>
-    <string name="permission_missing_31">Meshtastic требует разрешение на поиск и подключение к устройствам через Bluetooth. Вы можете отключить его, когда он не используется.</string>
+    <string name="permission_missing_31">Mesh Survey требует разрешение на поиск и подключение к устройствам через Bluetooth. Вы можете отключить его, когда он не используется.</string>
     <string name="permission_missing_pre31">В этой версии Android одно разрешение на местоположение охватывает две вещи: оно позволяет сканировать Bluetooth и отображает тебя на карте. Совместное использование твоей позиции остаётся выключенным, пока ты сам его не включишь.</string>
     <string name="permission_nearby_devices_summary">Найти и подключиться к ноде через Bluetooth</string>
     <string name="permission_notifications_summary">Оповещать о сообщениях, новых нодах и низком заряде батареи</string>
@@ -1442,7 +1442,7 @@
     <string name="permissions_nothing_needed">Ничто не требует вашего внимания</string>
     <string name="permissions_show">Показать разрешения</string>
     <string name="phone_location">Местоположение телефона</string>
-    <string name="phone_location_description">Meshtastic использует местоположение вашего телефона, чтобы включить ряд функций. Вы можете обновить права доступа к вашему местоположению в любое время из настроек.</string>
+    <string name="phone_location_description">Mesh Survey использует местоположение вашего телефона, чтобы включить ряд функций. Вы можете обновить права доступа к вашему местоположению в любое время из настроек.</string>
     <string name="phosphorus">Фосфор</string>
     <string name="pin_selected">PIN-код</string>
     <string name="play">Воспроизвести</string>
@@ -1744,13 +1744,13 @@
     <string name="share_channels">Поделиться каналами</string>
     <string name="share_channels_add_hint">Добавление сохраняет каналы, которые у них уже есть, и добавляет твои.</string>
     <string name="share_channels_replace_hint">Замена перезаписывает все каналы на их радио твоими.</string>
-    <string name="share_channels_subject">Каналы Meshtastic</string>
+    <string name="share_channels_subject">Каналы Mesh Survey</string>
     <string name="share_connected_node">Поделиться подключенной нодой</string>
     <string name="share_contact">Отправить контакт</string>
-    <string name="share_contact_subject">Контакт Meshtastic</string>
+    <string name="share_contact_subject">Контакт Mesh Survey</string>
     <string name="share_location">Поделиться геопозицией</string>
     <string name="share_location_description">Используй GPS твоего телефона для отправки координат на твою ноду вместо аппаратного GPS на самой ноде.</string>
-    <string name="share_qr_subtext">Отсканируй этот код с помощью приложения Meshtastic на другом устройстве, чтобы добавить его туда.</string>
+    <string name="share_qr_subtext">Отсканируй этот код с помощью приложения Mesh Survey на другом устройстве, чтобы добавить его туда.</string>
     <string name="share_to">Поделиться…</string>
     <string name="share_your_location_in_real_time">Делитесь своим местоположением в режиме реального времени и поддерживайте работу группы с функциями GPS.</string>
     <string name="shared_contact_no_public_key">У этого контакта нет публичного ключа, поэтому его нельзя импортировать. Контакт без ключа стирает любой ключ, который твоя радиостанция уже хранит для этой ноды. Попроси отправителя снова поделиться им, когда его нода обменяется ключами.</string>
@@ -1854,7 +1854,7 @@
     <string name="tak_server_status_not_running">TAK-сервер не запущен</string>
     <string name="tak_server_status_off">Выкл</string>
     <string name="tak_server_status_starting">Запуск TAK-сервера</string>
-    <string name="tak_server_status_unavailable">Локальный TAK-сервер доступен в Meshtastic для Android</string>
+    <string name="tak_server_status_unavailable">Локальный TAK-сервер доступен в Mesh Survey для Android</string>
     <string name="tak_server_status_waiting">Прослушивание 127.0.0.1:8089 — ожидание ATAK</string>
     <string name="tak_server_test_card_title">Сетевой тест TAK (Отладка)</string>
     <string name="tak_server_test_idle">Отправить все %1$d тестовых приспособлений в сеть</string>

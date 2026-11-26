@@ -97,7 +97,7 @@ internal fun ColumnScope.PersistenceSettingsContent(
             Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "application/csv"
-                putExtra(Intent.EXTRA_TITLE, "Meshtastic_rangetest_${nodeShortName}_$timestamp.csv")
+                putExtra(Intent.EXTRA_TITLE, "MeshSurvey_rangetest_${nodeShortName}_$timestamp.csv")
             }
         exportRangeTestLauncher.launch(intent)
     }
@@ -111,7 +111,7 @@ internal fun ColumnScope.PersistenceSettingsContent(
             Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "application/csv"
-                putExtra(Intent.EXTRA_TITLE, "Meshtastic_datalog_${nodeShortName}_$timestamp.csv")
+                putExtra(Intent.EXTRA_TITLE, "MeshSurvey_datalog_${nodeShortName}_$timestamp.csv")
             }
         exportDataLauncher.launch(intent)
     }
@@ -127,7 +127,7 @@ private fun ExportNodeDbItem(nodeShortName: String, timestamp: String, onExportN
         leadingIcon = MeshtasticIcons.Output,
         trailingIcon = null,
     ) {
-        exportNodeDbLauncher("Meshtastic_nodedb_${nodeShortName}_$timestamp.json", "application/json")
+        exportNodeDbLauncher("MeshSurvey_nodedb_${nodeShortName}_$timestamp.json", "application/json")
     }
 }
 

@@ -52,7 +52,7 @@ import org.meshtastic.core.takserver.TAKServerManager
 // English fallback for local_network_permission_denied_hint when resource lookup is unavailable. Kept above the
 // class KDoc so that KDoc still binds to the class. Internal so tests can assert the exact surfaced text.
 internal const val UNTRANSLATED_LOCAL_NETWORK_PERMISSION_DENIED_HINT =
-    "Local network access is turned off for Meshtastic. If this radio is on your local network, " +
+    "Local network access is turned off for Mesh Survey. If this radio is on your local network, " +
         "the connection will fail until you allow local network access in system settings."
 
 /**

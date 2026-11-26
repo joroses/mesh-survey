@@ -61,7 +61,7 @@
     <string name="desc_node_filter_clear">netejar filtre de node</string>
     <string name="description">Descripció</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <!-- DEVICE -->
     <string name="device_sleeping">Dispositiu hivernant</string>
     <string name="direct_message">Missatge directe</string>
@@ -125,7 +125,7 @@
     <string name="mesh_beacon_target_channel_index">Canal</string>
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_service_notifications">Notificacions de servei</string>
     <!-- MESSAGE -->
     <string name="message">Missatge</string>

@@ -185,7 +185,7 @@
     <string name="chirpy_error_unknown">Oops! Abbiamo riscontrato alcune pesanti perdite di pacchetti o interferenze di segnale! 📡 Trasmettiamo nuovamente quella interrogazione e vediamo se possiamo passare.</string>
     <string name="chirpy_error_unsupported_flavor">Sto operando su una frequenza limitata su questa edizione dell'app! 🔌 Prova a usare una versione con integrazione completa AI Core.</string>
     <string name="chirpy_error_unsupported_platform">Oh no! La mia antenna non riesce a stabilire una connessione su questa piattaforma. 📡 Si prega di ricontrollare la compatibilità hardware!</string>
-    <string name="chirpy_intro">Ehi ciao! 📡 Sono Chirpy, il tuo assistente Meshtastic sul dispositivo! Posso aiutarti con impostazione iniziale, configurazione, risoluzione dei problemi e suggerimenti di rete mesh. Come posso aiutarti?</string>
+    <string name="chirpy_intro">Ehi ciao! 📡 Sono Chirpy, il tuo assistente Mesh Survey sul dispositivo! Posso aiutarti con impostazione iniziale, configurazione, risoluzione dei problemi e suggerimenti di rete mesh. Come posso aiutarti?</string>
     <string name="chirpy_ready">Chiedi a Chirpy</string>
     <string name="chirpy_search_placeholder">Chiedi informazioni su Meshtastic…</string>
     <string name="chirpy_suggested_pages_help">Ecco alcune pagine di documentazione che potrebbero aiutare:</string>
@@ -322,11 +322,11 @@
     <string name="desc_node_filter_clear">elimina filtro nodi</string>
     <string name="description">Descrizione</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Esci</string>
-    <string name="desktop_tray_show">Mostra Meshtastic</string>
-    <string name="desktop_tray_tooltip">Meshtastic Desktop</string>
-    <string name="desktop_update_available_message">Meshtastic Desktop %1$s è pronto per il download.</string>
+    <string name="desktop_tray_show">Mostra Mesh Survey</string>
+    <string name="desktop_tray_tooltip">Mesh Survey Desktop</string>
+    <string name="desktop_update_available_message">Mesh Survey Desktop %1$s è pronto per il download.</string>
     <string name="desktop_update_available_title">Aggiornamento dell'app disponibile</string>
     <string name="desktop_update_download">Scarica l'aggiornamento %1$s</string>
     <string name="details">Dettagli</string>
@@ -901,7 +901,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Notifiche di allarme</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Notifiche di messaggi broadcast</string>
     <string name="meshtastic_low_battery_notifications">Notifica di batteria scarica</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Notifiche batteria scarica (nodi preferiti)</string>
@@ -1067,7 +1067,7 @@
     <string name="notes">Note</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Mesh</string>
-    <string name="notification_permissions_description">Meshtastic utilizza le notifiche per tenerti aggiornato su nuovi messaggi e altri eventi importanti. È possibile aggiornare i permessi di notifica in qualsiasi momento dalle impostazioni.</string>
+    <string name="notification_permissions_description">Mesh Survey utilizza le notifiche per tenerti aggiornato su nuovi messaggi e altri eventi importanti. È possibile aggiornare i permessi di notifica in qualsiasi momento dalle impostazioni.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Notifiche per i canali e i messaggi diretti.</string>
     <string name="notifications_for_low_battery_alerts">Notifiche per gli avvisi di batteria scarica per il dispositivo collegato.</string>
@@ -1089,7 +1089,7 @@
     <string name="open_bluetooth_settings">Apri le impostazioni Bluetooth</string>
     <string name="open_compass">Apri bussola</string>
     <string name="open_settings">Apri impostazioni</string>
-    <string name="open_source_description">Meshtastic è costruito con le seguenti librerie open source. Tocca una libreria per visualizzare la sua licenza.</string>
+    <string name="open_source_description">Mesh Survey è costruito con le seguenti librerie open source. Tocca una libreria per visualizzare la sua licenza.</string>
     <string name="open_source_libraries">Librerie Open Source</string>
     <string name="open_wifi_settings">Apri le impostazioni Wi-Fi</string>
     <string name="options">Opzioni</string>
@@ -1120,10 +1120,10 @@
     <string name="paxcounter_config">Configurazione Paxcounter</string>
     <string name="periodic_position_broadcast">Trasmissione periodica della posizione</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic ha bisogno dei permessi "Dispositivi nelle vicinanze" abilitati per trovare e connettersi ai dispositivi tramite Bluetooth. È possibile disabilitare quando non è in uso.</string>
+    <string name="permission_missing_31">Mesh Survey ha bisogno dei permessi "Dispositivi nelle vicinanze" abilitati per trovare e connettersi ai dispositivi tramite Bluetooth. È possibile disabilitare quando non è in uso.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Posizione del telefono</string>
-    <string name="phone_location_description">Meshtastic utilizza la posizione del telefono per abilitare molte funzionalità. È possibile aggiornare i permessi riguardo la posizione in qualsiasi momento dalle impostazioni.</string>
+    <string name="phone_location_description">Mesh Survey utilizza la posizione del telefono per abilitare molte funzionalità. È possibile aggiornare i permessi riguardo la posizione in qualsiasi momento dalle impostazioni.</string>
     <string name="pin_selected">Pin</string>
     <string name="play">Riproduci</string>
     <plurals name="plurals_hours">

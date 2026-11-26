@@ -201,7 +201,7 @@
     <string name="chirpy_error_unknown">Ups! Esines tugev paketi kadu või signaalihäire! 📡 Saadan päringu uuesti ja vaatan, kas saan läbi.</string>
     <string name="chirpy_error_unsupported_flavor">Kasutan seda rakenduse versiooni piiratud sagedusega! 🔌 Proovi versiooni, millel on täielik AI Core'i integratsioon.</string>
     <string name="chirpy_error_unsupported_platform">Oh ei! Mu antenn ei suuda sellel platvormil ühendust luua. 📡 Palun kontrolli oma riistvara ühilduvust!</string>
-    <string name="chirpy_intro">Tere! 📡 Mina olen Chirpy, sinu seadmesisene Meshtasticu assistent! Saan aidata seadistamise, konfigureerimise, tõrkeotsingu ja kärgvõrgu võrkude näpunäidetega. Millega saan sind aidata?</string>
+    <string name="chirpy_intro">Tere! 📡 Mina olen Chirpy, sinu seadmesisene Mesh Surveyu assistent! Saan aidata seadistamise, konfigureerimise, tõrkeotsingu ja kärgvõrgu võrkude näpunäidetega. Millega saan sind aidata?</string>
     <string name="chirpy_ready">Küsi Chirpy</string>
     <string name="chirpy_search_placeholder">Küsi Meshtastic kohta…</string>
     <string name="chirpy_suggested_pages_help">Siin on mõned abimaterjalid, mis võivad abiks olla:</string>
@@ -348,9 +348,9 @@
     <!-- DESKTOP -->
     <string name="desktop_notification_title">Kärgvõrgustik</string>
     <string name="desktop_tray_quit">Sule</string>
-    <string name="desktop_tray_show">Näita Meshtastic</string>
-    <string name="desktop_tray_tooltip">Meshtastic töölaud</string>
-    <string name="desktop_update_available_message">Meshtastic töölaud %1$s on allalaadimiseks valmis.</string>
+    <string name="desktop_tray_show">Näita Mesh Survey</string>
+    <string name="desktop_tray_tooltip">Mesh Survey töölaud</string>
+    <string name="desktop_update_available_message">Mesh Survey töölaud %1$s on allalaadimiseks valmis.</string>
     <string name="desktop_update_available_title">Rakenduse värskendus on saadaval</string>
     <string name="desktop_update_download">Lae alla värskendus %1$s</string>
     <string name="details">Üksikasjad</string>
@@ -836,7 +836,7 @@
     <!-- LOCAL -->
     <string name="local_mbtiles_file">Kohalik MB-paani fail</string>
     <string name="local_network_permission">Kohaliku võrgu load</string>
-    <string name="local_network_permission_denied_hint">Meshtasticu jaoks on kohtvõrguühendus välja lülitatud. Kui see raadio on kohtvõrgus, siis ühendus katkeb seni, kuni lubad süsteemiseadetes kohtvõrguühenduse.</string>
+    <string name="local_network_permission_denied_hint">Mesh Surveyu jaoks on kohtvõrguühendus välja lülitatud. Kui see raadio on kohtvõrgus, siis ühendus katkeb seni, kuni lubad süsteemiseadetes kohtvõrguühenduse.</string>
     <string name="local_stats_bad">Paha %1$d</string>
     <string name="local_stats_battery">Aku: %1$d%</string>
     <string name="local_stats_diagnostics_prefix">Diagnostika: %1$s</string>
@@ -981,7 +981,7 @@
     <string name="mesh_beacon_target_default">Vaikimisi</string>
     <string name="mesh_beacon_target_remove">Eemalda sihtmärk</string>
     <string name="mesh_beacon_targets">Levita sihtmärke</string>
-    <string name="mesh_map_location">Meshtastic kaardi asukoht</string>
+    <string name="mesh_map_location">Mesh-kaardi asukoht</string>
     <string name="mesh_map_location_description">Lubab telefoni asukoha kuvamine sinisena kärgvõrgu kaardil.</string>
     <!-- MESHTASTIC -->
     <string name="meshtastic">Kärgvõrgustik</string>
@@ -1094,7 +1094,7 @@
     <string name="navigate_into_label">Mine asukohta</string>
     <string name="nearby_devices_permission">Lähedal olevate seadmete load</string>
     <string name="need_hardware">Vajad raudvara?</string>
-    <string name="need_hardware_description">Meshtastic vajab ühilduvat seadet. Meie toetajad ja partnerid pakuvad kasutusvalmis riistvara. Siin on mõned populaarseimad valikud.</string>
+    <string name="need_hardware_description">Mesh Survey vajab ühilduvat seadet. Meie toetajad ja partnerid pakuvad kasutusvalmis riistvara. Siin on mõned populaarseimad valikud.</string>
     <string name="neighbor_info">Naabruse teave</string>
     <string name="neighbor_info_config">Naabruskonna teabe sätted</string>
     <string name="network">Võrk</string>
@@ -1190,7 +1190,7 @@
     <string name="notes">Sõnumid</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Kärgvõrk</string>
-    <string name="notification_permissions_description">Meshtastic kasutab märguandeid, et hoida teid kursis uute sõnumite ja muude oluliste sündmustega. Saate oma märguannete õigusi igal ajal seadetes muuta.</string>
+    <string name="notification_permissions_description">Mesh Survey kasutab märguandeid, et hoida teid kursis uute sõnumite ja muude oluliste sündmustega. Saate oma märguannete õigusi igal ajal seadetes muuta.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Kanali märguanded ja otsesõnumid.</string>
     <string name="notifications_for_low_battery_alerts">Ühendatud seadme madala akutaseme märguanded.</string>
@@ -1213,7 +1213,7 @@
     <string name="open_bluetooth_settings">Ava sinihamba ​​seaded</string>
     <string name="open_compass">Ava kompass</string>
     <string name="open_settings">Ava seaded</string>
-    <string name="open_source_description">Meshtastic on loodud avatud lähtekoodiga teekidest. Litsentsi vaatamiseks vali teek.</string>
+    <string name="open_source_description">Mesh Survey on loodud avatud lähtekoodiga teekidest. Litsentsi vaatamiseks vali teek.</string>
     <string name="open_source_libraries">Avatud lähtekoodiga teegid</string>
     <string name="open_wifi_settings">Ava WiFi ​​seaded</string>
     <string name="options">Valikud</string>
@@ -1246,7 +1246,7 @@
     <string name="periodic_position_broadcast">Perioodiline asukoha jagamine</string>
     <!-- PERMISSION -->
     <string name="permission_local_network_summary">Leia raadiod sinu WiFi võrgust</string>
-    <string name="permission_missing_31">Meshtastic vajab seadmete leidmiseks ja nendega sinihamba ​​kaudu ühenduse loomiseks „Lähi-seadmed” luba. Saate selle keelata, kui seda ei kasutata.</string>
+    <string name="permission_missing_31">Mesh Survey vajab seadmete leidmiseks ja nendega sinihamba ​​kaudu ühenduse loomiseks „Lähi-seadmed” luba. Saate selle keelata, kui seda ei kasutata.</string>
     <string name="permission_state_allowed">Lubatud</string>
     <string name="permission_state_blocked">Blokeeritud - klõpsi süsteemi sätete avamiseks</string>
     <string name="permission_state_denied">Keelatud - klõpsi lubamiseks</string>
@@ -1262,7 +1262,7 @@
     <string name="permissions_nothing_needed">Midagi ei vaja su tähelepanu</string>
     <string name="permissions_show">Näita lubasid</string>
     <string name="phone_location">Telefoni asukoht</string>
-    <string name="phone_location_description">Meshtastic kasutab teie telefoni asukohta mitmete funktsioonide lubamiseks. Saate oma asukohalubasid igal ajal seadetes muuta.</string>
+    <string name="phone_location_description">Mesh Survey kasutab teie telefoni asukohta mitmete funktsioonide lubamiseks. Saate oma asukohalubasid igal ajal seadetes muuta.</string>
     <string name="pin_selected">Klemm</string>
     <string name="play">Mängi ette</string>
     <plurals name="plurals_hours">
@@ -1581,7 +1581,7 @@
     <string name="tak_server_status_not_running">TAK server ei tööta</string>
     <string name="tak_server_status_off">Väljas</string>
     <string name="tak_server_status_starting">Käivitan TAK serveri</string>
-    <string name="tak_server_status_unavailable">Kohalik TAK server on Meshtasticus Androidi jaoks saadaval</string>
+    <string name="tak_server_status_unavailable">Kohalik TAK server on Mesh Surveyus Androidi jaoks saadaval</string>
     <string name="tak_server_status_waiting">Kuulan 127.0.0.1:8089 — ootan ATAK</string>
     <string name="tak_server_test_card_title">TAK kärgvõrgu test (arendaja)</string>
     <string name="tak_server_test_idle">Saada kõik %1$d testkinnitust kärgvõrku</string>

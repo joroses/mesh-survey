@@ -177,7 +177,7 @@
     <string name="desc_node_filter_clear">quitar filtro de nodo</string>
     <string name="description">Descripción</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="details">Detalles</string>
     <string name="detection_sensor">Sensor de Presencia</string>
     <string name="detection_sensor_config">Configuración del sensor detector</string>
@@ -398,7 +398,7 @@ Estos datos de ubicación pueden ser utilizados para fines como aparecer en un m
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Notificaciones de alerta</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Notificaciones de mensaje de difusión</string>
     <string name="meshtastic_low_battery_notifications">Notificaciones de batería baja</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Notificaciones de batería baja (nodos favoritos)</string>
@@ -484,7 +484,7 @@ Estos datos de ubicación pueden ser utilizados para fines como aparecer en un m
     <string name="not_connected">No está conectado</string>
     <string name="notes">Notas</string>
     <!-- NOTIFICATION -->
-    <string name="notification_permissions_description">Meshtastic utiliza las notificaciones para mantenerte actualizado sobre nuevos mensajes y otros eventos importantes. Puedes actualizar tus permisos de notificación en cualquier momento desde la configuración.</string>
+    <string name="notification_permissions_description">Mesh Survey utiliza las notificaciones para mantenerte actualizado sobre nuevos mensajes y otros eventos importantes. Puedes actualizar tus permisos de notificación en cualquier momento desde la configuración.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_newly_discovered_nodes">Notificaciones para nodos recién descubiertos.</string>
     <string name="notifications_on_alert_bell_receipt">Notificaciones al recibir una alerta/campana</string>
@@ -510,10 +510,10 @@ Estos datos de ubicación pueden ser utilizados para fines como aparecer en un m
     <string name="paxcounter_config">Configuración del Contador de Paquetes</string>
     <string name="periodic_position_broadcast">Transmisión periódica de posición</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic necesita activar los permisos "Dispositivos cercanos" para encontrar y conectarse a dispositivos mediante Bluetooth. Puede desactivar cuando no esté en uso.</string>
+    <string name="permission_missing_31">Mesh Survey necesita activar los permisos "Dispositivos cercanos" para encontrar y conectarse a dispositivos mediante Bluetooth. Puede desactivar cuando no esté en uso.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Ubicación del teléfono</string>
-    <string name="phone_location_description">Meshtastic utiliza la ubicación de tu teléfono para habilitar varias características. Puedes actualizar los permisos de ubicación en cualquier momento desde la configuración.</string>
+    <string name="phone_location_description">Mesh Survey utiliza la ubicación de tu teléfono para habilitar varias características. Puedes actualizar los permisos de ubicación en cualquier momento desde la configuración.</string>
     <string name="pin_selected">Pin</string>
     <plurals name="plurals_hours">
         <item quantity="one">%1$d hora</item>

@@ -269,10 +269,10 @@
     <string name="desc_node_filter_clear">изчистване на филтъра за възли</string>
     <string name="description">Описание</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Изход</string>
-    <string name="desktop_tray_tooltip">Meshtastic Desktop</string>
-    <string name="desktop_update_available_message">Meshtastic Desktop %1$s е готов за изтегляне.</string>
+    <string name="desktop_tray_tooltip">Mesh Survey Desktop</string>
+    <string name="desktop_update_available_message">Mesh Survey Desktop %1$s е готов за изтегляне.</string>
     <string name="desktop_update_available_title">Налична е актуализация на приложението</string>
     <string name="desktop_update_download">Изтегляне на актуализация %1$s</string>
     <string name="details">Подробности</string>
@@ -718,7 +718,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Известия за предупреждения</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Известия за излъчвани съобщения</string>
     <string name="meshtastic_low_battery_notifications">Известия за изтощена батерия</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Известия за изтощена батерия (любими възли)</string>
@@ -867,7 +867,7 @@
     <string name="notes">Бележки</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Mesh</string>
-    <string name="notification_permissions_description">Meshtastic използва известия, за да ви държи в течение за нови съобщения и други важни събития. Можете да актуализирате разрешенията си за известия по всяко време от настройките.</string>
+    <string name="notification_permissions_description">Mesh Survey използва известия, за да ви държи в течение за нови съобщения и други важни събития. Можете да актуализирате разрешенията си за известия по всяко време от настройките.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Известия за канал и директни съобщения.</string>
     <string name="notifications_for_low_battery_alerts">Известия за изтощена батерия на свързаното устройство.</string>
@@ -888,7 +888,7 @@
     <string name="open_bluetooth_settings">Отваряне на настройките на Bluetooth</string>
     <string name="open_compass">Отваряне на компас</string>
     <string name="open_settings">Отваряне на настройките</string>
-    <string name="open_source_description">Meshtastic е изграден със следните библиотеки с отворен код. Докоснете която и да е библиотека, за да видите нейния лиценз.</string>
+    <string name="open_source_description">Mesh Survey е изграден със следните библиотеки с отворен код. Докоснете която и да е библиотека, за да видите нейния лиценз.</string>
     <string name="open_source_libraries">Библиотеки с отворен код</string>
     <string name="open_wifi_settings">Отваряне на настройките на Wi-Fi</string>
     <string name="options">Опции</string>
@@ -906,10 +906,10 @@
     <string name="paxcounter_config">Конфигуриране на Paxcounter</string>
     <string name="periodic_position_broadcast">Периодично излъчване на позиция</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic се нуждае от активирани разрешения за "Устройства наблизо", за да намира и да се свързва с устройства чрез Bluetooth. Можете да ги дезактивирате, когато не се използват.</string>
+    <string name="permission_missing_31">Mesh Survey се нуждае от активирани разрешения за "Устройства наблизо", за да намира и да се свързва с устройства чрез Bluetooth. Можете да ги дезактивирате, когато не се използват.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Местоположение на телефона</string>
-    <string name="phone_location_description">Meshtastic използва местоположението на телефона ви, за да активира редица функции. Можете да актуализирате разрешенията си за местоположение по всяко време от настройките.</string>
+    <string name="phone_location_description">Mesh Survey използва местоположението на телефона ви, за да активира редица функции. Можете да актуализирате разрешенията си за местоположение по всяко време от настройките.</string>
     <string name="pin_selected">ПИН</string>
     <plurals name="plurals_hours">
         <item quantity="one">%1$d час</item>

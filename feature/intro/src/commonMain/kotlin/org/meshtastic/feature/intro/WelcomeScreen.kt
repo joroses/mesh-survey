@@ -41,7 +41,7 @@ import org.meshtastic.core.resources.create_your_own_networks
 import org.meshtastic.core.resources.easily_set_up_private_mesh_networks
 import org.meshtastic.core.resources.get_started
 import org.meshtastic.core.resources.intro_welcome
-import org.meshtastic.core.resources.meshtastic
+import org.meshtastic.core.resources.meshtastic_app_name
 import org.meshtastic.core.resources.share_your_location_in_real_time
 import org.meshtastic.core.resources.stay_connected_anywhere
 import org.meshtastic.core.resources.track_and_share_locations
@@ -101,7 +101,7 @@ internal fun WelcomeScreen(onGetStarted: () -> Unit) {
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = stringResource(Res.string.meshtastic),
+                text = stringResource(Res.string.meshtastic_app_name),
                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center,
             )

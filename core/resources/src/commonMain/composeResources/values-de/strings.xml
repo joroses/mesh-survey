@@ -184,7 +184,7 @@
     <string name="chirpy_error_unknown">Hoppla! Wir sind auf starken Paketverlust oder Signalstörungen gestoßen! 📡 Lassen Sie uns die Anfrage noch einmal senden und schauen, ob wir diesmal durchkommen.</string>
     <string name="chirpy_error_unsupported_flavor">Ich operiere in dieser App-Variante nur mit eingeschränkter Frequenz! 🔌 Versuchen Sie es stattdessen mit einer Version, die über eine vollständige KI Integration verfügt.</string>
     <string name="chirpy_error_unsupported_platform">Oh nein! Meine Antenne scheint auf dieser Plattform keine Verbindung herstellen zu können. 📡 Bitte überprüfen Sie noch einmal die Kompatibilität Ihrer Hardware!</string>
-    <string name="chirpy_intro">Hallo! 📡 Ich bin Chirpy, ihr lokaler Meshtastic Assistent! Ich kann Ihnen bei der Einrichtung, Konfiguration, Fehlerbehebung und mit Tipps rund um das Mesh-Netzwerk helfen. Wobei kann ich Ihnen behilflich sein?</string>
+    <string name="chirpy_intro">Hallo! 📡 Ich bin Chirpy, ihr lokaler Mesh Survey Assistent! Ich kann Ihnen bei der Einrichtung, Konfiguration, Fehlerbehebung und mit Tipps rund um das Mesh-Netzwerk helfen. Wobei kann ich Ihnen behilflich sein?</string>
     <string name="chirpy_ready">Fragen Sie Chirpy</string>
     <string name="chirpy_search_placeholder">Fragen Sie nach Meshtastic…</string>
     <string name="chirpy_suggested_pages_help">Hier sind einige Dokumentationsseiten, die Ihnen helfen können:</string>
@@ -314,11 +314,11 @@
     <string name="desc_node_filter_clear">Knotenfilter löschen</string>
     <string name="description">Beschreibung</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Beenden</string>
-    <string name="desktop_tray_show">Meshtastic anzeigen</string>
-    <string name="desktop_tray_tooltip">Meshtastic Desktop</string>
-    <string name="desktop_update_available_message">Meshtastic Desktop %1$s ist bereit zum Download.</string>
+    <string name="desktop_tray_show">Mesh Survey anzeigen</string>
+    <string name="desktop_tray_tooltip">Mesh Survey Desktop</string>
+    <string name="desktop_update_available_message">Mesh Survey Desktop %1$s ist bereit zum Download.</string>
     <string name="desktop_update_available_title">App Update verfügbar</string>
     <string name="desktop_update_download">Update %1$s downloaden</string>
     <string name="details">Details</string>
@@ -808,7 +808,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Warnmeldungen</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Benachrichtigung allgemeine Nachrichten</string>
     <string name="meshtastic_low_battery_notifications">Benachrichtigung leerer Akku</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Akkustands Warnung (für Favoriten)</string>
@@ -975,7 +975,7 @@
     <string name="notes">Knoten</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Netz</string>
-    <string name="notification_permissions_description">Meshtastic nutzt Benachrichtigungen, um Sie über neue Nachrichten und andere wichtige Ereignisse auf dem Laufenden zu halten. Sie können Ihre Benachrichtigungsrechte jederzeit in den Einstellungen aktualisieren.</string>
+    <string name="notification_permissions_description">Mesh Survey nutzt Benachrichtigungen, um Sie über neue Nachrichten und andere wichtige Ereignisse auf dem Laufenden zu halten. Sie können Ihre Benachrichtigungsrechte jederzeit in den Einstellungen aktualisieren.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Benachrichtigungen für Kanal und Direktnachrichten.</string>
     <string name="notifications_for_low_battery_alerts">Benachrichtigungen für niedrige Akku-Warnungen des angeschlossenen Gerätes.</string>
@@ -998,7 +998,7 @@
     <string name="open_bluetooth_settings">Öffne Bluetootheinstellungen</string>
     <string name="open_compass">Kompass öffnen</string>
     <string name="open_settings">Einstellungen öffnen</string>
-    <string name="open_source_description">Meshtastic wurde mit den folgenden Quellen offenen Bibliotheken gebaut. Tippen Sie auf eine beliebige Bibliothek, um ihre Lizenz anzuzeigen.</string>
+    <string name="open_source_description">Mesh Survey wurde mit den folgenden Quellen offenen Bibliotheken gebaut. Tippen Sie auf eine beliebige Bibliothek, um ihre Lizenz anzuzeigen.</string>
     <string name="open_source_libraries">Quellen offene Bibliotheken</string>
     <string name="open_wifi_settings">Öffne Wlan-Einstellungen</string>
     <string name="options">Optionen</string>
@@ -1023,10 +1023,10 @@
     <string name="paxcounter_config">Einstellung Besucherzähler</string>
     <string name="periodic_position_broadcast">Regelmäßige Standortübertragung</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic benötigt die Berechtigung „Geräte in der Nähe“, um Geräte über Bluetooth zu finden und eine Verbindung zu ihnen herzustellen. Sie können die Funktion deaktivieren, wenn sie nicht verwendet wird.</string>
+    <string name="permission_missing_31">Mesh Survey benötigt die Berechtigung „Geräte in der Nähe“, um Geräte über Bluetooth zu finden und eine Verbindung zu ihnen herzustellen. Sie können die Funktion deaktivieren, wenn sie nicht verwendet wird.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Telefonstandort</string>
-    <string name="phone_location_description">Meshtastic nutzt den Standort Ihres Telefons, um einige Funktionen zu aktivieren. Sie können Ihre Standortberechtigungen jederzeit in den Einstellungen aktualisieren.</string>
+    <string name="phone_location_description">Mesh Survey nutzt den Standort Ihres Telefons, um einige Funktionen zu aktivieren. Sie können Ihre Standortberechtigungen jederzeit in den Einstellungen aktualisieren.</string>
     <string name="pin_selected">PIN Nummer</string>
     <string name="play">Wiedergabe</string>
     <plurals name="plurals_hours">

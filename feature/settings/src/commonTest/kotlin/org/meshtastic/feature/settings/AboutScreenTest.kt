@@ -63,8 +63,8 @@ class AboutScreenTest {
         onNodeWithText("Apps").assertIsDisplayed()
         onNodeWithText("Need Hardware?").assertIsDisplayed()
         onNodeWithText(
-            "Meshtastic requires a compatible device. Our backers and partners offer ready-to-use hardware. " +
-                "Here are some of the most popular options.",
+            "Mesh Survey requires a compatible Meshtastic device. Meshtastic backers and partners offer " +
+                "ready-to-use hardware. Here are some of the most popular options.",
         )
             .assertIsDisplayed()
         onNodeWithText("GitHub Repository").assertIsDisplayed()

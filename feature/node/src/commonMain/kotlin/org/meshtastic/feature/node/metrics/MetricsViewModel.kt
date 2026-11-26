@@ -629,7 +629,7 @@ internal fun buildGpx(positions: List<org.meshtastic.proto.Position>, trackName:
     }
     val name = trackName.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return """<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Meshtastic" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Mesh Survey" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
     <name>$name</name>
     <trkseg>

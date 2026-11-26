@@ -91,5 +91,5 @@ private fun codePointAt(text: String, index: Int): Int = SURROGATE_OFFSET +
  */
 internal fun deviceProfileExportFileName(longName: String?, shortName: String?, dateStamp: String): String {
     val nodeName = sanitizeExportNameSegment(longName) ?: sanitizeExportNameSegment(shortName) ?: FALLBACK_NODE_NAME
-    return "Meshtastic_${nodeName}_${dateStamp}_nodeConfig.cfg"
+    return "MeshSurvey_${nodeName}_${dateStamp}_nodeConfig.cfg"
 }

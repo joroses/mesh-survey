@@ -137,10 +137,10 @@
     <string name="bluetooth_permission_blocked_notice_pre31">L'autorisation de localisation est désactivée et Android ne la demandera plus. Activez-la dans les paramètres de l'application vous rechercher des appareils Bluetooth ou bien connectez-vous via Wi-Fi ou USB.</string>
     <string name="bluetooth_permission_blocked_rationale">L'accès aux appareils à proximité est désactivé et Android ne le demandera plus. Activez-le dans les paramètres de l'application pour rechercher et vous connecter via Bluetooth.</string>
     <string name="bluetooth_permission_blocked_rationale_pre31">L'autorisation de localisation est désactivée et Android ne la demandera plus. Activez-la dans les paramètres de l'application pour rechercher et vous connecter via Bluetooth.</string>
-    <string name="bluetooth_permission_denied_notice">Sans accès aux appareils à proximité, Meshtastic ne peut pas trouver ou se connecter à votre radio via Bluetooth. Vous pouvez toujours vous connecter via Wi-Fi ou USB.</string>
-    <string name="bluetooth_permission_denied_notice_pre31">Sans autorisation de localisation, Android bloque la recherche Bluetooth, Meshtastic ne peut donc pas trouver votre radio. Vous pouvez toujours vous connecter via Wi-Fi ou USB.</string>
-    <string name="bluetooth_permission_rationale">Meshtastic a besoin de l'accès aux périphériques à proximité pour trouver votre radio et se connecter à celle-ci. Il est utilisé seulement pour parler à vos propres appareils, jamais pour vous localiser. Sans cela, le Bluetooth est indisponible — le Wi-Fi et l'USB fonctionnent toujours.</string>
-    <string name="bluetooth_permission_rationale_pre31">Meshtastic a besoin d'une autorisation de localisation car cette version d'Android traite la recherche Bluetooth comme une capacité de localisation. Votre position n'est jamais lue ou partagée pour cela. Sans elle, le Bluetooth n'est pas disponible — le Wi-Fi et l'USB fonctionnent toujours.</string>
+    <string name="bluetooth_permission_denied_notice">Sans accès aux appareils à proximité, Mesh Survey ne peut pas trouver ou se connecter à votre radio via Bluetooth. Vous pouvez toujours vous connecter via Wi-Fi ou USB.</string>
+    <string name="bluetooth_permission_denied_notice_pre31">Sans autorisation de localisation, Android bloque la recherche Bluetooth, Mesh Survey ne peut donc pas trouver votre radio. Vous pouvez toujours vous connecter via Wi-Fi ou USB.</string>
+    <string name="bluetooth_permission_rationale">Mesh Survey a besoin de l'accès aux périphériques à proximité pour trouver votre radio et se connecter à celle-ci. Il est utilisé seulement pour parler à vos propres appareils, jamais pour vous localiser. Sans cela, le Bluetooth est indisponible — le Wi-Fi et l'USB fonctionnent toujours.</string>
+    <string name="bluetooth_permission_rationale_pre31">Mesh Survey a besoin d'une autorisation de localisation car cette version d'Android traite la recherche Bluetooth comme une capacité de localisation. Votre position n'est jamais lue ou partagée pour cela. Sans elle, le Bluetooth n'est pas disponible — le Wi-Fi et l'USB fonctionnent toujours.</string>
     <string name="bluetooth_scan_location_services_disabled">Les services de localisation sont désactivés. Activez-les pour rechercher les appareils à proximité.</string>
     <string name="bluetooth_scan_missing_permission">L'analyse Bluetooth nécessite une autorisation. Autorisez les périphériques à proximité (ou la localisation) pour trouver des périphériques.</string>
     <string name="bluetooth_scan_start_failed">L'analyse Bluetooth n'a pas pu démarrer. Essayez à nouveau, ou activez/désactivez Bluetooth si le problème continue.</string>
@@ -151,7 +151,7 @@
     <string name="bonding_failed_permissions">L'appairage a échoué. Accorder les autorisations de l'appareil à proximité et essayer à nouveau.</string>
     <string name="bonding_failed_retry">L'appairage n'a pas abouti. Veuillez réessayer.</string>
     <string name="boot_reconnect_blocked_message">L'autorisation d'accès aux appareils à proximité est désactivée, votre radio ne peut donc pas être atteinte en Bluetooth. Appuyez pour l'allumer.</string>
-    <string name="boot_reconnect_blocked_title">Meshtastic ne peut pas se reconnecter</string>
+    <string name="boot_reconnect_blocked_title">Mesh Survey ne peut pas se reconnecter</string>
     <string name="bottom_nav_settings">Réglages</string>
     <plurals name="cache_limit_eviction_warning">
         <item quantity="one">Réduire ceci supprimera définitivement l'historique pour %1$d appareil.</item>
@@ -198,7 +198,7 @@
     <string name="chirpy_error_unknown">Oups ! On a heurté une grosse perte de packet ou une interférence du signal ! 📡 Retransmet cette requête et voyons siont arrive à passer.</string>
     <string name="chirpy_error_unsupported_flavor">J'opère sur une fréquence limitée sur version de l'app! 🔌 ntm l ia.</string>
     <string name="chirpy_error_unsupported_platform">Oh non ! Mon antenne n'arrive pas à établir une connexion sur cette plate-forme.📡 Veuillez revérifier la compatibilité de l'hardwaree!</string>
-    <string name="chirpy_intro">Bonjour! : satellite_antenne: Je suis Chirpy, votre assistant Meshtastic sur votre appareil ! Je peux vous aider avec les conseils de configuration, de configuration, de dépannage et de réseautage de maillage. Comment puis-je vous aider ?</string>
+    <string name="chirpy_intro">Bonjour! : satellite_antenne: Je suis Chirpy, votre assistant Mesh Survey sur votre appareil ! Je peux vous aider avec les conseils de configuration, de configuration, de dépannage et de réseautage de maillage. Comment puis-je vous aider ?</string>
     <string name="chirpy_ready">Demander à Chirpy</string>
     <string name="chirpy_search_placeholder">Pose des questions sur Meshtastic…</string>
     <string name="chirpy_suggested_pages_help">Voici quelques pages de documentations qui pourrait aider:</string>
@@ -337,11 +337,11 @@
     <string name="desc_node_filter_clear">Effacer le filtre de nœud</string>
     <string name="description">Description</string>
     <!-- DESKTOP -->
-    <string name="desktop_notification_title">Meshtastic</string>
+    <string name="desktop_notification_title">Mesh Survey</string>
     <string name="desktop_tray_quit">Quitter</string>
-    <string name="desktop_tray_show">Afficher Meshtastic</string>
-    <string name="desktop_tray_tooltip">Meshtastic application de bureau</string>
-    <string name="desktop_update_available_message">Meshtastic Desktop %1$s est prêt à télécharger.</string>
+    <string name="desktop_tray_show">Afficher Mesh Survey</string>
+    <string name="desktop_tray_tooltip">Mesh Survey application de bureau</string>
+    <string name="desktop_update_available_message">Mesh Survey Desktop %1$s est prêt à télécharger.</string>
     <string name="desktop_update_available_title">Mise à jour de l'app disponible</string>
     <string name="desktop_update_download">Télécharger la mise à jour %1$s</string>
     <string name="details">Détails</string>
@@ -827,7 +827,7 @@
     <!-- MESHTASTIC -->
     <string name="meshtastic">Meshtastic</string>
     <string name="meshtastic_alerts_notifications">Notifications d'alerte</string>
-    <string name="meshtastic_app_name">Meshtastic</string>
+    <string name="meshtastic_app_name">Mesh Survey</string>
     <string name="meshtastic_broadcast_notifications">Diffuser les notifications de message</string>
     <string name="meshtastic_low_battery_notifications">Notifications de batterie faible</string>
     <string name="meshtastic_low_battery_temporary_remote_notifications">Notifications de batterie faible (nœuds favoris)</string>
@@ -957,7 +957,7 @@
     <string name="notes">Notes</string>
     <!-- NOTIFICATION -->
     <string name="notification_group_mesh">Maillage</string>
-    <string name="notification_permissions_description">Meshtastic utilise les notifications pour vous tenir à jour sur les nouveaux messages et autres événements importants. Vous pouvez mettre à jour vos autorisations de notification à tout moment à partir des paramètres.</string>
+    <string name="notification_permissions_description">Mesh Survey utilise les notifications pour vous tenir à jour sur les nouveaux messages et autres événements importants. Vous pouvez mettre à jour vos autorisations de notification à tout moment à partir des paramètres.</string>
     <!-- NOTIFICATIONS -->
     <string name="notifications_for_channel_and_direct_messages">Notifications pour le canal et les messages directs.</string>
     <string name="notifications_for_low_battery_alerts">Notifications d'alertes de batterie faible pour l'appareil connecté.</string>
@@ -978,7 +978,7 @@
     <!-- OPEN -->
     <string name="open_compass">Boussole</string>
     <string name="open_settings">Ouvrir les paramètres</string>
-    <string name="open_source_description">Meshtastic est construit avec les bibliothèques open source suivantes. Appuyez sur n'importe quelle bibliothèque pour voir sa licence.</string>
+    <string name="open_source_description">Mesh Survey est construit avec les bibliothèques open source suivantes. Appuyez sur n'importe quelle bibliothèque pour voir sa licence.</string>
     <string name="open_source_libraries">Bibliothèques Open Source</string>
     <string name="options">Options</string>
     <string name="orient_north">Orienter vers le nord</string>
@@ -998,10 +998,10 @@
     <string name="paxcounter_config">Configuration du Paxcounter</string>
     <string name="periodic_position_broadcast">Diffusion périodique de position</string>
     <!-- PERMISSION -->
-    <string name="permission_missing_31">Meshtastic a besoin des autorisations "Périphériques à proximité" activées pour trouver et se connecter à des appareils via Bluetooth. Vous pouvez désactiver la lorsque la localisation n'est pas utilisée.</string>
+    <string name="permission_missing_31">Mesh Survey a besoin des autorisations "Périphériques à proximité" activées pour trouver et se connecter à des appareils via Bluetooth. Vous pouvez désactiver la lorsque la localisation n'est pas utilisée.</string>
     <!-- PERMISSIONS -->
     <string name="phone_location">Localisation du téléphone</string>
-    <string name="phone_location_description">Meshtastic utilise la localisation de votre téléphone pour activer un certain nombre de fonctionnalités. Vous pouvez mettre à jour vos autorisations de localisation à tout moment à partir des paramètres.</string>
+    <string name="phone_location_description">Mesh Survey utilise la localisation de votre téléphone pour activer un certain nombre de fonctionnalités. Vous pouvez mettre à jour vos autorisations de localisation à tout moment à partir des paramètres.</string>
     <string name="pin_selected">Broche</string>
     <string name="play">Lancer</string>
     <plurals name="plurals_hours">

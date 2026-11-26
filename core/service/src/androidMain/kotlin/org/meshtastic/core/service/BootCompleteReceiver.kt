@@ -151,7 +151,7 @@ class BootCompleteReceiver :
         /** A broadcast has seconds, not indefinite time; fall back to untranslated text rather than stall. */
         const val STRING_RESOLVE_TIMEOUT_MILLIS = 2_000L
 
-        const val UNTRANSLATED_BLOCKED_TITLE = "Meshtastic can't reconnect"
+        const val UNTRANSLATED_BLOCKED_TITLE = "Mesh Survey can't reconnect"
         const val UNTRANSLATED_BLOCKED_MESSAGE =
             "Nearby devices permission is off, so your radio cannot be reached over Bluetooth. " +
                 "Tap to turn it back on."
