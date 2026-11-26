@@ -116,7 +116,12 @@ The fork's own name and identity, kept out of the Meshtastic trademark (see `CON
 | :--- | :--- |
 | `README.md` | replaced by the fork's own; it links upstream's. Upstream edits its README often: on a rebase, keep this one |
 | `config.properties` | `APPLICATION_ID=io.github.joroses.meshsurvey`; `VERSION_NAME_BASE` gets a `-survey.N` suffix |
-| `androidApp/src/main/res/values/strings.xml` | `app_name` and `nfc_tag_emulation_service` say Mesh Survey |
+| `androidApp/src/main/res/values/strings.xml`, `feature/widget/src/main/res/values/strings.xml` | `app_name`, `nfc_tag_emulation_service` and `widget_local_stats_label` say Mesh Survey |
+| `core/resources/.../values*/strings.xml`, `feature/intro/.../WelcomeScreen.kt`, `core/service/.../BootCompleteReceiver.kt`, `MeshServiceOrchestrator.kt` | app-self UI text, permission explanations and untranslated fallbacks say Mesh Survey; copyright and trademark notices stay. Finnish and Estonian call the map the mesh map (`mesh-kartta`, `mesh-kaardi`), not the Meshtastic map |
+| `feature/discovery/.../PdfDiscoveryExporter.kt`, `TextDiscoveryExporter.kt`, `DiscoveryReportFormatter.kt` | the discovery report's title, footer and `meshsurvey_discovery_` file name say Mesh Survey |
+| `feature/settings/.../PersistenceSection.kt`, `DeviceProfileExportFileName.kt` (and its test), `TAKConfigItemList.kt`, `feature/node/.../MetricsViewModel.kt` | suggested export file names start `MeshSurvey_`; exported GPX says `creator="Mesh Survey"` |
+| `core/model/.../MeshtasticUrlConstants.kt`, `ChannelSet.kt`, `SharedContact.kt`, `UriUtils.kt`, `core/navigation/.../Routes.kt`, `androidApp/src/main/AndroidManifest.xml` | created share URLs and deep links use `meshsurvey://meshsurvey`; `meshtastic.org` manifest filters removed while in-app import of `meshtastic.org` links still works |
+| `feature/settings/.../SettingsScreen.kt`, `DesktopSettingsScreen.kt` | upstream Help & Documentation entry hidden from Settings |
 | `androidApp/src/main/res/drawable-anydpi/ic_launcher_*.xml`, `ic_splash.xml` | placeholder signal icon on blue |
 | `core/resources/src/androidMain/res/drawable/meshtastic_ic_notification.xml`, `core/resources/.../drawable/ic_meshtastic.xml`, `feature/widget/.../drawable/widget_app_icon.xml` | the same placeholder icon (notification, top bar, widget) |
 | `core/service/.../MeshNotificationManagerImpl.kt`, `feature/widget/.../LocalStatsWidget.kt` | the app's label in place of `meshtastic_app_name` |

@@ -7,9 +7,9 @@ Mesh Survey is a modified fork of [Meshtastic-Android](https://github.com/meshta
   <img src="feature/survey/docs/survey-relays.jpg" alt="An ended session's relays: each relay byte with the node behind it, its packets, RSSI and SNR, why SigSleuth names that node, and nodes heard directly nearby" width="300"/>
 </p>
 
-- **Modified work.** This fork has been modified from the upstream project since 2026-09: the signal survey, the app name, application ID and icons, and the source link on the About screen. The [commit history](https://github.com/joroses/mesh-survey/commits/feature/signal-survey) shows every change and its date.
+- **Modified work.** This fork has been modified from the upstream project since 2026-09: the signal survey, the app name, application ID, icons, UI text and link scheme, and the source link on the About screen. The [commit history](https://github.com/joroses/mesh-survey/commits/feature/signal-survey) shows every change and its date.
 - **Not affiliated.** Mesh Survey is not affiliated with, sponsored by or endorsed by Meshtastic LLC or the Meshtastic project. Please report problems with this fork [here](https://github.com/joroses/mesh-survey/issues), not to the Meshtastic project.
-- **Trademark.** Meshtastic® is a registered trademark of Meshtastic LLC.
+- **Trademark.** Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software components are released under various licenses, see GitHub for details. No warranty is provided - use at your own risk.
 - **License.** Like the upstream project, this fork is licensed under the [GNU General Public License v3.0 or later](LICENSE). The source of every release is the tagged commit it was built from.
 
 ## Privacy
