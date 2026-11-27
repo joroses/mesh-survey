@@ -229,6 +229,9 @@ class SurveyRecorder(
      * firmware's limit is.
      */
     @Volatile private var lastPingElapsedMs: Long? = null
+
+    /** Last ping ID firmware refused; kept in case the refusal arrives before [sendPing] publishes [SurveyPing]. */
+    @Volatile private var lastRefusedPingId: Int? = null
     private var writer: Job? = null
     private var watcher: Job? = null
     private var refresher: Job? = null
@@ -360,7 +363,13 @@ class SurveyRecorder(
         val id = if (sessionId != null && !coolingDown) safeCatching { pings.send() }.getOrNull() else null
         if (id != null) {
             lastPingElapsedMs = now
-            mutableState.update { if (it.session?.id == sessionId) it.copy(ping = SurveyPing(id, sentAtMs)) else it }
+            mutableState.update {
+                if (it.session?.id == sessionId) {
+                    it.copy(ping = SurveyPing(id, sentAtMs, refused = lastRefusedPingId == id))
+                } else {
+                    it
+                }
+            }
         }
         return id != null
     }
@@ -371,6 +380,7 @@ class SurveyRecorder(
      */
     private fun onPingRefused(pingId: Int) {
         Logger.i { "Signal survey ping refused by the radio" }
+        lastRefusedPingId = pingId
         mutableState.update { state ->
             val ping = state.ping?.takeIf { it.id == pingId } ?: return@update state
             state.copy(ping = ping.copy(refused = true))

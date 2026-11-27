@@ -302,10 +302,13 @@ class SurveyCaptureTest {
 
     @Test
     fun `other traceroute packets keep no SNR towards the sender`() {
-        // A request, a relay on the way there or back, one to another node, an unknown SNR, and not a traceroute.
+        // A request, a relay on the way there or back, one to another node, an unknown SNR, an incomplete or extra
+        // SNR list, and not a traceroute.
         assertNull(snrTowards(traceroute(wantResponse = true)))
         assertNull(snrTowards(traceroute(route = listOf(99, 5, -1_234), snr = listOf(0, 8, -30))))
         assertNull(snrTowards(traceroute(route = listOf(99, -1_234), snr = listOf(0, -30), routeBack = listOf(5))))
+        assertNull(snrTowards(traceroute(route = listOf(99), snr = listOf(0))))
+        assertNull(snrTowards(traceroute(route = listOf(99, -1_234), snr = listOf(0, -30, 8))))
         assertNull(snrTowards(traceroute(), to = -1))
         assertNull(snrTowards(traceroute(snr = listOf(-128))))
         assertNull(snrTowards(decoded(bitfield = 1)))

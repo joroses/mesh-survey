@@ -379,6 +379,7 @@ class SurveyDatabaseMigrationTest {
         assertEquals(171, row.relayByte)
         assertNull(row.okToMqtt)
         assertNull(row.defaultKey)
+        assertNull(row.snrTowards)
     }
 
     /** Creates the database exactly as [version]'s exported schema describes it, then runs [fill] on it. */

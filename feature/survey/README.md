@@ -48,7 +48,7 @@ Tap the card's **Relay bytes** count for the full list: each byte's guess, every
 
 ## CSV export
 
-One session per file, with the columns `session_id, seq, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, sender_node_id, recipient_node_id, packet_id, rx_snr, rx_rssi, hop_start, hop_limit, relay_byte, ok_to_mqtt, default_key`. A missing value is an empty cell. The radio settings are in the database's `survey_session` table, not in the CSV.
+One session per file, with the columns `session_id, seq, heard_at_ms, latitude, longitude, accuracy_m, fix_age_ms, sender_node_id, recipient_node_id, packet_id, rx_snr, rx_rssi, hop_start, hop_limit, relay_byte, ok_to_mqtt, default_key, snr_towards`. A missing value is an empty cell. The radio settings are in the database's `survey_session` table, not in the CSV.
 
 Compared with Settings → "Export all packets", it has the phone's own GPS fix with its accuracy and age instead of the node's last known position, times to the millisecond, RSSI, packet IDs, and packets the node couldn't decrypt. It has no payloads or sender names and positions, writes the relay byte as a decimal number, and keeps rows without an SNR.
 
@@ -65,6 +65,8 @@ Compared with Settings → "Export all packets", it has the phone's own GPS fix 
 | `SurveyNewToYou.kt` | "New to you", and recounting it after a delete |
 | `SurveyUploader.kt`, `SurveyUploadWorker.kt` | Uploads, and the retry once online |
 | `SurveyRelays.kt`, `SurveyRelayNodes.kt` | Relay guesses, and SigSleuth's list of relay nodes |
+| `SurveyPing.kt` | Zero-hop broadcast traceroute ping and its answers |
+| `SurveyServerLinks.kt` | Upload server's Telegram group link, cached offline |
 | `SurveyCsv.kt` | CSV export |
 | `SurveySettings.kt` | Server address, password and switches |
 | `ui/SurveyScreen.kt`, `ui/SurveyViewModel.kt` | The screen |
@@ -104,6 +106,8 @@ Keep these edits small; a rebase onto upstream has to carry them.
 | `core/data/.../manager/SurveyPacketTapImpl.kt` | new: Koin's binding, forwarding to the shared instance |
 | `core/data/.../manager/MeshMessageProcessorImpl.kt` | one import and one call, no constructor parameter |
 | `core/data/.../manager/MeshMessageProcessorImplTest.kt` | one test of the hook |
+| `core/data/.../manager/TracerouteHandlerImpl.kt` | skips showing traceroute results for the survey's pings |
+| `core/data/.../manager/FromRadioPacketHandlerImpl.kt`, `FromRadioPacketHandlerImplTest.kt` | hands firmware's ping refusal notification to the survey instead of a pop-up |
 | `core/service/.../ConversationShortcutPublisher.kt`, `ConversationShortcutPublisherTest.kt` | prunes only conversation shortcuts, so the survey's launcher shortcut stays |
 | `feature/settings/.../radio/RadioConfig.kt` | the Settings entry, behind `showSignalSurvey` |
 | `feature/settings/src/androidMain/.../SettingsScreen.kt` | `showSignalSurvey = true` |

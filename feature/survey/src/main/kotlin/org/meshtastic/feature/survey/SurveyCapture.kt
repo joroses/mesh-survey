@@ -160,11 +160,19 @@ private fun MeshPacket.relayByte(): Int? {
 private fun MeshPacket.snrTowards(surveyNode: Int): Float? {
     val data = decoded?.takeIf { it.portnum == PortNum.TRACEROUTE_APP && !it.want_response && to == surveyNode }
     val route = data?.let { RouteDiscovery.ADAPTER.decodeOrNull(it.payload) } ?: return null
-    val others = route.route.filter { it != surveyNode }
-    val direct =
-        route.route_back.isEmpty() &&
-            (others.isEmpty() || others == listOf(from)) &&
-            route.snr_towards.size in route.route.size..route.route.size + 1
+    val expectedSnrs =
+        when (route.route) {
+            emptyList<Int>(),
+            listOf(surveyNode),
+            -> route.route.size + 1
+
+            listOf(from),
+            listOf(surveyNode, from),
+            -> route.route.size
+
+            else -> null
+        }
+    val direct = route.route_back.isEmpty() && route.snr_towards.size == expectedSnrs
     return route.snr_towards.lastOrNull()?.takeIf { direct && it != UNKNOWN_SNR }?.let { it / QUARTER_DB }
 }
 

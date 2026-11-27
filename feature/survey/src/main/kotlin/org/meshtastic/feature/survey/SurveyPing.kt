@@ -83,10 +83,16 @@ class RadioSurveyPingSender(
     private val tap: SurveyPacketTap,
 ) : SurveyPingSender {
     override suspend fun send(): Int? {
+        val previous = tap.pingIds
         val id = commands.generatePacketId()
         // A few, for answers that arrive after the next ping.
-        tap.pingIds = (tap.pingIds.toList() + id).takeLast(KEPT_PING_IDS).toSet()
-        return id.takeIf { packets.sendToRadio(zeroHopTraceroute(id)) }
+        tap.pingIds = (previous.toList() + id).takeLast(KEPT_PING_IDS).toSet()
+        return if (packets.sendToRadio(zeroHopTraceroute(id))) {
+            id
+        } else {
+            tap.pingIds = previous
+            null
+        }
     }
 
     private companion object {

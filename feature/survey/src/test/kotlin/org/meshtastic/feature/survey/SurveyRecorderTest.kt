@@ -134,7 +134,7 @@ class SurveyRecorderTest {
     /** The clock that keeps counting while the phone sleeps; tests move it to fake a sleep. */
     private var elapsedRealtime = 5_000L
 
-    private fun TestScope.recorder(surveyDao: SurveyDao = dao): SurveyRecorder {
+    private fun TestScope.recorder(surveyDao: SurveyDao = dao, pingSender: SurveyPingSender = pings): SurveyRecorder {
         radio =
             FakeRadioInterfaceService(backgroundScope).apply {
                 setDeviceAddress("xradio")
@@ -158,7 +158,7 @@ class SurveyRecorderTest {
             FakeBuildConfigProvider(versionName = "2.8.3-survey"),
             object : ApplicationCoroutineScope, CoroutineScope by backgroundScope {},
             relayNodes,
-            pings,
+            pingSender,
             answers,
         )
     }
@@ -991,6 +991,26 @@ class SurveyRecorderTest {
         recorder.stop()
         assertNull(tap.onPingRefused)
     }
+
+    @Test
+    fun `a refusal that arrives before send returns still marks the ping refused`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val recorder =
+                recorder(
+                    pingSender = {
+                        val id = ++pingsSent
+                        tap.onPingRefused?.invoke(id)
+                        id
+                    },
+                )
+            assertTrue(recorder.start())
+
+            assertTrue(recorder.ping())
+
+            val ping = assertNotNull(recorder.state.value.ping)
+            assertEquals(pingsSent, ping.id)
+            assertTrue(ping.refused)
+        }
 }
 
 private const val HOP_START = 3

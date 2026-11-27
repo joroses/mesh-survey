@@ -89,8 +89,14 @@ class SurveyServerLinksTest {
     fun `only an https link is kept, and only an upload server is asked`() = runTest {
         telegram = "\"tg://resolve?domain=mesh\""
         assertEquals(listOf(null, null), telegram())
+        now += SERVER_LINKS_STALE.inWholeMilliseconds + 1
+        telegram = "\"https://\""
+        assertEquals(listOf(null, null), telegram())
+        now += SERVER_LINKS_STALE.inWholeMilliseconds + 1
+        telegram = "\" https://t.me/mesh \""
+        assertEquals(listOf(null, "https://t.me/mesh"), telegram())
         assertEquals(listOf(null), telegram("maps.example"))
         assertEquals(listOf(null), telegram(""))
-        assertEquals(1, requests.size)
+        assertEquals(3, requests.size)
     }
 }

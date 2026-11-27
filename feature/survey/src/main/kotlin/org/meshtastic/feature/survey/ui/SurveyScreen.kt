@@ -749,7 +749,7 @@ private fun PingButton(
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
 ) {
     val cooldownMs = PING_COOLDOWN.inWholeMilliseconds
-    val leftMs = sentAtMs?.let { cooldownMs - (clock().wallMs - it) }?.takeIf { it > 0 }
+    val leftMs = sentAtMs?.let { cooldownMs - (clock().wallMs - it).coerceAtLeast(0L) }?.takeIf { it > 0 }
     // In the tertiary blue: the tonal default matches the card, and the light theme's tertiary container nearly does.
     FilledTonalButton(
         onClick = onPing,
@@ -858,7 +858,11 @@ private fun PingAnswerRow(
     spreadingFactor: Int,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+        modifier.semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Text(
             nodeName(answer.nodeId, relayNames),
             Modifier.weight(1f),
@@ -1418,15 +1422,17 @@ private fun LegendButton(website: String?, telegram: String?) {
     val scope = rememberCoroutineScope()
     val title = stringResource(R.string.survey_legend)
     // Below the top bar it has the rest of the window; in landscape or with big text it scrolls there.
+    val hasLinks = website != null || telegram != null
     val window = LocalWindowInfo.current.containerSize.height
-    val maxHeight = with(LocalDensity.current) { window.toDp() } - LEGEND_ROOM_ABOVE
+    val roomAbove = if (hasLinks) LEGEND_ROOM_WITH_LINKS else LEGEND_ROOM_ABOVE
+    val maxHeight = (with(LocalDensity.current) { window.toDp() } - roomAbove).coerceAtLeast(LEGEND_MIN_HEIGHT)
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
         tooltip = {
             RichTooltip(
                 title = { Text(title) },
                 action =
-                if (website == null && telegram == null) {
+                if (!hasLinks) {
                     null
                 } else {
                     { LegendLinks(website, telegram, onOpen = { scope.launch { tooltip.dismiss() } }) }
@@ -1451,6 +1457,10 @@ private val LEGEND_ICON_SIZE = 20.dp
 
 /** The top bar, the tooltip's title and padding, and a margin: what the legend's own height must leave. */
 private val LEGEND_ROOM_ABOVE = 160.dp
+
+/** [LEGEND_ROOM_ABOVE] plus room for [LegendLinks] under the legend, including when the buttons wrap. */
+private val LEGEND_ROOM_WITH_LINKS = 240.dp
+private val LEGEND_MIN_HEIGHT = 80.dp
 
 /** Each sample as the cards and relays draw it, with its meaning beside or under it. */
 @Composable
@@ -1506,7 +1516,7 @@ internal fun LegendLinks(website: String?, telegram: String?, onOpen: () -> Unit
                     Modifier.size(ButtonDefaults.IconSize),
                 )
                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(stringResource(R.string.survey_legend_telegram))
+                Text(stringResource(R.string.survey_legend_telegram), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

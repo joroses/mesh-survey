@@ -21,6 +21,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -146,8 +147,7 @@ class SurveyViewModel(
         combine(
             state
                 .map { state ->
-                    val (ids, sigSleuth) = relayNodeIds(state.relays.values, state.mapped)
-                    (ids + state.ping?.answers?.keys.orEmpty()) to sigSleuth
+                    relayNodeIds(state.relays.values, state.mapped, state.ping?.answers?.keys.orEmpty())
                 }
                 .distinctUntilChanged(),
             nodes.nodeDBbyNum,
@@ -223,9 +223,12 @@ class SurveyViewModel(
         appScope.launch { recorder.stop() }
     }
 
+    private var pingJob: Job? = null
+
     /** Pings the survey node's neighbours ([SurveyRecorder.ping]); says so when the ping did not go. */
     fun ping() {
-        appScope.launch {
+        if (pingJob?.isActive == true) return
+        pingJob = appScope.launch {
             if (!recorder.ping()) {
                 val cooldownS = PING_COOLDOWN.inWholeSeconds.toInt()
                 snackbars.showSnackbar(app.getString(R.string.survey_ping_not_sent, cooldownS))
@@ -279,10 +282,14 @@ class SurveyViewModel(
  * The nodes in [relays]' guesses, candidates, ruled-out nodes and SigSleuth's answers, with the short names SigSleuth
  * gave them in its answers or on its map ([mapped]).
  */
-private fun relayNodeIds(relays: Collection<RelayStats>, mapped: MappedNodes?): Pair<Set<Long>, Map<Long, String>> {
+private fun relayNodeIds(
+    relays: Collection<RelayStats>,
+    mapped: MappedNodes?,
+    extraIds: Set<Long> = emptySet(),
+): Pair<Set<Long>, Map<Long, String>> {
     val sigSleuth = mutableMapOf<Long, String>()
     val ids =
-        relays.flatMapTo(mutableSetOf()) { relay ->
+        relays.flatMapTo(extraIds.toMutableSet()) { relay ->
             relay.server?.let { answer -> answer.nodeId?.let { id -> answer.shortName?.let { sigSleuth[id] = it } } }
             relay.guess.nodeIds +
                 relay.candidates.map { it.nodeId } +

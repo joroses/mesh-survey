@@ -31,6 +31,7 @@ import org.meshtastic.core.common.util.ioDispatcher
 import org.meshtastic.core.common.util.safeCatching
 import java.io.File
 import java.io.IOException
+import java.net.URI
 import kotlin.time.Duration.Companion.days
 
 /** How old the saved Telegram link may get before it is fetched again. */
@@ -54,7 +55,7 @@ class FileSurveyServerLinks(
             return@flow
         }
         val saved = read()?.takeIf { it.server == server }
-        emit(saved?.telegramUrl)
+        emit(saved?.telegramUrl?.httpsUrl())
         if (saved != null && saved.fetchedAtMs > clock.wallTimeMs() - SERVER_LINKS_STALE.inWholeMilliseconds) {
             return@flow
         }
@@ -71,8 +72,9 @@ class FileSurveyServerLinks(
         if (!response.status.isSuccess()) throw IOException("HTTP ${response.status.value}")
         val telegram = json.decodeFromString<ServerStatus>(response.bodyAsText()).telegramUrl
         // Opened as given, so only a web link.
-        val links = SavedServerLinks(server, clock.wallTimeMs(), telegram?.takeIf { it.startsWith("https://") })
-        write(links)
+        val links = SavedServerLinks(server, clock.wallTimeMs(), telegram?.httpsUrl())
+        safeCatching { write(links) }
+            .onFailure { Logger.w { "Signal survey server links not saved: ${it::class.simpleName}" } }
         return links
     }
 
@@ -93,6 +95,12 @@ class FileSurveyServerLinks(
         private const val FILE = "server-links.json"
         private val json = Json { ignoreUnknownKeys = true }
     }
+}
+
+private fun String.httpsUrl(): String? {
+    val trimmed = trim()
+    val uri = safeCatching { URI(trimmed) }.getOrNull() ?: return null
+    return trimmed.takeIf { uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() }
 }
 
 @Serializable internal data class ServerStatus(@SerialName("telegram_url") val telegramUrl: String? = null)
