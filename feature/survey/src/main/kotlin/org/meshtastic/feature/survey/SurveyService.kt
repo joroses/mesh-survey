@@ -217,6 +217,11 @@ class SurveyService : Service() {
                     setStyle(NotificationCompat.BigTextStyle().bigText((listOf(text) + details).joinToString("\n")))
                 }
             }
+            .apply {
+                // The session's running time; the system keeps the clock going, so it needs no updates.
+                val startedAt = state.session?.startedAt
+                if (startedAt != null) setWhen(startedAt).setUsesChronometer(true) else setShowWhen(false)
+            }
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(0, getString(R.string.survey_stop), stop)
