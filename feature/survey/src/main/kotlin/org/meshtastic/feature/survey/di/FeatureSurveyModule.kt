@@ -24,10 +24,12 @@ import org.koin.core.annotation.ComponentScan
 import org.koin.core.annotation.Module
 import org.koin.core.annotation.Single
 import org.meshtastic.feature.survey.FileSurveyRelayNodes
+import org.meshtastic.feature.survey.FileSurveyServerLinks
 import org.meshtastic.feature.survey.SurveyClock
 import org.meshtastic.feature.survey.SurveyDao
 import org.meshtastic.feature.survey.SurveyDatabase
 import org.meshtastic.feature.survey.SurveyRelayNodes
+import org.meshtastic.feature.survey.SurveyServerLinks
 import org.meshtastic.feature.survey.SurveySettings
 import java.io.File
 
@@ -49,4 +51,8 @@ class FeatureSurveyModule {
         http: HttpClient,
         clock: SurveyClock,
     ): SurveyRelayNodes = FileSurveyRelayNodes(File(context.filesDir, "survey"), settings, http, clock)
+
+    @Single
+    fun provideSurveyServerLinks(context: Application, http: HttpClient, clock: SurveyClock): SurveyServerLinks =
+        FileSurveyServerLinks(File(context.filesDir, "survey"), http, clock)
 }

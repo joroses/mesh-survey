@@ -225,6 +225,7 @@ fun TooltipLegend() = SurveyFrame {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Legend(Modifier.verticalScroll(rememberScrollState()))
+            LegendLinks("https://sigsleuth.com", "https://t.me/sigsleuth")
         }
     }
 }

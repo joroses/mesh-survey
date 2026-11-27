@@ -126,6 +126,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -163,6 +164,7 @@ import org.meshtastic.core.common.util.DateFormatter
 import org.meshtastic.core.common.util.NumberFormatter
 import org.meshtastic.core.common.util.latLongToMeter
 import org.meshtastic.core.common.util.nowMillis
+import org.meshtastic.core.common.util.safeCatching
 import org.meshtastic.core.resources.Res
 import org.meshtastic.core.resources.survey_relay_server_candidate
 import org.meshtastic.core.resources.survey_relay_server_candidates
@@ -253,6 +255,7 @@ internal data class SurveyUi(
     val deleted: SurveyDeleted? = null,
     val directSenders: Int = 0,
     val opened: OpenedSession? = null,
+    val telegramUrl: String? = null,
 )
 
 /** What the survey screen's controls do. [SurveyScreen] hands them to [SurveyViewModel]; by default they do nothing. */
@@ -298,6 +301,7 @@ fun SurveyScreen(
     val carMode by viewModel.carMode.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
     val directSenders by viewModel.directSenders.collectAsStateWithLifecycle()
+    val telegramUrl by viewModel.telegramUrl.collectAsStateWithLifecycle()
     val opened by viewModel.opened.collectAsStateWithLifecycle()
     // Only while this screen is in front: Android drops the flag once the app is in the background.
     KeepScreenOn(carMode && state.session != null)
@@ -364,6 +368,7 @@ fun SurveyScreen(
             deleted,
             directSenders,
             opened,
+            telegramUrl,
         ),
         actions,
         modifier,
@@ -398,7 +403,7 @@ internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modif
                     }
                 },
                 actions = {
-                    LegendButton()
+                    LegendButton(website = uploadSettings?.url?.takeIf(::isUploadUrl), telegram = ui.telegramUrl)
                     CarModeChip(ui.carMode, actions.onCarMode)
                 },
             )
@@ -1403,12 +1408,12 @@ private fun usableFix(ageMs: Long, accuracyM: Float?): Boolean =
 
 /**
  * The top bar's ⓘ, there whether recording or not: a tap opens the key to the cards (what a cell is, the green
- * new-to-you and blue added-to-map notes, the SNR's colour), so the cards themselves need no words for it. Opens like
- * [GpsMark].
+ * new-to-you and blue added-to-map notes, the SNR's colour), so the cards themselves need no words for it, and links to
+ * the upload server's [website] and [telegram] group when there are any. Opens like [GpsMark].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LegendButton() {
+private fun LegendButton(website: String?, telegram: String?) {
     val tooltip = rememberTooltipState(isPersistent = true)
     val scope = rememberCoroutineScope()
     val title = stringResource(R.string.survey_legend)
@@ -1418,7 +1423,15 @@ private fun LegendButton() {
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
         tooltip = {
-            RichTooltip(title = { Text(title) }) {
+            RichTooltip(
+                title = { Text(title) },
+                action =
+                if (website == null && telegram == null) {
+                    null
+                } else {
+                    { LegendLinks(website, telegram, onOpen = { scope.launch { tooltip.dismiss() } }) }
+                },
+            ) {
                 Legend(Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState()))
             }
         },
@@ -1464,6 +1477,37 @@ internal fun Legend(modifier: Modifier = Modifier) {
             LegendMark(MeshtasticIcons.CheckCircle, colors.StatusGreen, R.string.survey_legend_likely)
             LegendMark(unsure, colors.StatusYellow, R.string.survey_relay_uncertain)
             LegendMark(unsure, colors.onSurfaceVariant, R.string.survey_relay_unknown)
+        }
+    }
+}
+
+/** The legend's links: the upload server's site, by its host, and its Telegram group. */
+@Composable
+internal fun LegendLinks(website: String?, telegram: String?, onOpen: () -> Unit = {}) {
+    val uriHandler = LocalUriHandler.current
+    val open = { url: String ->
+        onOpen()
+        // No app to open it: nothing to do.
+        safeCatching { uriHandler.openUri(url) }
+    }
+    FlowRow {
+        website?.let { url ->
+            TextButton(onClick = { open(url) }) {
+                Icon(MeshtasticIcons.Map, contentDescription = null, Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(uploadUrlTyped(url).trimEnd('/'), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        telegram?.let { url ->
+            TextButton(onClick = { open(url) }) {
+                Icon(
+                    ImageVector.vectorResource(R.drawable.survey_ic_telegram),
+                    contentDescription = null,
+                    Modifier.size(ButtonDefaults.IconSize),
+                )
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(stringResource(R.string.survey_legend_telegram))
+            }
         }
     }
 }

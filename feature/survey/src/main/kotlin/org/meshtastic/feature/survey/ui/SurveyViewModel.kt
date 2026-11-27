@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -50,6 +51,7 @@ import org.meshtastic.feature.survey.SurveyDeleted
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveyRecorder
 import org.meshtastic.feature.survey.SurveyRelayNodes
+import org.meshtastic.feature.survey.SurveyServerLinks
 import org.meshtastic.feature.survey.SurveyService
 import org.meshtastic.feature.survey.SurveySession
 import org.meshtastic.feature.survey.SurveySessionSummary
@@ -81,6 +83,7 @@ class SurveyViewModel(
     private val dao: SurveyDao,
     private val startRequest: SurveyStartRequest,
     relayNodes: SurveyRelayNodes,
+    serverLinks: SurveyServerLinks,
     nodes: NodeRepository,
     service: ServiceRepository,
     private val snackbars: SnackbarManager,
@@ -111,6 +114,15 @@ class SurveyViewModel(
             .stateInWhileSubscribed(emptyList())
     val uploadSettings: StateFlow<SurveyUploadSettings?> = settings.settings.stateInWhileSubscribed(null)
     val carMode: StateFlow<Boolean> = settings.carMode.stateInWhileSubscribed(false)
+
+    /** The upload server's Telegram group, for the legend. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val telegramUrl: StateFlow<String?> =
+        settings.settings
+            .map { it.url }
+            .distinctUntilChanged()
+            .flatMapLatest(serverLinks::telegram)
+            .stateInWhileSubscribed(null)
 
     /** What deleted sessions had added to SigSleuth's map, for the Sessions card's total. */
     val deleted: StateFlow<SurveyDeleted?> = dao.deleted().stateInWhileSubscribed(null)

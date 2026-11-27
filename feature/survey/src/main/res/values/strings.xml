@@ -142,6 +142,8 @@
     <string name="survey_legend_snr_high">Strong signal</string>
     <!-- Beside the green check in the legend's relay marks; the other marks reuse survey_relay_confirmed, _uncertain and _unknown. -->
     <string name="survey_legend_likely">Heard directly, or a likely guess</string>
+    <!-- A button under the legend that opens the upload server's Telegram group. -->
+    <string name="survey_legend_telegram">Telegram group</string>
     <!-- Metric labels on the last-packet readout in normal mode. -->
     <string name="survey_snr_label">SNR</string>
     <string name="survey_rssi_label">RSSI</string>
