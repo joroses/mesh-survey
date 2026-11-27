@@ -122,6 +122,10 @@
     <string name="survey_hours">%1$d h</string>
     <string name="survey_gps">GPS ±%1$s m, fix %2$s s old</string>
     <string name="survey_gps_none">No GPS fix yet</string>
+    <!-- A notification that sounds while recording when packets heard for half a minute had no fix SigSleuth can use. -->
+    <string name="survey_gps_alert">No GPS fix</string>
+    <!-- Its notification channel's name in Android's settings. -->
+    <string name="survey_gps_alert_channel">GPS warnings</string>
     <!-- The recording header's GPS mark; a tap shows survey_gps or survey_gps_none. -->
     <string name="survey_gps_label">GPS</string>
     <!-- The GPS mark's state, read by screen readers: whether SigSleuth can place packets heard now. -->

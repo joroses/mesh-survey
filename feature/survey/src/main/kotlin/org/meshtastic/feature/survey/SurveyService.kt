@@ -86,7 +86,12 @@ class SurveyService : Service() {
         }
         job = scope.launch {
             if (uploader.startSession { recorder.start(upload = it) }) {
-                val whileRecording = listOf(launch { updateNotification() }, launch { uploadRuns.whileRecording() })
+                val whileRecording =
+                    listOf(
+                        launch { updateNotification() },
+                        launch { uploadRuns.whileRecording() },
+                        launch { alertWithoutGps() },
+                    )
                 recorder.state.first { it.session == null }
                 // Join, not just cancel: a notify() still running would bring the notification back after removal.
                 whileRecording.forEach { it.cancelAndJoin() }
@@ -113,6 +118,59 @@ class SurveyService : Service() {
                 delay(NOTIFICATION_INTERVAL)
             }
     }
+
+    /** Shows [SurveyGpsAlert]'s "No GPS fix" while it says so, and removes it when the session ends. */
+    private suspend fun alertWithoutGps() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(
+                GPS_CHANNEL_ID,
+                getString(R.string.survey_gps_alert_channel),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ),
+        )
+        val alert = SurveyGpsAlert()
+        var measured: SurveyMeasurement? = null
+        var fix: SurveyFix? = null
+        try {
+            recorder.state.collect { state ->
+                val changes =
+                    listOfNotNull(
+                        state.lastMeasurement
+                            ?.takeIf { it !== measured }
+                            ?.let {
+                                measured = it
+                                alert.measured(it)
+                            },
+                        state.fix
+                            ?.takeIf { it !== fix }
+                            ?.let {
+                                fix = it
+                                alert.fixed(it)
+                            },
+                        state.takeIf { it.waitingForRadio }?.let { alert.paused() },
+                    )
+                when (changes.lastOrNull()) {
+                    GpsAlertChange.SOUND -> manager.notify(GPS_NOTIFICATION_ID, gpsAlert(silent = false))
+                    GpsAlertChange.SHOW_QUIETLY -> manager.notify(GPS_NOTIFICATION_ID, gpsAlert(silent = true))
+                    GpsAlertChange.REMOVE -> manager.cancel(GPS_NOTIFICATION_ID)
+                    null -> Unit
+                }
+            }
+        } finally {
+            manager.cancel(GPS_NOTIFICATION_ID)
+        }
+    }
+
+    private fun gpsAlert(silent: Boolean): Notification = NotificationCompat.Builder(this, GPS_CHANNEL_ID)
+        .setSmallIcon(R.drawable.survey_ic_notification)
+        .setContentTitle(getString(R.string.survey_gps_alert))
+        .setCategory(NotificationCompat.CATEGORY_STATUS)
+        .setSilent(silent)
+        .setContentIntent(
+            PendingIntent.getActivity(this, 0, surveyScreenIntent(this), PendingIntent.FLAG_IMMUTABLE),
+        )
+        .build()
 
     private fun notification(state: SurveyState): Notification {
         val manager = getSystemService(NotificationManager::class.java)
@@ -192,6 +250,8 @@ class SurveyService : Service() {
         private const val ACTION_STOP = "org.meshtastic.feature.survey.STOP"
         private const val CHANNEL_ID = "signal_survey"
         private const val NOTIFICATION_ID = 7319
+        private const val GPS_CHANNEL_ID = "signal_survey_gps"
+        private const val GPS_NOTIFICATION_ID = 7320
         private val NOTIFICATION_INTERVAL = 1.seconds
 
         fun start(context: Context) {

@@ -60,6 +60,7 @@ Compared with Settings → "Export all packets", it has the phone's own GPS fix 
 | `SurveyCapture.kt` | Which packets become rows, and each row's map cell |
 | `SurveyRecorder.kt` | Sessions: start, stop, radio away, settings changes |
 | `SurveyService.kt` | The foreground service (type `location`) and its notification |
+| `SurveyGpsAlert.kt` | When to sound the "No GPS fix" notification |
 | `SurveyLocation.kt` | The one-second GPS request |
 | `SurveyDatabase.kt` | Room database `signal_survey.db` and its migrations |
 | `SurveyNewToYou.kt` | "New to you", and recounting it after a delete |
