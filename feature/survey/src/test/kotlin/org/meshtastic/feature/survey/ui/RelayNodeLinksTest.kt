@@ -26,6 +26,7 @@ import org.meshtastic.feature.survey.ServerCandidate
 import org.meshtastic.feature.survey.SurveyMeasurement
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class RelayNodeLinksTest {
     private val packet =
@@ -109,5 +110,25 @@ class RelayNodeLinksTest {
                 ),
             )
         assertEquals(listOf(0x0000_0738L to "MAYB"), relayMentionedNodes(unknown, emptyMap()))
+    }
+
+    @Test
+    fun `an answer for an earlier packet names the relay only when the latest guess is not likely`() {
+        val earlier =
+            ServerAnswer(
+                seq = 0,
+                heardAtMs = 0L,
+                relayByte = 0x38,
+                nodeId = 0x0000_0138L,
+                how = "survey_link",
+                shortName = "SRV1",
+            )
+        val likely = RelayStats(packets = 2, last = packet, guess = RelayGuess.Likely(0x0000_0238L), server = earlier)
+        assertNull(likely.confirmedNode)
+        assertEquals(0x0000_0238L, relayMentionedNodes(likely, emptyMap()).first().first)
+
+        assertEquals(0x0000_0138L, likely.copy(server = earlier.copy(seq = packet.seq)).confirmedNode)
+        assertEquals(0x0000_0138L, likely.copy(guess = RelayGuess.Possible(0x0000_0238L)).confirmedNode)
+        assertEquals(0x0000_0138L, likely.copy(guess = RelayGuess.Unknown).confirmedNode)
     }
 }

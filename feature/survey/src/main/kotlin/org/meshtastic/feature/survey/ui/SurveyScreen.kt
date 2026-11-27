@@ -1829,9 +1829,14 @@ private fun carRelayText(relayByte: Int, relay: RelayStats?, names: Map<Long, St
     return stringResource(R.string.survey_last_packet_car_relay, byte, nodeName(node, names))
 }
 
-/** The node SigSleuth named as this byte's relay, unless the packet came straight from its sender. */
-private val RelayStats.confirmedNode: Long?
-    get() = server?.nodeId?.takeIf { guess !is RelayGuess.Direct }
+/**
+ * The node SigSleuth named as this byte's relay, unless the packet came straight from its sender. An answer for an
+ * earlier packet ([RelayStats.server] is kept all session) gives way to a likely guess for the latest one, which
+ * another node sharing the byte may have relayed.
+ */
+internal val RelayStats.confirmedNode: Long?
+    get() =
+        server?.takeIf { guess !is RelayGuess.Direct && (it.seq == last.seq || guess !is RelayGuess.Likely) }?.nodeId
 
 /** The single node [relayText] names, if it names one. */
 private val RelayStats.shownNode: Long?
