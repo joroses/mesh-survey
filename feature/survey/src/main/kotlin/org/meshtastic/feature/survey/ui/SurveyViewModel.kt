@@ -139,9 +139,8 @@ class SurveyViewModel(
             .stateInWhileSubscribed(false)
 
     /**
-     * Short names of the nodes in this session's relay guesses, candidates, ruled-out nodes, SigSleuth's answers and
-     * the ping's answers. The node database is the connected radio's, which is the survey radio; SigSleuth names the
-     * nodes missing from it.
+     * Short names of the nodes in this session's relay guesses, candidates, SigSleuth's answers and the ping's answers.
+     * The node database is the connected radio's, which is the survey radio; SigSleuth names the nodes missing from it.
      */
     val relayNames: StateFlow<Map<Long, String>> =
         combine(
@@ -279,8 +278,8 @@ class SurveyViewModel(
 }
 
 /**
- * The nodes in [relays]' guesses, candidates, ruled-out nodes and SigSleuth's answers, with the short names SigSleuth
- * gave them in its answers or on its map ([mapped]).
+ * The nodes in [relays]' guesses, candidates and SigSleuth's answers, with the short names SigSleuth gave them in its
+ * answers or on its map ([mapped]).
  */
 private fun relayNodeIds(
     relays: Collection<RelayStats>,
@@ -291,10 +290,7 @@ private fun relayNodeIds(
     val ids =
         relays.flatMapTo(extraIds.toMutableSet()) { relay ->
             relay.server?.let { answer -> answer.nodeId?.let { id -> answer.shortName?.let { sigSleuth[id] = it } } }
-            relay.guess.nodeIds +
-                relay.candidates.map { it.nodeId } +
-                relay.ruledOut.map { it.nodeId } +
-                listOfNotNull(relay.server?.nodeId)
+            relay.guess.nodeIds + relay.candidates.map { it.nodeId } + listOfNotNull(relay.server?.nodeId)
         }
     ids.forEach { id -> mapped?.names?.get(id)?.let { sigSleuth.putIfAbsent(id, it) } }
     return ids to sigSleuth.toMap()

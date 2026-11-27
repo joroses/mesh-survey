@@ -65,10 +65,10 @@ private val WALK_END = 52.23 to 21.15
 
 /**
  * A made-up mesh beside a made-up drive, run through the recorder's own relay guessing ([evidenceFor], [withPacket]),
- * so its relays carry the guesses, candidates and ruled-out nodes a real session would. [nodeCount] nodes, some sharing
- * a relay byte; about half were heard directly in the weeks before the session and some of the rest are on SigSleuth's
- * map. [packetCount] packets come evenly over [length], the last one [lastAgo] before [SNAPSHOT_NOW], and
- * [answeredShare] of the relay bytes get a SigSleuth answer. The same arguments always make the same mesh.
+ * so its relays carry the guesses and candidates a real session would. [nodeCount] nodes, some sharing a relay byte;
+ * about half were heard directly in the weeks before the session and some of the rest are on SigSleuth's map.
+ * [packetCount] packets come evenly over [length], the last one [lastAgo] before [SNAPSHOT_NOW], and [answeredShare] of
+ * the relay bytes get a SigSleuth answer. The same arguments always make the same mesh.
  */
 @Suppress("LongParameterList")
 internal class SyntheticMesh(
@@ -198,7 +198,6 @@ internal class SyntheticMesh(
             node.id,
             lastDirect,
             places = cells.associateWith { lastDirect - random.nextLong(0, 5 * DAY) },
-            signals = cells.associateWith { random.nextDouble(-125.0, -85.0) },
         )
     }
 

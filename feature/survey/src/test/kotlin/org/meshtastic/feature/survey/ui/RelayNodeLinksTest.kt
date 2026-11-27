@@ -20,7 +20,6 @@ import org.meshtastic.feature.survey.NearEvidence
 import org.meshtastic.feature.survey.RelayCandidate
 import org.meshtastic.feature.survey.RelayGuess
 import org.meshtastic.feature.survey.RelayStats
-import org.meshtastic.feature.survey.RuledOut
 import org.meshtastic.feature.survey.ServerAnswer
 import org.meshtastic.feature.survey.ServerCandidate
 import org.meshtastic.feature.survey.SurveyMeasurement
@@ -49,7 +48,7 @@ class RelayNodeLinksTest {
         )
 
     @Test
-    fun `mentions confirmed, guessed, server, candidate and ruled-out nodes once in order`() {
+    fun `mentions confirmed, guessed, server and candidate nodes once in order`() {
         val relay =
             RelayStats(
                 packets = 4,
@@ -61,7 +60,6 @@ class RelayNodeLinksTest {
                     RelayCandidate.Reported(0x0000_0338L, 41.0, 2.0),
                     RelayCandidate.Mapped(0x0000_0438L, 41.1, 2.1, reachMeters = null, estimated = false),
                 ),
-                ruledOut = listOf(RuledOut(0x0000_0538L, strongestHere = -120.0, packetSignal = -85.0)),
                 server =
                 ServerAnswer(
                     seq = 1,
@@ -73,7 +71,7 @@ class RelayNodeLinksTest {
                     near = NearEvidence(nodeId = 0x0000_0900L, name = "NEAR", km = 1.2),
                 ),
             )
-        val names = mapOf(0x0000_0238L to "LOC1", 0x0000_0538L to "WEAK")
+        val names = mapOf(0x0000_0238L to "LOC1")
 
         assertEquals(
             listOf(
@@ -82,7 +80,6 @@ class RelayNodeLinksTest {
                 0x0000_0338L to "!00000338",
                 0x0000_0900L to "NEAR",
                 0x0000_0438L to "!00000438",
-                0x0000_0538L to "WEAK",
             ),
             relayMentionedNodes(relay, names),
         )

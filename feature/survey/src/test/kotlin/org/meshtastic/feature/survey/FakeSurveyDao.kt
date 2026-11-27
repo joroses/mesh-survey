@@ -104,7 +104,6 @@ internal class FakeSurveyDao : SurveyDao {
                     rows.maxOf { it.heardAtMs },
                     cell?.latitude,
                     cell?.longitude,
-                    rows.mapNotNull { it.signal() }.maxOrNull(),
                 )
             }
     }

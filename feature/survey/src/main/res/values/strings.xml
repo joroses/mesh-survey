@@ -226,8 +226,6 @@
     <string name="survey_relay_candidate_mapped">within %1$s on SigSleuth\'s map</string>
     <!-- %1$s is a candidate's line, %2$s the longest link SigSleuth trusts it to have sent. -->
     <string name="survey_relay_candidate_reach">%1$s · reaches %2$s</string>
-    <!-- A node ruled out as the relay because the packet arrived far stronger than the node is ever heard here: %1$d is this packet's signal in dBm, %2$d the node's strongest heard near here, both negative. -->
-    <string name="survey_relay_ruled_out">too strong: %1$d dBm, best here %2$d</string>
     <!-- Single-node chip in an opened relay row that opens the node's coverage page on SigSleuth: %1$s is the node's short name. -->
     <string name="survey_relay_open_on_sigsleuth">%1$s on SigSleuth</string>
     <!-- Screen-reader label for a relay node chip that opens the node on SigSleuth: %1$s is the node's short name. -->

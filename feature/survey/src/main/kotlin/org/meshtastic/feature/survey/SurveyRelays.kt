@@ -41,15 +41,6 @@ const val NEAR = 1_000.0
  */
 const val FAR = 30_000.0
 
-/**
- * How far a relayed packet's signal may exceed a candidate's strongest direct signal heard within [NEAR] before that
- * candidate is ruled out. A relay sends at its own power over its own path, so its copy cannot arrive much stronger
- * than its own packets heard here; weaker is normal (pocket, indoors, fading), so only "too strong" is checked. Set
- * 2026-10-22 on SigSleuth's loranet.pl gateways (279k relayed traceroute receptions): 30 dB wrongly ruled out 0.035% of
- * true relays and removed 15% of wrong directly heard candidates. Gateways don't move; ground level is untested.
- */
-const val TOO_STRONG_DB = 30.0
-
 private const val BYTE_MASK = 0xFFL
 private const val ZERO_BYTE_RELAY = 0xFF
 
@@ -66,16 +57,6 @@ fun relayByteOf(nodeId: Long): Int = (nodeId and BYTE_MASK).toInt().takeIf { it 
 fun SurveyMeasurement.isDirect(): Boolean =
     relayByte != null && hopStart == hopLimit && relayByte == relayByteOf(senderNodeId)
 
-/**
- * A reception's signal in dB: RSSI plus any negative SNR, since below the noise floor RSSI stops falling and the SNR
- * carries the rest. Null without RSSI; 0 is the proto's unset. A missing SNR counts as 0. `SurveyDao.directPlaces`
- * repeats this in SQL.
- */
-fun signalOf(rssi: Int?, snr: Float?): Double? = rssi?.takeIf { it != 0 }?.let { it + minOf(snr ?: 0f, 0f).toDouble() }
-
-/** This packet's [signalOf]. */
-fun SurveyMeasurement.signal(): Double? = signalOf(rxRssi, rxSnr)
-
 /** Which neighbour most likely relayed a packet. It is a guess: the relays list shows the evidence under it. */
 sealed interface RelayGuess {
     val nodeIds: List<Long>
@@ -86,10 +67,7 @@ sealed interface RelayGuess {
             get() = listOf(senderId)
     }
 
-    /**
-     * The only near neighbour with this byte not ruled out by the packet's signal, or the only recent one when the
-     * packet has no fix.
-     */
+    /** The only near neighbour with this byte, or the only recent one when the packet has no fix. */
     data class Likely(val nodeId: Long) : RelayGuess {
         override val nodeIds
             get() = listOf(nodeId)
@@ -108,7 +86,7 @@ sealed interface RelayGuess {
     /** Several neighbours in the best tier; nearest first, or newest first without a packet fix. */
     data class Ambiguous(override val nodeIds: List<Long>) : RelayGuess
 
-    /** No candidate has this byte, or every one was ruled out by the packet's signal. */
+    /** No candidate has this byte. */
     data object Unknown : RelayGuess {
         override val nodeIds
             get() = emptyList<Long>()
@@ -136,27 +114,13 @@ data class DirectCell(val latitude: Int, val longitude: Int) {
 /** The closest direct reception's distance from the requested position and its latest time in that cell. */
 data class NearestDirect(val meters: Double, val heardAtMs: Long)
 
-/**
- * A directly heard node, its latest direct time, the latest direct time in each reception cell, and the strongest
- * [signalOf] in each cell that has one.
- */
-data class DirectSender(
-    val nodeId: Long,
-    val lastDirectMs: Long,
-    val places: Map<DirectCell, Long> = emptyMap(),
-    val signals: Map<DirectCell, Double> = emptyMap(),
-) {
+/** A directly heard node, its latest direct time, and the latest direct time in each reception cell. */
+data class DirectSender(val nodeId: Long, val lastDirectMs: Long, val places: Map<DirectCell, Long> = emptyMap()) {
     /** Closest cell centre heard since [sinceMs]; null when there are no cells in that history. */
     fun nearest(latitude: Double, longitude: Double, sinceMs: Long): NearestDirect? = places.entries
         .filter { it.value >= sinceMs }
         .map { (cell, at) -> NearestDirect(cell.metersFrom(latitude, longitude), at) }
         .minWithOrNull(compareBy<NearestDirect> { it.meters }.thenByDescending { it.heardAtMs })
-
-    /** The strongest signal in cells within [meters] heard since [sinceMs]; null when none of them has one. */
-    fun strongestWithin(latitude: Double, longitude: Double, meters: Double, sinceMs: Long): Double? = places.entries
-        .filter { (cell, at) -> at >= sinceMs && cell.metersFrom(latitude, longitude) <= meters }
-        .mapNotNull { signals[it.key] }
-        .maxOrNull()
 }
 
 /** A node that could have relayed a packet, and how the survey knows of it. */
@@ -293,18 +257,8 @@ fun placedWith(
 private val Node.nodeId: Long
     get() = num.toUInt().toLong()
 
-/** A node heard directly near the packet whose copy arrived [packetSignal] dB, too strong for its [strongestHere]. */
-data class RuledOut(val nodeId: Long, val strongestHere: Double, val packetSignal: Double)
-
-/**
- * A relay byte's guess and every candidate behind it: the guessed tier first, the rest after it by distance. [ruledOut]
- * are the candidates the packet's signal excluded.
- */
-data class RelayEvidence(
-    val guess: RelayGuess,
-    val candidates: List<RelayCandidate>,
-    val ruledOut: List<RuledOut> = emptyList(),
-)
+/** A relay byte's guess and every candidate behind it: the guessed tier first, the rest after it by distance. */
+data class RelayEvidence(val guess: RelayGuess, val candidates: List<RelayCandidate>)
 
 /**
  * One relay byte in this session: its packets, the [last] of them, and the guess made for that packet with all its
@@ -316,7 +270,6 @@ data class RelayStats(
     val last: SurveyMeasurement,
     val guess: RelayGuess,
     val candidates: List<RelayCandidate> = emptyList(),
-    val ruledOut: List<RuledOut> = emptyList(),
     val server: ServerAnswer? = null,
 ) {
     val lastHeardMs: Long
@@ -332,7 +285,6 @@ fun RelayStats?.withPacket(row: SurveyMeasurement, evidence: RelayEvidence, serv
     row,
     evidence.guess,
     evidence.candidates,
-    evidence.ruledOut,
     this?.server ?: server,
 )
 
@@ -362,7 +314,6 @@ fun DirectNeighbours.evidenceFor(
             row.longitude,
             roleOf = { id -> nodes[id.toInt()]?.user?.role },
             placed = placed,
-            signal = row.signal(),
         )
     }
 }
@@ -388,13 +339,11 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
     fun record(row: SurveyMeasurement) {
         if (!row.isDirect()) return
         val cell = row.latitude?.let { lat -> row.longitude?.let { lon -> DirectCell.of(lat, lon) } }
-        val signal = row.signal()
         heard(
             DirectSender(
                 nodeId = row.senderNodeId,
                 lastDirectMs = row.heardAtMs,
                 places = cell?.let { mapOf(it to row.heardAtMs) }.orEmpty(),
-                signals = cell?.let { c -> signal?.let { mapOf(c to it) } }.orEmpty(),
             ),
         )
     }
@@ -404,8 +353,7 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
      * cannot be its relay; [roleOf] checks the survey radio's node database, and an unknown role keeps a candidate.
      * [placed] are the nodes with this byte known by a position ([placedWith]); with a packet fix, those within their
      * [RelayCandidate.Placed.withinMeters] join the neighbours heard directly elsewhere. A position is a claim, not a
-     * reception, so it never makes a guess likely. With a fix and the packet's [signal], a neighbour whose strongest
-     * direct signal within [NEAR] is more than [TOO_STRONG_DB] weaker is ruled out of every tier for this packet.
+     * reception, so it never makes a guess likely.
      */
     @Suppress("LongParameterList")
     fun weigh(
@@ -416,7 +364,6 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
         longitude: Double? = null,
         roleOf: (Long) -> Config.DeviceConfig.Role? = { null },
         placed: List<RelayCandidate.Placed> = emptyList(),
-        signal: Double? = null,
     ): RelayEvidence {
         val sinceMs = atMs - DIRECT_HISTORY.inWholeMilliseconds
         val inPlay =
@@ -436,22 +383,8 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
                 newest.map { RelayCandidate.Heard(it.nodeId) },
             )
         }
-        // Only receptions within NEAR are compared: a node heard weakly far away may well be strong here.
-        val ruledOut =
-            if (signal == null) {
-                emptyList()
-            } else {
-                inPlay.mapNotNull { candidate ->
-                    candidate
-                        .strongestWithin(latitude, longitude, NEAR, sinceMs)
-                        ?.takeIf { signal - it > TOO_STRONG_DB }
-                        ?.let { RuledOut(candidate.nodeId, it, signal) }
-                }
-            }
-        val excluded = ruledOut.mapTo(mutableSetOf()) { it.nodeId }
-        val candidates = inPlay.filter { it.nodeId !in excluded }
         // A neighbour without cells in the history has no distance; it stays, after every one that has.
-        val heard = candidates.map { candidate ->
+        val heard = inPlay.map { candidate ->
             Ranked(RelayCandidate.Heard(candidate.nodeId), candidate.nearest(latitude, longitude, sinceMs)?.meters)
         }
         val near = heard.filter { ranked ->
@@ -459,11 +392,10 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
         }
         val heardElsewhere = (heard - near.toSet()).filter { ranked -> ranked.meters?.let { it <= FAR } ?: true }
         // A node heard directly only far away can still be placed nearby.
-        // A node ruled out by its signal must not come back by its position.
         val kept = (near + heardElsewhere).mapTo(mutableSetOf()) { it.candidate.nodeId }
         val placedNearby =
             placed
-                .filter { it.nodeId != senderId && it.nodeId !in kept && it.nodeId !in excluded }
+                .filter { it.nodeId != senderId && it.nodeId !in kept }
                 .filter { roleOf(it.nodeId) != Config.DeviceConfig.Role.CLIENT_MUTE }
                 .mapNotNull { node ->
                     latLongToMeter(node.latitude, node.longitude, latitude, longitude)
@@ -479,7 +411,7 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
             } else {
                 tierGuess(possibleTier.map { it.nodeId }, likely = false)
             }
-        return RelayEvidence(guess, nearTier + possibleTier, ruledOut)
+        return RelayEvidence(guess, nearTier + possibleTier)
     }
 
     /** A candidate with its distance from the packet; null for a neighbour without cells in the history. */
@@ -492,10 +424,7 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
         else -> RelayGuess.Possible(nodeIds.single())
     }
 
-    /**
-     * Keeps the latest direct time for the node and for each cell, and each cell's strongest signal, without changing
-     * published snapshots.
-     */
+    /** Keeps the latest direct time for the node and for each cell without changing published snapshots. */
     private fun heard(sender: DirectSender) {
         val known = all[sender.nodeId]
         val merged =
@@ -505,7 +434,6 @@ class DirectNeighbours(history: List<DirectSender> = emptyList()) {
                 known.copy(
                     lastDirectMs = maxOf(sender.lastDirectMs, known.lastDirectMs),
                     places = maxMerge(known.places, sender.places),
-                    signals = maxMerge(known.signals, sender.signals),
                 )
             }
         byByte.getOrPut(relayByteOf(sender.nodeId)) { mutableSetOf() } += sender.nodeId

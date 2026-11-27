@@ -184,7 +184,6 @@ import org.meshtastic.core.ui.icon.ChevronRight
 import org.meshtastic.core.ui.icon.CloudUpload
 import org.meshtastic.core.ui.icon.Delete
 import org.meshtastic.core.ui.icon.DetectionSensor
-import org.meshtastic.core.ui.icon.DoDisturb
 import org.meshtastic.core.ui.icon.Edit
 import org.meshtastic.core.ui.icon.ErrorOutline
 import org.meshtastic.core.ui.icon.FileDownload
@@ -206,7 +205,6 @@ import org.meshtastic.core.ui.icon.Visibility
 import org.meshtastic.core.ui.icon.VisibilityOff
 import org.meshtastic.core.ui.theme.StatusColors.StatusGreen
 import org.meshtastic.core.ui.theme.StatusColors.StatusOrange
-import org.meshtastic.core.ui.theme.StatusColors.StatusRed
 import org.meshtastic.core.ui.theme.StatusColors.StatusSky
 import org.meshtastic.core.ui.theme.StatusColors.StatusYellow
 import org.meshtastic.core.ui.util.KeepScreenOn
@@ -2054,9 +2052,8 @@ private fun RelayEntry(
 
 /**
  * An opened [RelayEntry]: its packet count and the last packet's RSSI, SigSleuth's answer, every candidate with how it
- * is known, measured from where that packet was heard (the guess was made there, not where the phone is now), the nodes
- * its signal ruled out, and links to each mentioned node's coverage page when a SigSleuth [serverUrl] is configured.
- * Times are measured from [now].
+ * is known, measured from where that packet was heard (the guess was made there, not where the phone is now), and links
+ * to each mentioned node's coverage page when a SigSleuth [serverUrl] is configured. Times are measured from [now].
  */
 @Composable
 private fun RelayDetails(
@@ -2115,20 +2112,6 @@ private fun RelayDetails(
                     )
             }
         }
-        // Nodes heard here too weakly to have sent this packet, so the list says why they left.
-        relay.ruledOut.forEach { node ->
-            CandidateLine(
-                MeshtasticIcons.DoDisturb,
-                MaterialTheme.colorScheme.StatusRed,
-                nodeName(node.nodeId, names),
-                stringResource(
-                    R.string.survey_relay_ruled_out,
-                    node.packetSignal.roundToInt(),
-                    node.strongestHere.roundToInt(),
-                ),
-                LineTone.RULED_OUT,
-            )
-        }
         if (serverUrl != null) {
             RelayNodeLinks(relay, names, serverUrl)
         }
@@ -2137,7 +2120,7 @@ private fun RelayDetails(
 
 /**
  * The distinct nodes an opened relay row mentions, in display order: SigSleuth's named relay, the local guess, any node
- * in SigSleuth's answer (its near link or candidates), every local candidate, and ruled-out nodes.
+ * in SigSleuth's answer (its near link or candidates), and every local candidate.
  */
 internal fun relayMentionedNodes(relay: RelayStats, names: Map<Long, String>): List<Pair<Long, String>> {
     val serverNames = buildMap {
@@ -2154,7 +2137,6 @@ internal fun relayMentionedNodes(relay: RelayStats, names: Map<Long, String>): L
     relay.server?.near?.nodeId?.let(ordered::add)
     relay.server?.candidates?.forEach { ordered += it.nodeId }
     relay.candidates.forEach { ordered += it.nodeId }
-    relay.ruledOut.forEach { ordered += it.nodeId }
     return ordered.map { id -> id to (names[id] ?: serverNames[id] ?: nodeName(id, names)) }
 }
 
@@ -2266,17 +2248,16 @@ private fun sigSleuthLabelled(text: String): AnnotatedString =
 
 private const val SIGSLEUTH = "SigSleuth"
 
-/** How much a candidate line stands out: the guess, another candidate, or one the packet's signal ruled out. */
+/** How much a candidate line stands out: the guess or another candidate. */
 private enum class LineTone {
     GUESS,
     OTHER,
-    RULED_OUT,
 }
 
 /**
- * A candidate's kind as an icon in [iconTint], the colour of what the knowledge comes from (your radio, SigSleuth, the
- * node's own claim, or red when ruled out), then its short name and how it is known or why it was ruled out, toned by
- * [tone]. [kind] describes the icon for screen readers when [detail] does not already say it.
+ * A candidate's kind as an icon in [iconTint], the colour of what the knowledge comes from (your radio, SigSleuth or
+ * the node's own claim), then its short name and how it is known, toned by [tone]. [kind] describes the icon for screen
+ * readers when [detail] does not already say it.
  */
 @Composable
 private fun CandidateLine(
@@ -2292,7 +2273,6 @@ private fun CandidateLine(
         when (tone) {
             LineTone.GUESS -> LocalContentColor.current
             LineTone.OTHER -> colors.onSurfaceVariant
-            LineTone.RULED_OUT -> colors.outline
         }
     val weight = if (tone == LineTone.GUESS) FontWeight.SemiBold else null
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
