@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,11 +58,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -121,6 +124,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -384,7 +388,10 @@ internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modif
                         Icon(MeshtasticIcons.ArrowBack, contentDescription = stringResource(R.string.survey_back))
                     }
                 },
-                actions = { CarModeChip(ui.carMode, actions.onCarMode) },
+                actions = {
+                    LegendButton()
+                    CarModeChip(ui.carMode, actions.onCarMode)
+                },
             )
         },
     ) { padding ->
@@ -1201,6 +1208,108 @@ private fun GpsMark(fix: SurveyFix?, clock: () -> SurveyNow) {
 
 private fun usableFix(ageMs: Long, accuracyM: Float?): Boolean =
     ageMs <= SIGSLEUTH_MAX_FIX_AGE_S * MILLIS_PER_SECOND && (accuracyM ?: 0f) <= SIGSLEUTH_MAX_ACCURACY_M
+
+/**
+ * The top bar's ⓘ, there whether recording or not: a tap opens the key to the cards (what a cell is, the green
+ * new-to-you and blue added-to-map notes, the SNR's colour), so the cards themselves need no words for it. Opens like
+ * [GpsMark].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LegendButton() {
+    val tooltip = rememberTooltipState(isPersistent = true)
+    val scope = rememberCoroutineScope()
+    val title = stringResource(R.string.survey_legend)
+    // Below the top bar it has the rest of the window; in landscape or with big text it scrolls there.
+    val window = LocalWindowInfo.current.containerSize.height
+    val maxHeight = with(LocalDensity.current) { window.toDp() } - LEGEND_ROOM_ABOVE
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+        tooltip = {
+            RichTooltip(title = { Text(title) }) {
+                Legend(Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState()))
+            }
+        },
+        state = tooltip,
+    ) {
+        IconButton(onClick = { scope.launch { if (tooltip.isVisible) tooltip.dismiss() else tooltip.show() } }) {
+            Icon(
+                ImageVector.vectorResource(R.drawable.survey_ic_info),
+                contentDescription = title,
+                Modifier.size(LEGEND_ICON_SIZE),
+            )
+        }
+    }
+}
+
+private val LEGEND_ICON_SIZE = 20.dp
+
+/** The top bar, the tooltip's title and padding, and a margin: what the legend's own height must leave. */
+private val LEGEND_ROOM_ABOVE = 160.dp
+
+/** Each sample as the cards and relays draw it, with its meaning beside or under it. */
+@Composable
+internal fun Legend(modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val noteStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
+    val unsure = ImageVector.vectorResource(R.drawable.survey_ic_help)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LegendEntry(R.string.survey_legend_cells) { FigureLabel(Figure.CELLS) }
+        LegendEntry(R.string.survey_legend_direct) { FigureLabel(Figure.DIRECT) }
+        LegendEntry(R.string.survey_legend_new) {
+            Text(stringResource(R.string.survey_stat_new, 1), style = noteStyle, color = colors.StatusGreen)
+        }
+        LegendEntry(R.string.survey_legend_added) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Icon(Figure.MAP.icon(), null, Modifier.size(FIGURE_ICON_SIZE), tint = colors.StatusSky)
+                Text(stringResource(R.string.survey_stat_added, 1), style = noteStyle, color = colors.StatusSky)
+            }
+        }
+        MarginScale()
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            FigureLabel(Figure.RELAYS)
+            LegendMark(MeshtasticIcons.Verified, colors.StatusSky, R.string.survey_relay_confirmed)
+            LegendMark(MeshtasticIcons.CheckCircle, colors.StatusGreen, R.string.survey_legend_likely)
+            LegendMark(unsure, colors.StatusYellow, R.string.survey_relay_uncertain)
+            LegendMark(unsure, colors.onSurfaceVariant, R.string.survey_relay_unknown)
+        }
+    }
+}
+
+@Composable
+private fun LegendEntry(@StringRes meaning: Int, sample: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        sample()
+        Text(stringResource(meaning), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** A [ConfidenceMark] as the relays draw it, and what it says. */
+@Composable
+private fun LegendMark(icon: ImageVector, tint: Color, @StringRes meaning: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Icon(icon, contentDescription = null, Modifier.size(FIGURE_ICON_SIZE), tint = tint)
+        Text(stringResource(meaning), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** "SNR", then [marginColor]'s scale as a bar with its two ends named under it, as the SNR chips are coloured. */
+@Composable
+private fun MarginScale() {
+    val ends = MaterialTheme.typography.labelSmall
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            stringResource(R.string.survey_snr_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Box(Modifier.fillMaxWidth().height(8.dp).background(marginBrush(), MaterialTheme.shapes.extraSmall))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(stringResource(R.string.survey_legend_snr_low), style = ends)
+            Text(stringResource(R.string.survey_legend_snr_high), style = ends)
+        }
+    }
+}
 
 /** What the header's cloud says about uploads while recording, when a server is set. */
 private enum class UploadMark {

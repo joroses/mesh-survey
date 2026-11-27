@@ -16,6 +16,7 @@
  */
 package org.meshtastic.feature.survey.ui
 
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -41,6 +42,13 @@ internal fun marginColor(margin: Float): Color {
         blue = low.blue + share * (high.blue - low.blue),
     )
 }
+
+/** [marginColor]'s whole scale, from the edge of decoding on the left to 25 dB on the right, for a legend. */
+@Suppress("SpreadOperator") // Compose takes the stops only as a vararg; four pairs, built when the legend opens.
+internal fun marginBrush(): Brush =
+    Brush.horizontalGradient(
+        *MARGIN_STOPS.map { (db, color) -> db / MARGIN_STOPS.last().first to color }.toTypedArray(),
+    )
 
 private const val SF7 = 7
 private const val FLOOR_SF7_DB = -7.5f

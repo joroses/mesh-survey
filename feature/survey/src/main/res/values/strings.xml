@@ -101,6 +101,19 @@
     <string name="survey_gps_unusable">Not good enough to place packets</string>
     <!-- %1$d and %2$d are SigSleuth's limits, in seconds and metres. -->
     <string name="survey_gps_skipped">SigSleuth skips packets heard now: it needs a fix at most %1$d s old and within %2$d m.</string>
+    <!-- The top bar's ⓘ and the title of what it opens: the key to the figures, colours and marks on the cards and relays. -->
+    <string name="survey_legend">Legend</string>
+    <string name="survey_legend_cells">Squares of SigSleuth\'s map, about 200 m wide.</string>
+    <string name="survey_legend_direct">Nodes heard with no relay in between.</string>
+    <!-- Under a green "+1 new" (survey_stat_new). -->
+    <string name="survey_legend_new">Not heard in any earlier session on this phone.</string>
+    <!-- Under a blue "1 added to map" (survey_stat_added). -->
+    <string name="survey_legend_added">Cells SigSleuth\'s map did not have yet.</string>
+    <!-- The two ends of the SNR colour bar. -->
+    <string name="survey_legend_snr_low">Weak signal</string>
+    <string name="survey_legend_snr_high">Strong signal</string>
+    <!-- Beside the green check in the legend's relay marks; the other marks reuse survey_relay_confirmed, _uncertain and _unknown. -->
+    <string name="survey_legend_likely">Heard directly, or a likely guess</string>
     <!-- Metric labels on the last-packet readout in normal mode. -->
     <string name="survey_snr_label">SNR</string>
     <string name="survey_rssi_label">RSSI</string>
