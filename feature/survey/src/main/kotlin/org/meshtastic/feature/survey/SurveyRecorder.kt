@@ -92,6 +92,8 @@ data class SurveyState(
     val neighbours: Map<Long, DirectSender> = emptyMap(),
     /** SigSleuth's relay node list this session uses, if any. */
     val mapped: MappedNodes? = null,
+    /** This session's last ping and its answers; null until the first. */
+    val ping: SurveyPing? = null,
     val problem: SurveyProblem? = null,
     /** How the last session ended, until the next one starts. */
     val lastEnd: SurveyStatus? = null,
@@ -183,6 +185,7 @@ class SurveyRecorder(
     private val buildConfig: BuildConfigProvider,
     private val scope: ApplicationCoroutineScope,
     private val relayNodes: SurveyRelayNodes,
+    private val pings: SurveyPingSender,
     answers: SurveyAnswers,
 ) {
     private val mutableState = MutableStateFlow(SurveyState())
@@ -219,6 +222,13 @@ class SurveyRecorder(
 
     @Volatile private var fix: SurveyFix? = null
     private val lifecycle = Mutex()
+    private val pinging = Mutex()
+
+    /**
+     * When the last ping went, on the clock that keeps counting while the phone sleeps. Kept across sessions, as the
+     * firmware's limit is.
+     */
+    @Volatile private var lastPingElapsedMs: Long? = null
     private var writer: Job? = null
     private var watcher: Job? = null
     private var refresher: Job? = null
@@ -299,6 +309,7 @@ class SurveyRecorder(
         refresher = scope.launch { refreshRelayNodes(current) }
         active = current
         tap.listener = ::onPacket
+        tap.onPingRefused = ::onPingRefused
         resumeGps()
         Logger.i { "Signal survey started" }
         true
@@ -310,6 +321,7 @@ class SurveyRecorder(
         if (sessionId != null && sessionId != current.session.id) return@withLock
         active = null
         tap.listener = null
+        tap.onPingRefused = null
         refresher?.cancel()
         // The watcher may be resuming GPS on another thread right now; let it finish before GPS goes off for good.
         watcher?.cancelAndJoin()
@@ -324,6 +336,45 @@ class SurveyRecorder(
             it.copy(session = null, waitingForRadio = false, fix = null, problem = null, lastEnd = status)
         }
         Logger.i { "Signal survey ended: $status" }
+    }
+
+    /**
+     * Pings the survey node's neighbours ([zeroHopTraceroute]) while the session records from its radio; their answers
+     * collect in [SurveyState.ping]. Returns whether the ping went to the radio: not while the radio is away, a ping is
+     * on its way, or within [PING_COOLDOWN] of the last. The radio may still refuse it ([onPingRefused]).
+     */
+    suspend fun ping(): Boolean {
+        if (!pinging.tryLock()) return false
+        return try {
+            sendPing()
+        } finally {
+            pinging.unlock()
+        }
+    }
+
+    private suspend fun sendPing(): Boolean {
+        val sessionId = active?.takeIf { it.verified != null }?.session?.id
+        val now = clock.elapsedRealtimeMs()
+        val coolingDown = lastPingElapsedMs?.let { now - it < PING_COOLDOWN.inWholeMilliseconds } == true
+        val sentAtMs = clock.wallTimeMs()
+        val id = if (sessionId != null && !coolingDown) safeCatching { pings.send() }.getOrNull() else null
+        if (id != null) {
+            lastPingElapsedMs = now
+            mutableState.update { if (it.session?.id == sessionId) it.copy(ping = SurveyPing(id, sentAtMs)) else it }
+        }
+        return id != null
+    }
+
+    /**
+     * Marks the session's last ping refused when firmware names it ([SurveyPacketTap.onPingRefused]). The cooldown
+     * keeps running from the refused ping, which is enough: the traceroute that blocked it went before.
+     */
+    private fun onPingRefused(pingId: Int) {
+        Logger.i { "Signal survey ping refused by the radio" }
+        mutableState.update { state ->
+            val ping = state.ping?.takeIf { it.id == pingId } ?: return@update state
+            state.copy(ping = ping.copy(refused = true))
+        }
     }
 
     /** Shows a problem found before [start] could run, such as a refused permission. */
@@ -363,6 +414,11 @@ class SurveyRecorder(
             )
         if (row != null && current.rows.trySend(row).isFailure) {
             Logger.w { "Signal survey queue full; dropped a packet" }
+        }
+        // Only the packet says which request it answers.
+        val requestId = packet.decoded?.request_id
+        if (row?.snrTowards != null && requestId != null) {
+            mutableState.update { it.copy(ping = it.ping?.withAnswer(row, requestId)) }
         }
     }
 

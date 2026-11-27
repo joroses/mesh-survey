@@ -27,6 +27,7 @@ import org.meshtastic.core.repository.NodeRepository
 import org.meshtastic.core.repository.RadioInterfaceService
 import org.meshtastic.core.repository.RadioSessionContext
 import org.meshtastic.core.repository.ServiceStateWriter
+import org.meshtastic.core.repository.SurveyPacketTap
 import org.meshtastic.core.repository.TracerouteHandler
 import org.meshtastic.core.repository.TracerouteSnapshotRepository
 import org.meshtastic.core.resources.Res
@@ -58,7 +59,9 @@ class TracerouteHandlerImpl(
         val routeDiscovery = packet.fullRouteDiscovery ?: return
         val forwardRoute = routeDiscovery.route
         val returnRoute = routeDiscovery.route_back
-        if (forwardRoute.isEmpty() || returnRoute.isEmpty()) return
+        // An answer to the signal survey's ping is the survey's to show.
+        val surveyPing = packet.decoded?.request_id in SurveyPacketTap.pingIds
+        if (forwardRoute.isEmpty() || returnRoute.isEmpty() || surveyPing) return
 
         radioInterfaceService.launchSessionWork(
             scope = scope,

@@ -29,11 +29,28 @@ interface SurveyPacketTap {
     var listener: ((packet: MeshPacket, session: RadioSessionContext) -> Unit)?
 
     /**
+     * The request IDs of the survey's latest pings, broadcast traceroutes. Their answers are the survey's, so
+     * TracerouteHandlerImpl, an upstream class, shows no traceroute result for them.
+     */
+    var pingIds: Set<Int>
+
+    /**
+     * Told the ID of one of [pingIds] that firmware refused, as the ClientNotification it sends names it: firmware
+     * takes one traceroute from the phone every 30 s, the app's own included. FromRadioPacketHandlerImpl, an upstream
+     * class, hands the refusal here instead of showing it as a pop-up.
+     */
+    var onPingRefused: ((pingId: Int) -> Unit)?
+
+    /**
      * The one tap in the process. MeshMessageProcessorImpl, an upstream class, reads it directly rather than taking a
      * constructor parameter, so the fork adds only the call and its import there. Everything else injects
      * [SurveyPacketTap]; Koin's binding forwards to this object.
      */
     companion object Shared : SurveyPacketTap {
         @Volatile override var listener: ((packet: MeshPacket, session: RadioSessionContext) -> Unit)? = null
+
+        @Volatile override var pingIds: Set<Int> = emptySet()
+
+        @Volatile override var onPingRefused: ((pingId: Int) -> Unit)? = null
     }
 }

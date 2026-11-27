@@ -152,6 +152,27 @@ fun RecordingUploadFailed() = Screen(SurveyScenarios.uploadFailed)
 fun CarBusy() = Screen(SurveyScenarios.carBusy)
 
 @PreviewTest @SurveyPreviews @Composable
+fun RecordingPinged() = Screen(SurveyScenarios.pinged)
+
+@PreviewTest @SurveyPreviews @Composable
+fun CarPinged() = Screen(SurveyScenarios.carPinged)
+
+@PreviewTest @SurveyPreviews @Composable
+fun RecordingPingedLongAgo() = Screen(SurveyScenarios.pingedLongAgo)
+
+@PreviewTest @SurveyPreviews @Composable
+fun RecordingPingRefused() = Screen(SurveyScenarios.pingRefused)
+
+@PreviewTest @SurveyPreviews @Composable
+fun CarPingRefused() = Screen(SurveyScenarios.pingRefused.copy(carMode = true))
+
+@PreviewTest @SurveyPreviews @Composable
+fun RecordingPingedByMany() = Screen(SurveyScenarios.pingedByMany)
+
+@PreviewTest @SurveyPreviews @Composable
+fun CarPingedByMany() = Screen(SurveyScenarios.carPingedByMany)
+
+@PreviewTest @SurveyPreviews @Composable
 fun CarWaiting() = Screen(SurveyScenarios.carWaiting)
 
 // ---- Sheets ----

@@ -43,9 +43,12 @@ import org.meshtastic.core.testing.TestDataFactory
 import org.meshtastic.proto.ChannelSet
 import org.meshtastic.proto.ChannelSettings
 import org.meshtastic.proto.Config
+import org.meshtastic.proto.Data
 import org.meshtastic.proto.LocalConfig
 import org.meshtastic.proto.MeshPacket
+import org.meshtastic.proto.PortNum
 import org.meshtastic.proto.Position
+import org.meshtastic.proto.RouteDiscovery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -60,6 +63,8 @@ class SurveyRecorderTest {
     private val tap =
         object : SurveyPacketTap {
             override var listener: ((MeshPacket, RadioSessionContext) -> Unit)? = null
+            override var pingIds: Set<Int> = emptySet()
+            override var onPingRefused: ((Int) -> Unit)? = null
         }
     private val location = FakeSurveyLocation()
     private val dao = FakeSurveyDao()
@@ -99,6 +104,14 @@ class SurveyRecorderTest {
                 }
         }
     private val answers = SurveyAnswers()
+
+    /** How many pings went to the radio (each one's ID), and whether the next one is taken. */
+    private var pingsSent = 0
+    private var pingTaken = true
+    private val pings = SurveyPingSender {
+        pingsSent++
+        pingsSent.takeIf { pingTaken }
+    }
 
     /** Set to make the clock throw, which fails capturing a packet. */
     private var clockError: IllegalStateException? = null
@@ -145,6 +158,7 @@ class SurveyRecorderTest {
             FakeBuildConfigProvider(versionName = "2.8.3-survey"),
             object : ApplicationCoroutineScope, CoroutineScope by backgroundScope {},
             relayNodes,
+            pings,
             answers,
         )
     }
@@ -889,6 +903,93 @@ class SurveyRecorderTest {
 
         assertNull(recorder.state.value.problem)
         assertEquals(SurveyStatus.STOPPED, recorder.state.value.lastEnd)
+    }
+
+    /**
+     * A node's answer to traceroute [request], by default the last ping: straight back to the survey node (1), heard at
+     * -5 dB, having heard it at [towards].
+     */
+    private fun answerPing(from: Int, towards: Int, request: Int = pingsSent) = tap.listener?.invoke(
+        MeshPacket.Builder()
+            .apply {
+                this.from = from
+                to = 1
+                id = from
+                rx_snr = -5f
+                rx_rssi = -100
+                // A packet with hop start 0 reaches the phone without its relay byte.
+                relay_node = 0
+                transport_mechanism = MeshPacket.TransportMechanism.TRANSPORT_LORA
+                decoded =
+                    Data.Builder()
+                        .apply {
+                            portnum = PortNum.TRACEROUTE_APP
+                            bitfield = 1
+                            request_id = request
+                            payload =
+                                RouteDiscovery.Builder()
+                                    .apply {
+                                        // As the answer arrives: the survey node's radio and the sender added
+                                        // themselves.
+                                        route = listOf(1, from)
+                                        snr_towards = listOf(0, towards)
+                                    }
+                                    .build()
+                                    .encodeByteString()
+                        }
+                        .build()
+            }
+            .build(),
+        RadioSessionContext(generation = 1, address = "xradio"),
+    )
+
+    @Test
+    fun `a ping collects the answers heard after it and waits out the firmware's limit`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val recorder = recorder()
+            assertFalse(recorder.ping()) // No session.
+            assertTrue(recorder.start())
+
+            assertTrue(recorder.ping())
+            answerPing(from = 42, towards = -30)
+            answerPing(from = 7, towards = -20, request = 900) // A reply to the app's own traceroute: not listed.
+            answerPing(from = 43, towards = 8)
+
+            val ping = assertNotNull(recorder.state.value.ping)
+            assertEquals(setOf(42L, 43L), ping.answers.keys)
+            assertEquals(PingAnswer(42, heardSnr = -5f, heardRssi = -100, snrTowards = -7.5f), ping.answers[42])
+            assertEquals(3, recorder.state.value.directCount) // The replies are ordinary direct packets too.
+
+            assertFalse(recorder.ping())
+            assertEquals(1, pingsSent)
+            elapsedRealtime += PING_COOLDOWN.inWholeMilliseconds
+            pingTaken = false
+            assertFalse(recorder.ping()) // The queue refused it: the answers stay.
+            assertEquals(2, recorder.state.value.ping?.answers?.size)
+            pingTaken = true
+            assertTrue(recorder.ping())
+            assertEquals(emptyMap(), recorder.state.value.ping?.answers)
+            answerPing(from = 42, towards = -30, request = 1) // A late answer to the first ping.
+            assertEquals(emptyMap(), recorder.state.value.ping?.answers)
+        }
+
+    @Test
+    fun `a ping the radio refuses says so and lists no answers`() = runTest(UnconfinedTestDispatcher()) {
+        val recorder = recorder()
+        assertTrue(recorder.start())
+        assertTrue(recorder.ping())
+        val id = assertNotNull(recorder.state.value.ping).id
+
+        tap.onPingRefused?.invoke(id + 1) // An earlier ping's.
+        assertFalse(assertNotNull(recorder.state.value.ping).refused)
+        tap.onPingRefused?.invoke(id)
+        answerPing(from = 42, towards = -30, request = 900) // A reply to the app's traceroute, which blocked it.
+
+        val ping = assertNotNull(recorder.state.value.ping)
+        assertTrue(ping.refused)
+        assertEquals(emptyMap(), ping.answers)
+        recorder.stop()
+        assertNull(tap.onPingRefused)
     }
 }
 

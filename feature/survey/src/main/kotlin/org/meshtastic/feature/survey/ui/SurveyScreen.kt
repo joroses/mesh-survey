@@ -73,6 +73,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -114,6 +115,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -170,12 +172,14 @@ import org.meshtastic.core.ui.component.RSSI_BAD_THRESHOLD
 import org.meshtastic.core.ui.component.RSSI_FAIR_THRESHOLD
 import org.meshtastic.core.ui.component.RSSI_GOOD_THRESHOLD
 import org.meshtastic.core.ui.icon.ArrowBack
+import org.meshtastic.core.ui.icon.ArrowDownward
 import org.meshtastic.core.ui.icon.BarChart
 import org.meshtastic.core.ui.icon.Check
 import org.meshtastic.core.ui.icon.CheckCircle
 import org.meshtastic.core.ui.icon.ChevronRight
 import org.meshtastic.core.ui.icon.CloudUpload
 import org.meshtastic.core.ui.icon.Delete
+import org.meshtastic.core.ui.icon.DetectionSensor
 import org.meshtastic.core.ui.icon.DoDisturb
 import org.meshtastic.core.ui.icon.Edit
 import org.meshtastic.core.ui.icon.ErrorOutline
@@ -206,6 +210,8 @@ import org.meshtastic.feature.survey.DIRECT_HISTORY
 import org.meshtastic.feature.survey.DirectSender
 import org.meshtastic.feature.survey.FAR
 import org.meshtastic.feature.survey.LinkEvidence
+import org.meshtastic.feature.survey.PING_COOLDOWN
+import org.meshtastic.feature.survey.PingAnswer
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayCandidate
 import org.meshtastic.feature.survey.RelayGuess
@@ -217,6 +223,7 @@ import org.meshtastic.feature.survey.SurveyDeleted
 import org.meshtastic.feature.survey.SurveyFix
 import org.meshtastic.feature.survey.SurveyMeasurement
 import org.meshtastic.feature.survey.SurveyNews
+import org.meshtastic.feature.survey.SurveyPing
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveyRecorder
 import org.meshtastic.feature.survey.SurveySession
@@ -254,6 +261,7 @@ internal class SurveyActions(
     val onNavigateUp: () -> Unit = {},
     val onStart: () -> Unit = {},
     val onStop: () -> Unit = {},
+    val onPing: () -> Unit = {},
     val onCarMode: (Boolean) -> Unit = {},
     val onSaveServer: (SurveyUploadSettings) -> Unit = {},
     val onAutomatic: (Boolean) -> Unit = {},
@@ -329,6 +337,7 @@ fun SurveyScreen(
                 onNavigateUp = onNavigateUp,
                 onStart = requestStart,
                 onStop = viewModel::stop,
+                onPing = viewModel::ping,
                 onCarMode = viewModel::setCarMode,
                 onSaveServer = viewModel::saveServer,
                 onAutomatic = viewModel::setAutomatic,
@@ -407,6 +416,7 @@ internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modif
                 upload = uploadSettings?.takeIf { uploadsOn }?.let { uploadMark(it, live) },
                 onUpload = { showUpload = true },
                 onStop = actions.onStop,
+                onPing = actions.onPing,
                 modifier = Modifier.padding(padding),
             )
             if (showUpload && uploadSettings != null) {
@@ -546,6 +556,7 @@ private fun RecordingView(
     upload: UploadMark?,
     onUpload: () -> Unit,
     onStop: () -> Unit,
+    onPing: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // One clock for the card and the list, so the timer and every "ago" tick in step.
@@ -566,7 +577,7 @@ private fun RecordingView(
         ) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val card: @Composable () -> Unit = {
-                    RecordingCard(state, session, relayNames, clock, car, upload, onUpload, onStop)
+                    RecordingCard(state, session, relayNames, clock, car, upload, onUpload, onStop, onPing)
                 }
                 val scrolledCard: @Composable () -> Unit = {
                     Box(Modifier.padding(bottom = if (car) 8.dp else 12.dp)) { card() }
@@ -639,9 +650,10 @@ private fun CarModeChip(carMode: Boolean, onCarMode: (Boolean) -> Unit) {
 }
 
 /**
- * The session recording now: what it is doing, then what it found, the last packet and Stop. Its relays are in the list
- * under it. In [car] mode the small text is left out: Packets, and the full notes under the figures become compact `+N`
- * deltas (green beside each figure for new-to-you, blue with the map icon under Cells for SigSleuth's map).
+ * The session recording now: what it is doing, then what it found, the last packet, the last ping's answers, Ping and
+ * Stop. Its relays are in the list under it. In [car] mode the small text is left out: Packets, and the full notes
+ * under the figures become compact `+N` deltas (green beside each figure for new-to-you, blue with the map icon under
+ * Cells for SigSleuth's map).
  */
 @Composable
 @Suppress("LongParameterList")
@@ -654,6 +666,7 @@ private fun RecordingCard(
     upload: UploadMark?,
     onUpload: () -> Unit,
     onStop: () -> Unit,
+    onPing: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -684,23 +697,202 @@ private fun RecordingCard(
                 clock = clock,
                 car = car,
             )
+            state.ping?.let { PingAnswers(it, relayNames, session.spreadingFactor, clock, car) }
             state.problem?.let { ProblemBanner(it) }
-            Button(
-                onClick = onStop,
-                modifier = if (car) Modifier.fillMaxWidth().height(CAR_STOP_HEIGHT) else Modifier.fillMaxWidth(),
-                contentPadding =
-                if (car) PaddingValues(horizontal = 16.dp, vertical = 0.dp) else ButtonDefaults.ContentPadding,
-                colors =
-                ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
-            ) {
-                Text(stringResource(R.string.survey_stop))
+            val buttonHeight = if (car) Modifier.height(CAR_STOP_HEIGHT) else Modifier
+            val buttonPadding =
+                if (car) PaddingValues(horizontal = 16.dp, vertical = 0.dp) else ButtonDefaults.ContentPadding
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PingButton(
+                    sentAtMs = state.ping?.sentAtMs,
+                    enabled = !state.waitingForRadio,
+                    clock = clock,
+                    onPing = onPing,
+                    modifier = Modifier.weight(1f).then(buttonHeight),
+                    contentPadding = buttonPadding,
+                )
+                Button(
+                    onClick = onStop,
+                    modifier = Modifier.weight(1f).then(buttonHeight),
+                    contentPadding = buttonPadding,
+                    colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                ) {
+                    Text(stringResource(R.string.survey_stop))
+                }
             }
         }
     }
 }
+
+/**
+ * Pings the survey node's neighbours ([org.meshtastic.feature.survey.zeroHopTraceroute]), with the ping's mark. For
+ * [PING_COOLDOWN] after a ping, within which firmware refuses a second, a ring empties in its place and the label
+ * counts down.
+ */
+@Composable
+@Suppress("LongParameterList")
+private fun PingButton(
+    sentAtMs: Long?,
+    enabled: Boolean,
+    clock: () -> SurveyNow,
+    onPing: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+) {
+    val cooldownMs = PING_COOLDOWN.inWholeMilliseconds
+    val leftMs = sentAtMs?.let { cooldownMs - (clock().wallMs - it) }?.takeIf { it > 0 }
+    // In the tertiary blue: the tonal default matches the card, and the light theme's tertiary container nearly does.
+    FilledTonalButton(
+        onClick = onPing,
+        enabled = enabled && leftMs == null,
+        modifier = modifier,
+        contentPadding = contentPadding,
+        colors =
+        ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.tertiary,
+            contentColor = MaterialTheme.colorScheme.onTertiary,
+        ),
+    ) {
+        if (leftMs == null) {
+            Icon(MeshtasticIcons.DetectionSensor, contentDescription = null, Modifier.size(ButtonDefaults.IconSize))
+        } else {
+            CircularProgressIndicator(
+                progress = { leftMs.toFloat() / cooldownMs },
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+                strokeWidth = 2.dp,
+            )
+        }
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        val label =
+            if (leftMs == null) {
+                stringResource(R.string.survey_ping)
+            } else {
+                val leftS = ((leftMs + MILLIS_PER_SECOND - 1) / MILLIS_PER_SECOND).toInt()
+                stringResource(R.string.survey_ping_wait, leftS)
+            }
+        Text(label, maxLines = 1)
+    }
+}
+
+/**
+ * The last ping's answers under a line that counts them, the [PING_ANSWERS_SHOWN] strongest first and then how many
+ * more, so a ping from high ground leaves Ping and Stop on the pinned card: each node with the SNR the survey node
+ * heard it at and the SNR it heard the survey node at, as chips in the map's colours. The others are kept like any
+ * packet heard, in the relays under the card. Before any answer, that the ping waits for them; after
+ * [PING_ANSWER_WAIT_MS], that none came; or that the radio refused it. Once it stops waiting, the line says how long
+ * ago the ping went, and after [PING_SHOWN_MS] it all goes, as the survey has moved on from where it was in range.
+ */
+@Composable
+private fun PingAnswers(
+    ping: SurveyPing,
+    relayNames: Map<Long, String>,
+    spreadingFactor: Int,
+    clock: () -> SurveyNow,
+    car: Boolean,
+) {
+    val now = clock().wallMs
+    if (now - ping.sentAtMs >= PING_SHOWN_MS) return
+    val answers = ping.answers.values.sortedByDescending { it.snrTowards }
+    val waiting = !ping.refused && answers.isEmpty() && now - ping.sentAtMs < PING_ANSWER_WAIT_MS
+    val text =
+        when {
+            ping.refused -> stringResource(R.string.survey_ping_refused)
+
+            answers.isNotEmpty() -> {
+                val words = if (car) R.plurals.survey_ping_answers_short else R.plurals.survey_ping_answers
+                pluralStringResource(words, answers.size, answers.size)
+            }
+
+            waiting -> stringResource(R.string.survey_ping_waiting)
+
+            else -> stringResource(R.string.survey_ping_no_answer)
+        }
+    val age = if (car) shortAgeText(ping.sentAtMs, now) else agoText(ping.sentAtMs, now)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        InfoRow(MeshtasticIcons.DetectionSensor) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                if (!waiting) {
+                    Text(
+                        age,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+        val inset = Modifier.padding(start = INFO_ICON_SIZE + INFO_ICON_GAP)
+        answers.take(PING_ANSWERS_SHOWN).forEach { answer ->
+            PingAnswerRow(answer, relayNames, spreadingFactor, inset)
+        }
+        val more = answers.size - PING_ANSWERS_SHOWN
+        if (more > 0) {
+            Text(
+                pluralStringResource(R.plurals.survey_ping_more, more, more),
+                inset,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** How many ping answers the recording card lists; any more would push Ping and Stop off a pinned card. */
+private const val PING_ANSWERS_SHOWN = 3
+
+/** One answer: the node's name, then how the survey node heard it (down) and how it heard the survey node (up). */
+@Composable
+private fun PingAnswerRow(
+    answer: PingAnswer,
+    relayNames: Map<Long, String>,
+    spreadingFactor: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            nodeName(answer.nodeId, relayNames),
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        PingSnr(answer.heardSnr, spreadingFactor, up = false)
+        PingSnr(answer.snrTowards, spreadingFactor, up = true)
+    }
+}
+
+/** An arrow and an SNR chip: [up] for how the node heard the survey node, else how the survey node heard it. */
+@Composable
+private fun PingSnr(snr: Float?, spreadingFactor: Int, up: Boolean) {
+    val description = stringResource(if (up) R.string.survey_ping_heard_you else R.string.survey_ping_heard_it)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            MeshtasticIcons.ArrowDownward,
+            contentDescription = description,
+            modifier = Modifier.size(PING_ARROW_SIZE).rotate(if (up) HALF_TURN else 0f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (snr == null) {
+            Text("?", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            SnrChip(snr, spreadingFactor)
+        }
+    }
+}
+
+private val PING_ARROW_SIZE = 16.dp
+private const val HALF_TURN = 180f
+
+/** How long the card shows a ping's answers: by then the survey has usually moved on from where they were heard. */
+private const val PING_SHOWN_MS = 60_000L
+
+/** How long after a ping an empty answer list means none came: answers take a few seconds, as replies queue. */
+private const val PING_ANSWER_WAIT_MS = 15_000L
 
 /**
  * A dot in the colour of what the session is doing and its words, the GPS and upload marks, and how long it has run. In

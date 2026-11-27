@@ -21,6 +21,8 @@ import org.meshtastic.proto.ChannelSet
 import org.meshtastic.proto.ChannelSettings
 import org.meshtastic.proto.Data
 import org.meshtastic.proto.MeshPacket
+import org.meshtastic.proto.PortNum
+import org.meshtastic.proto.RouteDiscovery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -228,11 +230,98 @@ class SurveyCaptureTest {
     }
 
     @Test
+    fun `a zero-hop packet from firmware with a bitfield is heard straight from its sender`() {
+        fun zeroHop(change: MeshPacket.Builder.() -> Unit) = assertNotNull(
+            capture(
+                packet {
+                    hop_start = 0
+                    hop_limit = 0
+                    relay_node = 0 // Dropped by the survey node's firmware for a hop start of 0.
+                    change()
+                },
+            ),
+        )
+
+        val answer = zeroHop { decoded = decoded(bitfield = 1) }
+        assertEquals(0x2E, answer.relayByte) // -1_234 is 0xfffffb2e.
+        assertTrue(answer.isDirect())
+        // Encrypted, or without a bitfield: possibly firmware before 2.3, which had no hop start.
+        assertNull(zeroHop { decoded = null }.relayByte)
+        assertNull(zeroHop { decoded = decoded(bitfield = null) }.relayByte)
+    }
+
+    @Test
     fun `an encrypted packet is kept, and a packet without a fix is kept without a position`() {
         assertNotNull(capture(packet { decoded = null }))
         val row = assertNotNull(capture(packet(), withFix = null))
 
         assertNull(row.latitude)
         assertNull(row.fixAgeMs)
+    }
+
+    private fun traceroute(
+        wantResponse: Boolean = false,
+        route: List<Int> = emptyList(),
+        snr: List<Int> = listOf(-30),
+        routeBack: List<Int> = emptyList(),
+    ) = Data.Builder()
+        .apply {
+            portnum = PortNum.TRACEROUTE_APP
+            want_response = wantResponse
+            payload =
+                RouteDiscovery.Builder()
+                    .apply {
+                        this.route = route
+                        snr_towards = snr
+                        route_back = routeBack
+                    }
+                    .build()
+                    .encodeByteString()
+        }
+        .build()
+
+    /** What the survey node (99) keeps of a traceroute reply to it from the packet's sender (-1234). */
+    private fun snrTowards(decoded: Data, to: Int = 99) = assertNotNull(
+        capture(
+            packet {
+                this.to = to
+                this.decoded = decoded
+            },
+        ),
+    )
+        .snrTowards
+
+    @Test
+    fun `a traceroute reply with no relay either way keeps the SNR its sender heard the survey node at`() {
+        // An answer to the ping as it arrives: the survey node and the sender each added themselves on the way there.
+        assertEquals(-7.5f, snrTowards(traceroute(route = listOf(99, -1_234), snr = listOf(0, -30))))
+        // The same without the survey node's own entry, and a reply to a traceroute addressed to the sender.
+        assertEquals(-7.5f, snrTowards(traceroute(route = listOf(-1_234), snr = listOf(-30))))
+        assertEquals(-7.5f, snrTowards(traceroute()))
+    }
+
+    @Test
+    fun `other traceroute packets keep no SNR towards the sender`() {
+        // A request, a relay on the way there or back, one to another node, an unknown SNR, and not a traceroute.
+        assertNull(snrTowards(traceroute(wantResponse = true)))
+        assertNull(snrTowards(traceroute(route = listOf(99, 5, -1_234), snr = listOf(0, 8, -30))))
+        assertNull(snrTowards(traceroute(route = listOf(99, -1_234), snr = listOf(0, -30), routeBack = listOf(5))))
+        assertNull(snrTowards(traceroute(), to = -1))
+        assertNull(snrTowards(traceroute(snr = listOf(-128))))
+        assertNull(snrTowards(decoded(bitfield = 1)))
+    }
+
+    @Test
+    fun `the ping is a traceroute to everyone with no hops and no ACK`() {
+        val ping = zeroHopTraceroute(id = 5)
+
+        assertEquals(-1, ping.to)
+        assertEquals(5, ping.id)
+        assertEquals(0, ping.hop_limit)
+        assertEquals(0, ping.hop_start)
+        assertFalse(ping.want_ack)
+        assertEquals(PortNum.TRACEROUTE_APP, ping.decoded?.portnum)
+        assertTrue(ping.decoded?.want_response == true)
+        assertEquals(0, ping.decoded?.payload?.size) // An empty RouteDiscovery; 22 bytes on air.
     }
 }

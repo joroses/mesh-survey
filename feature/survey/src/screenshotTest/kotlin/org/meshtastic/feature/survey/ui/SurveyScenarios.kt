@@ -18,9 +18,11 @@
 
 package org.meshtastic.feature.survey.ui
 
+import org.meshtastic.feature.survey.PingAnswer
 import org.meshtastic.feature.survey.ReplayedRelays
 import org.meshtastic.feature.survey.SurveyDeleted
 import org.meshtastic.feature.survey.SurveyNews
+import org.meshtastic.feature.survey.SurveyPing
 import org.meshtastic.feature.survey.SurveyProblem
 import org.meshtastic.feature.survey.SurveySession
 import org.meshtastic.feature.survey.SurveySessionSummary
@@ -204,6 +206,48 @@ internal object SurveyScenarios {
             ui.copy(state = ui.state.copy(uploadFailing = true, problem = SurveyProblem.NO_LOCATION))
         }
     }
+
+    /** A ping 8 s ago, answered by three of the quiet mesh's nodes, strong to weak; the button counts down. */
+    val pinged by lazy {
+        meshRecording(quietMesh, newToYou = SurveyNews(cells = 9, relays = 4, direct = 1)).let { ui ->
+            val snrs = listOf(Triple(9.5f, -61, 7.25f), Triple(-3f, -98, -6.5f), Triple(null, null, -17f))
+            val answers =
+                ui.relayNames.keys.zip(snrs).associate { (id, snr) ->
+                    id to PingAnswer(id, heardSnr = snr.first, heardRssi = snr.second, snrTowards = snr.third)
+                }
+            ui.copy(state = ui.state.copy(ping = SurveyPing(id = 1, ago(8 * SECOND), answers)))
+        }
+    }
+
+    /** A ping from high ground in the busy mesh, answered by 12 nodes: the card lists the strongest 3. */
+    val pingedByMany by lazy {
+        meshRecording(busyMesh, newToYou = SurveyNews(cells = 31, relays = 6, direct = 4)).let { ui ->
+            val answers =
+                ui.relayNames.keys.take(MANY_ANSWERS).mapIndexed { i, id ->
+                    id to PingAnswer(id, heardSnr = 8f - 2 * i, heardRssi = -60 - 4 * i, snrTowards = 9f - 2.5f * i)
+                }
+            ui.copy(state = ui.state.copy(ping = SurveyPing(id = 1, ago(12 * SECOND), answers.toMap())))
+        }
+    }
+    private const val MANY_ANSWERS = 12
+
+    /** [pingedByMany] in car mode, where fewer rows fit. */
+    val carPingedByMany by lazy { pingedByMany.copy(carMode = true) }
+
+    /** A ping 3 s ago that the radio refused, as the app had sent a traceroute of its own. */
+    val pingRefused by lazy {
+        meshRecording(quietMesh, newToYou = SurveyNews(cells = 9, relays = 4, direct = 1)).let { ui ->
+            ui.copy(state = ui.state.copy(ping = SurveyPing(id = 1, ago(3 * SECOND), refused = true)))
+        }
+    }
+
+    /** [pinged] a minute later: the answers are gone from the card. */
+    val pingedLongAgo by lazy {
+        pinged.copy(state = pinged.state.copy(ping = pinged.state.ping?.copy(sentAtMs = ago(MINUTE))))
+    }
+
+    /** [pinged] in car mode. */
+    val carPinged by lazy { pinged.copy(carMode = true) }
 
     /** [busy] in car mode. */
     val carBusy by lazy { busy.copy(carMode = true) }

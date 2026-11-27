@@ -31,6 +31,34 @@
     <string name="survey_radio_none">No radio connected</string>
     <string name="survey_start">Start</string>
     <string name="survey_stop">Stop</string>
+    <!-- Recording card button: a traceroute no node passes on, so every node that hears it answers straight back. -->
+    <string name="survey_ping">Ping</string>
+    <!-- The Ping button while firmware would refuse another ping, beside a ring that empties: %1$d is the seconds left. -->
+    <string name="survey_ping_wait">%1$d s</string>
+    <string name="survey_ping_waiting">Ping sent, waiting for answers</string>
+    <string name="survey_ping_no_answer">No node answered the ping</string>
+    <!-- The radio dropped the ping unsent, as it takes one traceroute every 30 s, the app's own included. -->
+    <string name="survey_ping_refused">The radio refused the ping</string>
+    <!-- Above the list of nodes that answered the ping: %1$d is how many. -->
+    <plurals name="survey_ping_answers">
+        <item quantity="one">%1$d node answered the ping</item>
+        <item quantity="other">%1$d nodes answered the ping</item>
+    </plurals>
+    <!-- Under the strongest answers to the ping, for the others: %1$d is how many. -->
+    <plurals name="survey_ping_more">
+        <item quantity="one">+%1$d more</item>
+        <item quantity="other">+%1$d more</item>
+    </plurals>
+    <!-- survey_ping_answers in car mode, where big type leaves room for less: %1$d is how many nodes. -->
+    <plurals name="survey_ping_answers_short">
+        <item quantity="one">%1$d answered</item>
+        <item quantity="other">%1$d answered</item>
+    </plurals>
+    <!-- Spoken for the arrows beside a node that answered the ping, before each SNR. -->
+    <string name="survey_ping_heard_it">Your radio heard it at</string>
+    <string name="survey_ping_heard_you">It heard your radio at</string>
+    <!-- Snackbar: %1$d is the seconds firmware wants between pings. -->
+    <string name="survey_ping_not_sent">Ping not sent: the radio is away, or the last ping was under %1$d s ago</string>
     <!-- Top bar chip: while recording, keeps the screen on and shows the figures in big type, to read at a glance in a car. -->
     <string name="survey_car_mode">Car mode</string>
     <!-- %1$s is the radio's name, %2$s its preset (LongFast) or spreading factor (SF11), %3$s the frequency. -->

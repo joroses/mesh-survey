@@ -37,6 +37,7 @@ import org.meshtastic.core.repository.RadioInterfaceService
 import org.meshtastic.core.repository.RadioSessionContext
 import org.meshtastic.core.repository.RadioSessionLease
 import org.meshtastic.core.repository.ServiceRepository
+import org.meshtastic.core.repository.SurveyPacketTap
 import org.meshtastic.core.repository.XModemManager
 import org.meshtastic.core.testing.FakeLockdownCoordinator
 import org.meshtastic.proto.Channel
@@ -345,6 +346,32 @@ class FromRadioPacketHandlerImplTest {
 
         verify { serviceRepository.setClientNotification(notification) }
         verifySuspend { radioInterfaceService.runWithSessionLease(session, any()) }
+    }
+
+    @Test
+    fun `refused survey ping goes to the survey, not to a pop-up`() {
+        val refused = mutableListOf<Int>()
+        SurveyPacketTap.pingIds = setOf(300)
+        SurveyPacketTap.onPingRefused = { refused += it }
+        try {
+            val notification =
+                ClientNotification.Builder()
+                    .also { wb ->
+                        wb.message = "TraceRoute can only be sent once every 30 seconds"
+                        wb.reply_id = 300
+                        wb.level = LogRecord.Level.WARNING
+                    }
+                    .build()
+
+            handle(FromRadio.Builder().also { wb -> wb.clientNotification = notification }.build())
+
+            assertEquals(listOf(300), refused)
+            verify(mode = VerifyMode.exactly(0)) { serviceRepository.setClientNotification(any()) }
+            verifySuspend(mode = VerifyMode.exactly(0)) { radioInterfaceService.runWithSessionLease(session, any()) }
+        } finally {
+            SurveyPacketTap.pingIds = emptySet()
+            SurveyPacketTap.onPingRefused = null
+        }
     }
 
     @Test

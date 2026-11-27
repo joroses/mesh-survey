@@ -40,6 +40,7 @@ import org.meshtastic.core.repository.ServiceRepository
 import org.meshtastic.core.ui.util.SnackbarManager
 import org.meshtastic.core.ui.viewmodel.stateInWhileSubscribed
 import org.meshtastic.feature.survey.MappedNodes
+import org.meshtastic.feature.survey.PING_COOLDOWN
 import org.meshtastic.feature.survey.R
 import org.meshtastic.feature.survey.RelayStats
 import org.meshtastic.feature.survey.ReplayedRelays
@@ -125,12 +126,18 @@ class SurveyViewModel(
             .stateInWhileSubscribed(false)
 
     /**
-     * Short names of the nodes in this session's relay guesses, candidates, ruled-out nodes and SigSleuth's answers.
-     * The node database is the connected radio's, which is the survey radio; SigSleuth names the nodes missing from it.
+     * Short names of the nodes in this session's relay guesses, candidates, ruled-out nodes, SigSleuth's answers and
+     * the ping's answers. The node database is the connected radio's, which is the survey radio; SigSleuth names the
+     * nodes missing from it.
      */
     val relayNames: StateFlow<Map<Long, String>> =
         combine(
-            state.map { relayNodeIds(it.relays.values, it.mapped) }.distinctUntilChanged(),
+            state
+                .map { state ->
+                    val (ids, sigSleuth) = relayNodeIds(state.relays.values, state.mapped)
+                    (ids + state.ping?.answers?.keys.orEmpty()) to sigSleuth
+                }
+                .distinctUntilChanged(),
             nodes.nodeDBbyNum,
         ) { (ids, sigSleuth), db ->
             shortNames(ids, sigSleuth, db)
@@ -202,6 +209,16 @@ class SurveyViewModel(
 
     fun stop() {
         appScope.launch { recorder.stop() }
+    }
+
+    /** Pings the survey node's neighbours ([SurveyRecorder.ping]); says so when the ping did not go. */
+    fun ping() {
+        appScope.launch {
+            if (!recorder.ping()) {
+                val cooldownS = PING_COOLDOWN.inWholeSeconds.toInt()
+                snackbars.showSnackbar(app.getString(R.string.survey_ping_not_sent, cooldownS))
+            }
+        }
     }
 
     fun saveServer(newSettings: SurveyUploadSettings) {

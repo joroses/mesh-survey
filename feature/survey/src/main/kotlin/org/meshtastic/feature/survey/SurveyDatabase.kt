@@ -248,6 +248,11 @@ data class SurveyMeasurement(
      * by versions 5 to 8 may also carry bits 2 and 4 (a relay byte or direct sender new there), which nothing reads.
      */
     @ColumnInfo(name = "local_new") val localNew: Int? = null,
+    /**
+     * On a direct traceroute reply to the survey node, such as a ping's ([zeroHopTraceroute]), the SNR at which its
+     * sender heard the survey node, in dB; null on every other packet. Not uploaded.
+     */
+    @ColumnInfo(name = "snr_towards") val snrTowards: Float? = null,
 ) {
     override fun toString(): String = "SurveyMeasurement(seq=$seq, location redacted)"
 }
@@ -760,7 +765,7 @@ interface SurveyDao {
         SessionRelay::class,
         SessionDirect::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
     // 2: what SigSleuth kept and skipped of each session. 3: each measurement's consent bit and default key. 4: whether
     // each session may be uploaded. 5: each measurement's cell, what SigSleuth said it adds and what it adds to the
@@ -770,7 +775,7 @@ interface SurveyDao {
     // 7: SigSleuth's answer for each session's relay bytes, empty until the next uploads. 8: a near link's node and km.
     // 9: the local relay and direct counts renamed, as relays and direct senders rather than cells. 10: each session's
     // distinct relay bytes and direct senders (fixless packets too) in their own lists, the new ones counted from them
-    // across the network.
+    // across the network. 11: the SNR at which a ping's answer heard the survey node.
     autoMigrations =
     [
         AutoMigration(from = 1, to = 2),
@@ -782,6 +787,7 @@ interface SurveyDao {
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9, spec = RenameNewKeys::class),
         AutoMigration(from = 9, to = 10, spec = FillSessionLists::class),
+        AutoMigration(from = 10, to = 11),
     ],
 )
 abstract class SurveyDatabase : RoomDatabase() {

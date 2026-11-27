@@ -17,12 +17,15 @@
 package org.meshtastic.feature.survey
 
 import org.meshtastic.core.model.Channel
+import org.meshtastic.core.model.util.decodeOrNull
 import org.meshtastic.core.model.util.isLora
 import org.meshtastic.core.model.util.rxTimeOrNull
 import org.meshtastic.core.model.util.snrOrNull
 import org.meshtastic.proto.ChannelSet
 import org.meshtastic.proto.MeshPacket
 import org.meshtastic.proto.MeshPacket.TransportMechanism
+import org.meshtastic.proto.PortNum
+import org.meshtastic.proto.RouteDiscovery
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.ln
@@ -38,6 +41,10 @@ const val LATE_PACKET_MS = 60_000L
 private const val MILLIS_PER_SECOND = 1_000L
 private const val RELAY_BYTE_MASK = 0xFF
 private const val OK_TO_MQTT_MASK = 1
+
+/** Traceroutes carry SNR in quarter dB, and this for a hop whose SNR is unknown. */
+private const val QUARTER_DB = 4f
+private const val UNKNOWN_SNR = -128
 
 /**
  * SigSleuth skips a measurement whose fix is older or less accurate than this (its MAX_FIX_AGE_MS and MAX_ACCURACY_M).
@@ -119,15 +126,46 @@ fun measurementOf(
         rxRssi = packet.rx_rssi,
         hopStart = packet.hop_start,
         hopLimit = packet.hop_limit,
-        // Older firmware sends no relay byte (0). The byte is only the last byte of the relay's node number.
-        relayByte = packet.relay_node.takeIf { it != 0 }?.and(RELAY_BYTE_MASK),
+        relayByte = packet.relayByte(),
         // Firmware reads a missing bitfield as not OK (MQTT::onSend).
         okToMqtt = packet.decoded?.let { ((it.bitfield ?: 0) and OK_TO_MQTT_MASK) != 0 },
         // A direct message the survey node decrypted with its private key still carries a channel index.
         defaultKey = packet.decoded?.let { packet.pki_encrypted != true && packet.channel in defaultKeyChannels },
         cellX = cell?.x,
         cellY = cell?.y,
+        snrTowards = packet.snrTowards(surveyNode),
     )
+}
+
+/**
+ * The packet's relay byte, the last byte of the node number of whoever sent it on the air, or null when unknown.
+ * Firmware before 2.6 sends none (0), and the survey node's firmware drops the byte of any packet with hop start 0,
+ * taking it for one from before 2.3, which had no hop start. A decoded packet with a bitfield comes from 2.5 or later,
+ * so its hop start 0 is real: it went out with no hops, no node could pass it on, and its byte is its sender's. A
+ * ping's answers are such packets.
+ */
+private fun MeshPacket.relayByte(): Int? {
+    val carried = relay_node.takeIf { it != 0 }?.and(RELAY_BYTE_MASK)
+    val zeroHop = hop_start == 0 && hop_limit == 0 && decoded?.bitfield != null
+    return carried ?: relayByteOf(from.toUInt().toLong()).takeIf { zeroHop }
+}
+
+/**
+ * The SNR at which this packet's sender heard the survey node, in dB, when the packet is a traceroute reply to the
+ * survey node with no relay either way, such as an answer to the zero-hop ping ([zeroHopTraceroute]). The way there may
+ * list only the survey node and the sender: the survey node's radio adds itself to a broadcast the phone sends, and a
+ * node answering a broadcast adds itself as a relay would. Either way the sender's SNR comes last. Null for any other
+ * packet.
+ */
+private fun MeshPacket.snrTowards(surveyNode: Int): Float? {
+    val data = decoded?.takeIf { it.portnum == PortNum.TRACEROUTE_APP && !it.want_response && to == surveyNode }
+    val route = data?.let { RouteDiscovery.ADAPTER.decodeOrNull(it.payload) } ?: return null
+    val others = route.route.filter { it != surveyNode }
+    val direct =
+        route.route_back.isEmpty() &&
+            (others.isEmpty() || others == listOf(from)) &&
+            route.snr_towards.size in route.route.size..route.route.size + 1
+    return route.snr_towards.lastOrNull()?.takeIf { direct && it != UNKNOWN_SNR }?.let { it / QUARTER_DB }
 }
 
 /**

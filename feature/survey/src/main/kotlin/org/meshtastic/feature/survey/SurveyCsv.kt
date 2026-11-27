@@ -16,11 +16,14 @@
  */
 package org.meshtastic.feature.survey
 
-/** One column per upload field, plus the session ID. A missing value is an empty cell. */
+/**
+ * One column per upload field, plus the session ID and the SNR a ping's answer heard the survey node at. A missing
+ * value is an empty cell.
+ */
 object SurveyCsv {
     const val HEADER =
         "session_id,seq,heard_at_ms,latitude,longitude,accuracy_m,fix_age_ms,sender_node_id,recipient_node_id," +
-            "packet_id,rx_snr,rx_rssi,hop_start,hop_limit,relay_byte,ok_to_mqtt,default_key\n"
+            "packet_id,rx_snr,rx_rssi,hop_start,hop_limit,relay_byte,ok_to_mqtt,default_key,snr_towards\n"
 
     private const val PAGE_SIZE = 500
 
@@ -42,6 +45,7 @@ object SurveyCsv {
         m.relayByte,
         m.okToMqtt,
         m.defaultKey,
+        m.snrTowards,
     )
         .joinToString(",", postfix = "\n") { it?.toString().orEmpty() }
 

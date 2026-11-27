@@ -34,6 +34,7 @@ import org.meshtastic.core.repository.PacketHandler
 import org.meshtastic.core.repository.RadioInterfaceService
 import org.meshtastic.core.repository.RadioSessionContext
 import org.meshtastic.core.repository.ServiceStateWriter
+import org.meshtastic.core.repository.SurveyPacketTap
 import org.meshtastic.core.repository.XModemManager
 import org.meshtastic.core.resources.Res
 import org.meshtastic.core.resources.client_notification
@@ -153,6 +154,12 @@ class FromRadioPacketHandlerImpl(
     }
 
     private fun handleClientNotification(cn: ClientNotification, session: RadioSessionContext) {
+        // Firmware refusing a signal-survey ping is the survey's to show.
+        val replyId = cn.reply_id
+        if (replyId != null && replyId in SurveyPacketTap.pingIds) {
+            SurveyPacketTap.onPingRefused?.invoke(replyId)
+            return
+        }
         val admitted =
             radioInterfaceService.runIfSessionActive(session) {
                 if (!serviceNotifications.suppressClientNotificationModal(cn)) {
