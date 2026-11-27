@@ -15,7 +15,7 @@ What a survey records, from a privacy point of view, and how to install the app:
 ## Uploading
 
 - Only sessions you allow are sent: those started with **Upload automatically** on, and those you upload by hand. Turning the switch off during a session keeps the rest of it on the phone.
-- While recording, the app uploads every minute, in batches of 500 rows. A failed automatic upload is tried again once the phone is online, even after a reboot.
+- While recording, the app uploads every minute, in batches of 500 rows; after failures in a row it waits 2, 4, 8, then 10 minutes, but runs as soon as Android says the phone reaches the internet again. Each request gives up after 20 s, and a run sends nothing while Android says the phone has no internet. A failed automatic upload is tried again once the phone is online, even after a reboot, waiting up to 30 s for Android to confirm the internet.
 - The server address must start with `https://`; plain `http://` works only for `localhost`. The password goes in an HTTP Basic header.
 - Each session card shows what SigSleuth kept and skipped (no position, fix too old, …). Saving a different server address resets these counts, and the new server gets every allowed session from the start.
 

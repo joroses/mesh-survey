@@ -18,6 +18,8 @@ package org.meshtastic.feature.survey
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.retry
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -31,10 +33,13 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -44,6 +49,8 @@ import org.meshtastic.core.common.util.safeCatching
 import java.net.UnknownHostException
 import kotlin.concurrent.Volatile
 import kotlin.io.encoding.Base64
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -53,12 +60,15 @@ import kotlin.time.Duration.Companion.seconds
  * it already holds, so a repeated batch saves nothing twice.
  *
  * A run stops at the first failure and saves its error; the next run tries again. With automatic uploads on, a failed
- * run also queues [SurveyUploadRetry], which tries again once the phone is online. Two runs never overlap.
+ * run also queues [SurveyUploadRetry], which tries again once the phone is online ([SurveyUploadRuns]). Two runs never
+ * overlap, so each request gets [REQUEST_TIMEOUT] and no automatic retries: on a weak link, one run must not keep
+ * Upload now and the final upload at Stop waiting for minutes. Without internet ([SurveyInternet]) a run sends nothing.
  *
  * Each reply names the node SigSleuth decided every saved row heard; those of relayed packets go to [answers], and the
  * newest for each relay byte is saved ([SavedAnswer]). It also says what each row adds to SigSleuth's map, which is
  * saved on the row and counted on its session ([SurveyNews]).
  */
+@Suppress("LongParameterList") // Injected collaborators.
 @Single
 class SurveyUploader(
     private val dao: SurveyDao,
@@ -68,6 +78,7 @@ class SurveyUploader(
     private val scope: ApplicationCoroutineScope,
     private val retry: SurveyUploadRetry,
     private val answers: SurveyAnswers,
+    private val internet: SurveyInternet,
 ) {
     private val runs = Mutex()
 
@@ -125,8 +136,8 @@ class SurveyUploader(
     }
 
     /**
-     * The service calls this every [RECORDING_INTERVAL] while recording and once when the session ends, and
-     * [SurveyUploadWorker] after a failure. Returns false when a later run may get further, as [upload] does.
+     * [SurveyUploadRuns] calls this while recording and after a failure, the service once when the session ends.
+     * Returns false when a later run may get further, as [upload] does.
      */
     suspend fun uploadIfAutomatic(): Boolean {
         // An unreadable settings file skips this run but keeps a queued background retry alive.
@@ -209,6 +220,11 @@ class SurveyUploader(
             if (!dao.uploadAllowed(session.id)) return true
             val rows = dao.measurementsAfter(session.id, afterSeq, BATCH_SIZE)
             if (rows.isEmpty()) return true
+            // Also before each later batch: the network may have gone since the last one.
+            if (!isLocalUrl(target.url) && !internet.online()) {
+                dao.uploadFailed(session.id, NO_CONNECTION)
+                return false
+            }
             val ack = post(target, UploadRequest(session.toUpload(), rows.map { it.toUpload() }))
             val response = ack.getOrElse { error ->
                 dao.uploadFailed(session.id, errorText(error))
@@ -249,6 +265,13 @@ class SurveyUploader(
         safeCatching {
             val response =
                 http.post(target.url.trimEnd('/') + UPLOAD_PATH) {
+                    timeout {
+                        requestTimeoutMillis = REQUEST_TIMEOUT.inWholeMilliseconds
+                        connectTimeoutMillis = REQUEST_TIMEOUT.inWholeMilliseconds
+                        socketTimeoutMillis = REQUEST_TIMEOUT.inWholeMilliseconds
+                    }
+                    // The next run sends the batch again, and the server ignores rows it already has.
+                    retry { noRetry() }
                     authorize(target)
                     setBody(TextContent(json.encodeToString(request), ContentType.Application.Json))
                 }
@@ -263,9 +286,12 @@ class SurveyUploader(
         const val BATCH_SIZE = 500
         private const val INVALID_URL = "The SigSleuth URL must start with https://"
 
-        /** The saved error when the server's name could not be looked up: no internet, or a wrong server name. */
+        /**
+         * The saved error when Android says the phone has no internet, or the server's name could not be looked up: no
+         * internet, or a wrong server name.
+         */
         const val NO_CONNECTION = "No connection"
-        val RECORDING_INTERVAL = 60.seconds
+        val REQUEST_TIMEOUT = 20.seconds
 
         /** A session's saved skip reasons; an unreadable value counts as none. */
         fun decodeSkipReasons(text: String?): Map<String, Long> =
@@ -480,3 +506,47 @@ private fun SurveyMeasurement.toUpload() = UploadMeasurement(
     okToMqtt = okToMqtt,
     defaultKey = defaultKey,
 )
+
+/** When automatic uploads run: while recording, and in the background retry after a failure. */
+@Single
+class SurveyUploadRuns(private val uploader: SurveyUploader, private val internet: SurveyInternet) {
+    /**
+     * The service's runs while recording: each after [recordingDelay], or as soon as the phone gets the internet back
+     * during that wait, so a session uploads soon after a dead zone rather than at the end of a ten-minute wait.
+     */
+    suspend fun whileRecording(): Nothing {
+        var failures = 0
+        while (true) {
+            // Back online: the internet gone, then confirmed again by Android.
+            withTimeoutOrNull(recordingDelay(failures)) { internet.changes().dropWhile { it }.first { it } }
+            failures = if (uploader.uploadIfAutomatic()) 0 else failures + 1
+        }
+    }
+
+    /**
+     * For [SurveyUploadWorker], which WorkManager starts as soon as a network connects. Android confirms that it
+     * reaches the internet a few seconds later; a run before then would only save No connection and back off.
+     */
+    suspend fun retryWhenOnline(): Boolean {
+        withTimeoutOrNull(INTERNET_WAIT) { internet.changes().first { it } }
+        return uploader.uploadIfAutomatic()
+    }
+
+    companion object {
+        /** How long [retryWhenOnline] waits for Android to confirm the internet before running anyway. */
+        val INTERNET_WAIT = 30.seconds
+
+        /**
+         * How long [whileRecording] waits before its next run, unless the phone gets the internet back first: a minute,
+         * doubled after each run in a row that failed ([failures]), up to ten.
+         */
+        fun recordingDelay(failures: Int): Duration =
+            (RECORDING_DELAY_BASE * (1 shl failures.coerceIn(0, MAX_DOUBLINGS))).coerceAtMost(RECORDING_DELAY_MAX)
+
+        private val RECORDING_DELAY_BASE = 1.minutes
+        private val RECORDING_DELAY_MAX = 10.minutes
+
+        /** 16 minutes, already past [RECORDING_DELAY_MAX]; more would only overflow. */
+        private const val MAX_DOUBLINGS = 4
+    }
+}

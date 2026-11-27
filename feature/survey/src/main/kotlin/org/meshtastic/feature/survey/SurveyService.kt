@@ -52,6 +52,7 @@ import kotlin.time.Duration.Companion.seconds
 class SurveyService : Service() {
     private val recorder: SurveyRecorder by inject()
     private val uploader: SurveyUploader by inject()
+    private val uploadRuns: SurveyUploadRuns by inject()
     private val scope: ApplicationCoroutineScope by inject()
     private var job: Job? = null
 
@@ -85,7 +86,7 @@ class SurveyService : Service() {
         }
         job = scope.launch {
             if (uploader.startSession { recorder.start(upload = it) }) {
-                val whileRecording = listOf(launch { updateNotification() }, launch { uploadWhileRecording() })
+                val whileRecording = listOf(launch { updateNotification() }, launch { uploadRuns.whileRecording() })
                 recorder.state.first { it.session == null }
                 // Join, not just cancel: a notify() still running would bring the notification back after removal.
                 whileRecording.forEach { it.cancelAndJoin() }
@@ -97,13 +98,6 @@ class SurveyService : Service() {
             }
         }
         return START_NOT_STICKY
-    }
-
-    private suspend fun uploadWhileRecording() {
-        while (true) {
-            delay(SurveyUploader.RECORDING_INTERVAL)
-            uploader.uploadIfAutomatic()
-        }
     }
 
     private suspend fun updateNotification() {

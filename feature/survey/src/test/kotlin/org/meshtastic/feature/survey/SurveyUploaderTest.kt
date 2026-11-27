@@ -21,11 +21,14 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.client.engine.mock.toByteArray
+import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -44,6 +47,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class SurveyUploaderTest {
     private val dao = FakeSurveyDao()
@@ -100,8 +106,19 @@ class SurveyUploaderTest {
 
     private val answers = SurveyAnswers()
 
+    /** Whether Android says the phone reaches the internet, and its changes. */
+    private val internet = MutableStateFlow(true)
+    private var online by internet::value
+
+    /** How many times a run asked whether the phone is online, which it does just before sending a batch. */
+    private var onlineChecks = 0
+
+    /** Every request the server got, including those it failed. */
+    private var requests = 0
+
     private fun TestScope.uploader(): SurveyUploader {
         val engine = MockEngine { request ->
+            requests++
             authorization = request.headers[HttpHeaders.Authorization]
             thrown?.let { throw it }
             if (fail) return@MockEngine respondError(HttpStatusCode.ServiceUnavailable)
@@ -120,7 +137,14 @@ class SurveyUploaderTest {
         return SurveyUploader(
             dao,
             settings,
-            HttpClient(engine),
+            // Retries like the app's shared client, which the uploader must turn off.
+            HttpClient(engine) {
+                install(HttpRequestRetry) {
+                    retryOnException(maxRetries = 3, retryOnTimeout = true)
+                    retryOnServerErrors(maxRetries = 3)
+                    constantDelay(millis = 1, randomizationMs = 0)
+                }
+            },
             clock,
             object : ApplicationCoroutineScope, CoroutineScope by backgroundScope {},
             object : SurveyUploadRetry {
@@ -129,8 +153,21 @@ class SurveyUploaderTest {
                 }
             },
             answers,
+            fakeInternet,
         )
     }
+
+    private val fakeInternet =
+        object : SurveyInternet {
+            override fun online(): Boolean {
+                onlineChecks++
+                return online
+            }
+
+            override fun changes(): Flow<Boolean> = internet
+        }
+
+    private fun runs(uploader: SurveyUploader) = SurveyUploadRuns(uploader, fakeInternet)
 
     private suspend fun record(sessionId: String, count: Int, upload: Boolean = true) {
         if (dao.sessions.none { it.id == sessionId }) {
@@ -635,6 +672,123 @@ class SurveyUploaderTest {
 
         assertEquals(SurveyUploader.NO_CONNECTION, dao.sessions.single().lastUploadError)
         assertEquals(0L, dao.sessions.single().uploadedSeq)
+    }
+
+    @Test
+    fun `a request that fails is not retried within the run`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        thrown = IOException("timeout")
+
+        assertFalse(uploader.upload())
+        fail = true
+        thrown = null
+        assertFalse(uploader.upload())
+
+        assertEquals(2, requests)
+    }
+
+    @Test
+    fun `without internet a run sends nothing, saves no connection and queues a retry`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        online = false
+
+        assertFalse(uploader.uploadIfAutomatic())
+
+        assertEquals(0, requests)
+        assertEquals(SurveyUploader.NO_CONNECTION, dao.sessions.single().lastUploadError)
+        assertEquals(1, retries)
+
+        online = true
+        assertTrue(uploader.uploadIfAutomatic())
+        assertEquals(3L, dao.sessions.single().uploadedSeq)
+    }
+
+    @Test
+    fun `without internet a run with nothing to send saves no error`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        uploader.upload()
+        online = false
+
+        assertTrue(uploader.upload())
+
+        assertNull(dao.sessions.single().lastUploadError)
+    }
+
+    @Test
+    fun `a server on the phone itself is reached without internet`() = runTest {
+        settings.settings.value = settings.settings.value.copy(url = "http://localhost:8000")
+        record("a", 3)
+        val uploader = uploader()
+        online = false
+
+        assertTrue(uploader.upload())
+
+        assertEquals(3L, dao.sessions.single().uploadedSeq)
+    }
+
+    @Test
+    fun `while recording, failures in a row double the wait up to ten minutes`() {
+        assertEquals(
+            listOf(1, 2, 4, 8, 10, 10, 10).map { it.minutes },
+            listOf(0, 1, 2, 3, 4, 5, Int.MAX_VALUE).map(SurveyUploadRuns::recordingDelay),
+        )
+    }
+
+    @Test
+    fun `while recording, the internet coming back starts a run without waiting out the delay`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        online = false
+        backgroundScope.launch { runs(uploader).whileRecording() }
+
+        // Runs at 1, 3 and 7 minutes find no internet; the next would wait until 15.
+        testScheduler.advanceTimeBy(7.minutes + 1.milliseconds)
+        assertEquals(3, onlineChecks)
+        testScheduler.advanceTimeBy(1.minutes)
+        online = true
+        testScheduler.runCurrent()
+
+        // The run has checked the internet and is sending; a second run waits for it and finds nothing left.
+        assertEquals(4, onlineChecks)
+        assertTrue(uploader.upload())
+        assertEquals(3L, dao.sessions.single().uploadedSeq)
+        assertEquals(1, requests)
+    }
+
+    @Test
+    fun `a background retry waits for Android to confirm the internet`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        online = false
+        backgroundScope.launch { runs(uploader).retryWhenOnline() }
+
+        testScheduler.advanceTimeBy(10.seconds)
+        assertEquals(0, onlineChecks)
+        online = true
+        testScheduler.runCurrent()
+
+        assertEquals(1, onlineChecks)
+        assertTrue(uploader.upload())
+        assertEquals(3L, dao.sessions.single().uploadedSeq)
+        assertNull(dao.sessions.single().lastUploadError)
+    }
+
+    @Test
+    fun `a background retry still offline after the wait saves no connection`() = runTest {
+        record("a", 3)
+        val uploader = uploader()
+        online = false
+        val retry = backgroundScope.async { runs(uploader).retryWhenOnline() }
+
+        testScheduler.advanceTimeBy(SurveyUploadRuns.INTERNET_WAIT + 1.milliseconds)
+
+        assertTrue(retry.isCompleted)
+        assertFalse(retry.await())
+        assertEquals(0, requests)
+        assertEquals(SurveyUploader.NO_CONNECTION, dao.sessions.single().lastUploadError)
     }
 
     @Test

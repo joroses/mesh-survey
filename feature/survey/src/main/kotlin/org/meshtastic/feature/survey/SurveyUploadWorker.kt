@@ -59,7 +59,7 @@ class WorkManagerSurveyUploadRetry(private val context: Application) : SurveyUpl
 
 /** Runs once the phone has a network connection, and again with a growing delay while the upload keeps failing. */
 @KoinWorker
-class SurveyUploadWorker(appContext: Context, workerParams: WorkerParameters, private val uploader: SurveyUploader) :
+class SurveyUploadWorker(appContext: Context, workerParams: WorkerParameters, private val runs: SurveyUploadRuns) :
     CoroutineWorker(appContext, workerParams) {
-    override suspend fun doWork(): Result = if (uploader.uploadIfAutomatic()) Result.success() else Result.retry()
+    override suspend fun doWork(): Result = if (runs.retryWhenOnline()) Result.success() else Result.retry()
 }

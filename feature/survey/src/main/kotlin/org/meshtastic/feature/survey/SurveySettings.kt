@@ -51,12 +51,17 @@ data class SurveyUploadSettings(
  */
 fun isUploadUrl(url: String): Boolean {
     val uri = safeCatching { URI(url.trim()) }.getOrNull()
-    val host = uri?.host?.lowercase().orEmpty()
     return when (uri?.scheme?.lowercase()) {
-        "https" -> host.isNotBlank()
-        "http" -> host == "localhost" || host.endsWith(".localhost") || host == "127.0.0.1"
+        "https" -> !uri.host.isNullOrBlank()
+        "http" -> isLocalUrl(url)
         else -> false
     }
+}
+
+/** Whether [url] names this phone itself, which needs no internet: a server reached through `adb reverse`. */
+fun isLocalUrl(url: String): Boolean {
+    val host = safeCatching { URI(url.trim()).host }.getOrNull()?.lowercase() ?: return false
+    return host == "localhost" || host.endsWith(".localhost") || host == "127.0.0.1"
 }
 
 private const val HTTPS = "https://"
