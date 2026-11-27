@@ -249,6 +249,16 @@ internal object SurveyScenarios {
     /** [pinged] in car mode. */
     val carPinged by lazy { pinged.copy(carMode = true) }
 
+    /** [carPinged] with two-digit SNRs both ways, the widest chips, beside the quiet mesh's 4-letter names. */
+    val carPingedTwoDigits by lazy {
+        val snrs = listOf(10.5f to 12.25f, -11f to -12.5f, -17.5f to -19.75f)
+        val answers =
+            carPinged.relayNames.keys.zip(snrs).associate { (id, snr) ->
+                id to PingAnswer(id, heardSnr = snr.first, heardRssi = -100, snrTowards = snr.second)
+            }
+        carPinged.copy(state = carPinged.state.copy(ping = carPinged.state.ping?.copy(answers = answers)))
+    }
+
     /** [busy] in car mode. */
     val carBusy by lazy { busy.copy(carMode = true) }
 

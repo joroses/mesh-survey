@@ -157,6 +157,12 @@ fun RecordingPinged() = Screen(SurveyScenarios.pinged)
 @PreviewTest @SurveyPreviews @Composable
 fun CarPinged() = Screen(SurveyScenarios.carPinged)
 
+@PreviewTest
+@SurveyPreviews
+@SurveyHardPreviews
+@Composable
+fun CarPingedTwoDigits() = Screen(SurveyScenarios.carPingedTwoDigits)
+
 @PreviewTest @SurveyPreviews @Composable
 fun RecordingPingedLongAgo() = Screen(SurveyScenarios.pingedLongAgo)
 

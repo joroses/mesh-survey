@@ -279,7 +279,8 @@ internal class SurveyActions(
 
 /**
  * A still picture of the survey screen, for screenshots: every clock stopped at [now], and the relay rows of
- * [openRelays] opened. Null, as in the app, the clocks tick and every row starts closed.
+ * [openRelays] opened, several at once to compare them, though a tap keeps one open. Null, as in the app, the clocks
+ * tick and every row starts closed.
  */
 internal data class SurveySnapshot(val now: SurveyNow, val openRelays: Set<Int> = emptySet())
 
@@ -836,9 +837,10 @@ private fun PingAnswers(
                 }
             }
         }
-        val inset = Modifier.padding(start = INFO_ICON_SIZE + INFO_ICON_GAP)
+        // Under the line's text; in car mode from the card's edge, as the bigger chips leave little room for names.
+        val inset = if (car) Modifier else Modifier.padding(start = INFO_ICON_SIZE + INFO_ICON_GAP)
         answers.take(PING_ANSWERS_SHOWN).forEach { answer ->
-            PingAnswerRow(answer, relayNames, spreadingFactor, inset)
+            PingAnswerRow(answer, relayNames, spreadingFactor, car, inset)
         }
         val more = answers.size - PING_ANSWERS_SHOWN
         if (more > 0) {
@@ -855,12 +857,16 @@ private fun PingAnswers(
 /** How many ping answers the recording card lists; any more would push Ping and Stop off a pinned card. */
 private const val PING_ANSWERS_SHOWN = 3
 
-/** One answer: the node's name, then how the survey node heard it (down) and how it heard the survey node (up). */
+/**
+ * One answer: the node's name, then how the survey node heard it (down) and how it heard the survey node (up). In [car]
+ * mode the chips leave out "dB", so a name still fits beside two-digit values.
+ */
 @Composable
 private fun PingAnswerRow(
     answer: PingAnswer,
     relayNames: Map<Long, String>,
     spreadingFactor: Int,
+    car: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -875,14 +881,14 @@ private fun PingAnswerRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        PingSnr(answer.heardSnr, spreadingFactor, up = false)
-        PingSnr(answer.snrTowards, spreadingFactor, up = true)
+        PingSnr(answer.heardSnr, spreadingFactor, up = false, unit = !car)
+        PingSnr(answer.snrTowards, spreadingFactor, up = true, unit = !car)
     }
 }
 
 /** An arrow and an SNR chip: [up] for how the node heard the survey node, else how the survey node heard it. */
 @Composable
-private fun PingSnr(snr: Float?, spreadingFactor: Int, up: Boolean) {
+private fun PingSnr(snr: Float?, spreadingFactor: Int, up: Boolean, unit: Boolean) {
     val description = stringResource(if (up) R.string.survey_ping_heard_you else R.string.survey_ping_heard_it)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
@@ -894,7 +900,7 @@ private fun PingSnr(snr: Float?, spreadingFactor: Int, up: Boolean) {
         if (snr == null) {
             Text("?", style = MaterialTheme.typography.bodyMedium)
         } else {
-            SnrChip(snr, spreadingFactor)
+            SnrChip(snr, spreadingFactor, unit = unit)
         }
     }
 }
@@ -1641,7 +1647,7 @@ private fun InfoRow(icon: ImageVector, iconTint: Color = Color.Unspecified, text
 
 /**
  * [snr] and its unit drawn as a chip on roughly the colour SigSleuth's map gives this spot (its fade margin), in black
- * or white, whichever reads better.
+ * or white, whichever reads better. Without [unit] the chip shows the number only, and screen readers still hear "dB".
  */
 @Composable
 private fun SnrChip(
@@ -1651,12 +1657,15 @@ private fun SnrChip(
     style: TextStyle = MaterialTheme.typography.bodyMedium,
     padding: PaddingValues = PaddingValues(horizontal = SNR_CHIP_PADDING, vertical = 2.dp),
     shape: Shape = MaterialTheme.shapes.extraSmall,
+    unit: Boolean = true,
 ) {
-    val label = stringResource(R.string.survey_snr, NumberFormatter.format(snr, SNR_DECIMALS))
+    val number = NumberFormatter.format(snr, SNR_DECIMALS)
+    val label = stringResource(R.string.survey_snr, number)
     val fill = marginColor(fadeMargin(snr, spreadingFactor))
     Box(modifier.background(fill, shape).padding(padding), contentAlignment = Alignment.Center) {
         Text(
-            label,
+            if (unit) label else number,
+            if (unit) Modifier else Modifier.semantics { contentDescription = label },
             style = style.copy(fontFeatureSettings = "tnum"),
             color = contentOn(fill),
             maxLines = 1,
@@ -1922,8 +1931,8 @@ private val SHEET_INSET = 8.dp
 
 /**
  * Relay bytes, most packets first, so rows keep their places as packets come: one line each, which a tap opens
- * ([RelayEntry]). The row of [lastRelayByte], the last packet's relay, is tinted. [header] comes first and scrolls with
- * the rows. A spinner while [relays] is null, as an ended session's are rebuilt.
+ * ([RelayEntry]) and closes the one open before. The row of [lastRelayByte], the last packet's relay, is tinted.
+ * [header] comes first and scrolls with the rows. A spinner while [relays] is null, as an ended session's are rebuilt.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -1977,7 +1986,7 @@ private fun RelaysList(
                         latest = byte == lastRelayByte,
                         car = car,
                         serverUrl = serverUrl,
-                        onToggle = { open = if (opened) open - byte else open + byte },
+                        onToggle = { open = if (opened) emptySet() else setOf(byte) },
                     )
                 }
         }
