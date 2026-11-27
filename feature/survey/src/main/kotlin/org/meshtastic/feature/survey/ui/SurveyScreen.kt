@@ -66,6 +66,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -236,6 +238,7 @@ import org.meshtastic.feature.survey.SurveyTotals
 import org.meshtastic.feature.survey.SurveyUploadSettings
 import org.meshtastic.feature.survey.SurveyUploader
 import org.meshtastic.feature.survey.isUploadUrl
+import org.meshtastic.feature.survey.sigSleuthNodeUrl
 import org.meshtastic.feature.survey.surveyTotals
 import org.meshtastic.feature.survey.uploadUrlFrom
 import org.meshtastic.feature.survey.uploadUrlTyped
@@ -388,6 +391,7 @@ internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modif
             surveyTotals(sessions.map { it.session }, ui.deleted, ui.directSenders)
         }
     val uploadsOn = uploadSettings?.url?.isNotBlank() == true
+    val serverUrl = uploadSettings?.url?.takeIf(::isUploadUrl)
     val recording = state.session
     // The session recording now has the screen to itself, so the list holds only ended ones.
     val past = remember(sessions, recording?.id) { sessions.filter { it.session.id != recording?.id } }
@@ -403,7 +407,7 @@ internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modif
                     }
                 },
                 actions = {
-                    LegendButton(website = uploadSettings?.url?.takeIf(::isUploadUrl), telegram = ui.telegramUrl)
+                    LegendButton(website = serverUrl, telegram = ui.telegramUrl)
                     CarModeChip(ui.carMode, actions.onCarMode)
                 },
             )
@@ -419,6 +423,7 @@ internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modif
                 ui.relayNames,
                 car = ui.carMode,
                 upload = uploadSettings?.takeIf { uploadsOn }?.let { uploadMark(it, live) },
+                serverUrl = serverUrl,
                 onUpload = { showUpload = true },
                 onStop = actions.onStop,
                 onPing = actions.onPing,
@@ -492,7 +497,7 @@ internal fun SurveyContent(ui: SurveyUi, actions: SurveyActions, modifier: Modif
                 }
             }
         }
-        ui.opened?.let { SessionRelaysSheet(it, onDismiss = actions.onCloseSession) }
+        ui.opened?.let { SessionRelaysSheet(it, serverUrl = serverUrl, onDismiss = actions.onCloseSession) }
     }
 }
 
@@ -559,6 +564,7 @@ private fun RecordingView(
     relayNames: Map<Long, String>,
     car: Boolean,
     upload: UploadMark?,
+    serverUrl: String?,
     onUpload: () -> Unit,
     onStop: () -> Unit,
     onPing: () -> Unit,
@@ -608,6 +614,7 @@ private fun RecordingView(
                         ),
                         lastRelayByte = state.lastMeasurement?.relayByte,
                         car = car,
+                        serverUrl = serverUrl,
                         header = scrolledCard.takeUnless { pinned },
                     )
                 }
@@ -1868,18 +1875,18 @@ private fun highlighted(text: String, part: String, style: SpanStyle): Annotated
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SessionRelaysSheet(opened: OpenedSession, onDismiss: () -> Unit) {
+private fun SessionRelaysSheet(opened: OpenedSession, serverUrl: String?, onDismiss: () -> Unit) {
     val sheetState =
         rememberBottomSheetState(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
         )
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) { SessionRelays(opened) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) { SessionRelays(opened, serverUrl) }
 }
 
 /** [SessionRelaysSheet]'s content: the relays list under the session's date and length. */
 @Composable
-internal fun SessionRelays(opened: OpenedSession) {
+internal fun SessionRelays(opened: OpenedSession, serverUrl: String? = null) {
     val clock = rememberSurveyClock()
     RelaysList(
         opened.relays?.relays,
@@ -1889,6 +1896,7 @@ internal fun SessionRelays(opened: OpenedSession) {
         clock::value,
         // The rows' own inset brings their text in line with the title.
         contentPadding = PaddingValues(start = SHEET_INSET, end = SHEET_INSET, bottom = 24.dp),
+        serverUrl = serverUrl,
         header = {
             Column(
                 Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 8.dp).semantics(mergeDescendants = true) {
@@ -1926,6 +1934,7 @@ private fun RelaysList(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     lastRelayByte: Int? = null,
     car: Boolean = false,
+    serverUrl: String? = null,
     header: (@Composable () -> Unit)? = null,
 ) {
     val sorted = remember(relays) { relays?.entries?.sortedByDescending { it.value.packets } }
@@ -1964,6 +1973,7 @@ private fun RelaysList(
                         opened = opened,
                         latest = byte == lastRelayByte,
                         car = car,
+                        serverUrl = serverUrl,
                         onToggle = { open = if (opened) open - byte else open + byte },
                     )
                 }
@@ -1992,6 +2002,7 @@ private fun RelayEntry(
     opened: Boolean,
     latest: Boolean,
     car: Boolean,
+    serverUrl: String?,
     onToggle: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -2032,17 +2043,24 @@ private fun RelayEntry(
                 )
             }
         }
-        if (showDetails) RelayDetails(relay, neighbours, names, clock().wallMs)
+        if (showDetails) RelayDetails(relay, neighbours, names, clock().wallMs, serverUrl)
     }
 }
 
 /**
  * An opened [RelayEntry]: its packet count and the last packet's RSSI, SigSleuth's answer, every candidate with how it
- * is known, measured from where that packet was heard (the guess was made there, not where the phone is now), and the
- * nodes its signal ruled out. Times are measured from [now].
+ * is known, measured from where that packet was heard (the guess was made there, not where the phone is now), the nodes
+ * its signal ruled out, and links to each mentioned node's coverage page when a SigSleuth [serverUrl] is configured.
+ * Times are measured from [now].
  */
 @Composable
-private fun RelayDetails(relay: RelayStats, neighbours: Map<Long, DirectSender>, names: Map<Long, String>, now: Long) {
+private fun RelayDetails(
+    relay: RelayStats,
+    neighbours: Map<Long, DirectSender>,
+    names: Map<Long, String>,
+    now: Long,
+    serverUrl: String?,
+) {
     val packet = relay.last
     val guessed = relay.guess.nodeIds.toSet()
     fun tone(nodeId: Long) = if (nodeId in guessed) LineTone.GUESS else LineTone.OTHER
@@ -2106,8 +2124,79 @@ private fun RelayDetails(relay: RelayStats, neighbours: Map<Long, DirectSender>,
                 LineTone.RULED_OUT,
             )
         }
+        if (serverUrl != null) {
+            RelayNodeLinks(relay, names, serverUrl)
+        }
     }
 }
+
+/**
+ * The distinct nodes an opened relay row mentions, in display order: SigSleuth's named relay, the local guess, any node
+ * in SigSleuth's answer (its near link or candidates), every local candidate, and ruled-out nodes.
+ */
+internal fun relayMentionedNodes(relay: RelayStats, names: Map<Long, String>): List<Pair<Long, String>> {
+    val serverNames = buildMap {
+        relay.server?.let { answer ->
+            answer.nodeId?.let { id -> answer.shortName?.let { put(id, it) } }
+            answer.near?.let { near -> near.name?.let { putIfAbsent(near.nodeId, it) } }
+            answer.candidates.forEach { candidate -> candidate.name?.let { putIfAbsent(candidate.nodeId, it) } }
+        }
+    }
+    val ordered = linkedSetOf<Long>()
+    relay.confirmedNode?.let(ordered::add)
+    ordered += relay.guess.nodeIds
+    relay.server?.nodeId?.let(ordered::add)
+    relay.server?.near?.nodeId?.let(ordered::add)
+    relay.server?.candidates?.forEach { ordered += it.nodeId }
+    relay.candidates.forEach { ordered += it.nodeId }
+    relay.ruledOut.forEach { ordered += it.nodeId }
+    return ordered.map { id -> id to (names[id] ?: serverNames[id] ?: nodeName(id, names)) }
+}
+
+/** Chips under an opened relay row that open each mentioned node's coverage page on SigSleuth. */
+@Composable
+private fun RelayNodeLinks(relay: RelayStats, names: Map<Long, String>, serverUrl: String) {
+    val nodes =
+        remember(relay, names, serverUrl) {
+            relayMentionedNodes(relay, names).mapNotNull { (id, name) ->
+                sigSleuthNodeUrl(serverUrl, id)?.let { url -> name to url }
+            }
+        }
+    if (nodes.isEmpty()) return
+    val uriHandler = LocalUriHandler.current
+    val colors = MaterialTheme.colorScheme
+    val openIcon = ImageVector.vectorResource(R.drawable.survey_ic_open_in_new)
+    val single = nodes.size == 1
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        nodes.forEach { (name, url) ->
+            val label = if (single) stringResource(R.string.survey_relay_open_on_sigsleuth, name) else name
+            val description = stringResource(R.string.survey_relay_open_node, name)
+            AssistChip(
+                onClick = { safeCatching { uriHandler.openUri(url) } },
+                label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                modifier = Modifier.semantics { contentDescription = description },
+                leadingIcon = {
+                    Icon(
+                        MeshtasticIcons.Map,
+                        contentDescription = null,
+                        Modifier.size(AssistChipDefaults.IconSize),
+                        tint = colors.StatusSky,
+                    )
+                },
+                trailingIcon = {
+                    Icon(
+                        openIcon,
+                        contentDescription = null,
+                        Modifier.size(RELAY_LINK_ARROW_SIZE),
+                        tint = colors.onSurfaceVariant,
+                    )
+                },
+            )
+        }
+    }
+}
+
+private val RELAY_LINK_ARROW_SIZE = 16.dp
 
 /**
  * How sure the name beside it is: SigSleuth's badge, in its colour, when it named the relay; a green check for a direct

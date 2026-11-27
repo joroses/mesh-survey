@@ -180,7 +180,8 @@ fun CarWaiting() = Screen(SurveyScenarios.carWaiting)
 @PreviewTest
 @SurveyPreviews
 @Composable
-fun SheetEndedRelays() = Sheet(SurveyScenarios.busyOpenRows) { SessionRelays(SurveyScenarios.endedRelays) }
+fun SheetEndedRelays() =
+    Sheet(SurveyScenarios.busyOpenRows) { SessionRelays(SurveyScenarios.endedRelays, SurveyScenarios.server.url) }
 
 @PreviewTest
 @SurveyPreviews

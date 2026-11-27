@@ -99,4 +99,23 @@ class SurveyServerLinksTest {
         assertEquals(listOf(null), telegram(""))
         assertEquals(3, requests.size)
     }
+
+    @Test
+    fun `node link points to the node's coverage view on an upload server`() {
+        assertEquals(
+            "https://maps.example/#nodes/!02eb82f4?show=coverage",
+            sigSleuthNodeUrl("https://maps.example/", 0x02eb82f4L),
+        )
+        assertEquals(
+            "https://maps.example/sub/#nodes/!0000002a?show=coverage",
+            sigSleuthNodeUrl("https://maps.example/sub", 0x2aL),
+        )
+        assertEquals(
+            "http://localhost:8000/#nodes/!deadbeef?show=coverage",
+            sigSleuthNodeUrl("http://localhost:8000/", 0xdeadbeefL),
+        )
+        assertEquals(null, sigSleuthNodeUrl("http://maps.example", 0x02eb82f4L))
+        assertEquals(null, sigSleuthNodeUrl("", 0x02eb82f4L))
+        assertEquals(null, sigSleuthNodeUrl("https://maps.example", 0L))
+    }
 }

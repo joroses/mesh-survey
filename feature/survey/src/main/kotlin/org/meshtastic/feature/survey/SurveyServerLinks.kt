@@ -32,10 +32,21 @@ import org.meshtastic.core.common.util.safeCatching
 import java.io.File
 import java.io.IOException
 import java.net.URI
+import java.util.Locale
 import kotlin.time.Duration.Companion.days
 
 /** How old the saved Telegram link may get before it is fetched again. */
 val SERVER_LINKS_STALE = 1.days
+
+private const val NODE_ID_MASK = 0xFFFF_FFFFL
+
+/** SigSleuth's page for [nodeId] with its coverage layer on, or null when [server] is not an upload server. */
+fun sigSleuthNodeUrl(server: String, nodeId: Long): String? {
+    val masked = nodeId and NODE_ID_MASK
+    if (!isUploadUrl(server) || masked == 0L) return null
+    val hex = "%08x".format(Locale.ROOT, masked)
+    return "${server.trim().trimEnd('/')}/#nodes/!$hex?show=coverage"
+}
 
 /** The upload server's Telegram group, from its status, kept on the phone so the legend links to it offline. */
 interface SurveyServerLinks {
